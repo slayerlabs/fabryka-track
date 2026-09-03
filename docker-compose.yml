@@ -1,0 +1,12 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: fabryka
+      POSTGRES_PASSWORD: fabryka
+      POSTGRES_DB: fabryka
+    ports: ["5432:5432"]
+    volumes: ["postgres:/var/lib/postgresql/data"]
+volumes:
+  postgres:
+
