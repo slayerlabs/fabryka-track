@@ -9,6 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from .accounts import router as accounts_router, require_user, owned_run
+from .huggingface_auth import router as huggingface_router
 from .database import create_tables, session_scope
 from .models import Artifact, IngestedEvent, Metric, Project, Run, RunLog
 from .schemas import EventBatch, LogInput, Notes
@@ -29,6 +30,7 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(title="Fabryka Track", version="0.1.0", lifespan=lifespan)
 
 
+app.include_router(huggingface_router)
 app.include_router(accounts_router)
 app.include_router(training_router)
 

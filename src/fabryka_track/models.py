@@ -100,3 +100,20 @@ class Dataset(Base):
     sha256: Mapped[str] = mapped_column(String(64), index=True)
     example: Mapped[bool] = mapped_column(default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class HuggingFaceIdentity(Base):
+    __tablename__ = "huggingface_identities"
+    subject: Mapped[str] = mapped_column(String(255), primary_key=True)
+    account_id: Mapped[str] = mapped_column(String(36), ForeignKey("accounts.id"), unique=True)
+    username: Mapped[str] = mapped_column(String(200))
+
+
+class OAuthAttempt(Base):
+    __tablename__ = "oauth_attempts"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    browser_hash: Mapped[str] = mapped_column(String(64))
+    verifier: Mapped[str] = mapped_column(String(128))
+    account_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    session_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

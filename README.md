@@ -189,3 +189,28 @@ python -m fabryka_track.account_admin reset-password USERNAME
 
 Before upgrading, back up the database with its native consistent-backup tool
 and preserve the installed source. Do not restart while training runs are active.
+
+## Hugging Face sign-in
+
+Login and registration include Sign in with Hugging Face. Existing Track users
+can connect an HF identity from Account; new HF sign-ins receive a separate
+`hf_` username. Identity is keyed by the provider's stable `sub`, never inferred
+from matching usernames or email addresses. No existing workspace is claimed
+automatically. HF-only accounts can set a local password or generate an API key
+within five minutes of signing in; older sessions must sign in with HF again.
+
+This uses the Hugging Face documented Client ID Metadata Document flow with
+PKCE S256. `/.well-known/oauth-cimd` publishes the client metadata. Configure
+`FABRYKA_PUBLIC_URL` to the public HTTPS origin (default `https://track.fabryka.ai`).
+The callback is `/api/auth/huggingface/callback`; the client ID is the metadata
+URL. Hugging Face fetches this public document, so no client secret is required.
+A local development origin must be configured separately and reachable by HF.
+
+OAuth attempts are bound to a random HttpOnly browser cookie, expire after ten
+minutes and can be consumed only once. Connecting an identity additionally
+requires the same Track session at the start and callback. Only `openid profile`
+scopes are requested. The server exchanges the authorization code and fetches
+userinfo over HTTPS, then discards provider tokens and issues a regular Track
+session. Provider cancellation and failed verification do not change accounts.
+
+Reference: https://huggingface.co/docs/hub/oauth

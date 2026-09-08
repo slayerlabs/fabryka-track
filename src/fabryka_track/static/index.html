@@ -671,7 +671,8 @@
         $("#nav-account").href = account ? "#account" : "#login";
       }
       function authForm(register = false) {
-        app.innerHTML = `<section class="panel" style="max-width:480px;margin:35px auto"><div class="eyebrow">Your workspace</div><h1>${register ? "Create an account" : "Welcome back"}</h1><p class="muted">Keep datasets and training runs private. Publish selected scores to the leaderboard.</p><form id="auth-form"><label class="field"><span>Username</span><input name="username" autocomplete="username" pattern="[A-Za-z0-9_-]{3,32}" minlength="3" maxlength="32" required><small>3–32 letters, numbers, underscores or hyphens.</small></label><label class="field"><span>Password</span><input name="password" type="password" autocomplete="${register ? "new-password" : "current-password"}" minlength="12" maxlength="128" required><small>At least 12 characters. Keep it in your password manager; email recovery is not available.</small></label><button class="primary" type="submit">${register ? "Create account" : "Sign in"}</button></form><p style="margin-top:20px"><a href="${register ? "#login" : "#register"}">${register ? "Already have an account? Sign in" : "Create an account"}</a></p><a href="#leaderboard">Browse the public leaderboard →</a></section>`;
+        app.innerHTML = `<section class="panel" style="max-width:480px;margin:35px auto"><div class="eyebrow">Your workspace</div><h1>${register ? "Create an account" : "Welcome back"}</h1><p class="muted">Keep datasets and training runs private. Publish selected scores to the leaderboard.</p><button class="secondary" id="hf-signin" style="width:100%;margin:12px 0">🤗 Sign in with Hugging Face</button><p class="muted">Or use your Track username and password.</p><form id="auth-form"><label class="field"><span>Username</span><input name="username" autocomplete="username" pattern="[A-Za-z0-9_-]{3,32}" minlength="3" maxlength="32" required><small>3–32 letters, numbers, underscores or hyphens.</small></label><label class="field"><span>Password</span><input name="password" type="password" autocomplete="${register ? "new-password" : "current-password"}" minlength="12" maxlength="128" required><small>At least 12 characters. Keep it in your password manager; email recovery is not available.</small></label><button class="primary" type="submit">${register ? "Create account" : "Sign in"}</button></form><p style="margin-top:20px"><a href="${register ? "#login" : "#register"}">${register ? "Already have an account? Sign in" : "Create an account"}</a></p><a href="#leaderboard">Browse the public leaderboard →</a></section>`;
+        $("#hf-signin").onclick = () => startHuggingFace(false);
         $("#auth-form").onsubmit = async event => {
           event.preventDefault();
           const form = event.currentTarget, button = form.querySelector("button"); button.disabled = true;
@@ -682,12 +683,27 @@
           } catch (e) { error(e); button.disabled = false; }
         };
       }
-      function accountPage() {
-        app.innerHTML = `<section class="panel" style="max-width:600px;margin:30px auto"><div class="eyebrow">Account</div><h1>${esc(account.username)}</h1><p>Your datasets, notes and model files are private. Publishing shares your username, run name, scores and mixture percentages, while uploaded filenames and contents stay private.</p><div class="actions"><a class="primary" href="#new">New training run →</a><button class="secondary" id="logout">Sign out</button></div><div class="divider"></div><h2>Change password</h2><form id="password-form"><label class="field"><span>Current password</span><input name="current_password" type="password" autocomplete="current-password" maxlength="128" required></label><label class="field"><span>New password</span><input name="new_password" type="password" autocomplete="new-password" minlength="12" maxlength="128" required></label><p class="muted">Changing your password signs out other sessions and revokes your API key.</p><button class="primary">Update password</button></form><div class="divider"></div><h2>SDK API key</h2><p class="muted">Use an API key with the Python tracker. Generating a key replaces the previous one.</p><form id="key-form"><label class="field"><span>Confirm password</span><input name="password" type="password" autocomplete="current-password" maxlength="128" required></label><button class="secondary">Generate API key</button><button type="button" class="secondary" id="revoke-key">Revoke API key</button></form><div id="key-result"></div></section>`;
+      async function startHuggingFace(link) {
+        const button = $(link ? "#hf-connect" : "#hf-signin");
+        if (button) button.disabled = true;
+        try { const result = await post("/auth/huggingface/start", {link}); location.assign(result.url); }
+        catch(e) { error(e); if (button) button.disabled = false; }
+      }
+      async function accountPage() {
+        account = (await api("/auth/me")).user;
+        if (!account) { authForm(); return; }
+        app.innerHTML = `<section class="panel" style="max-width:600px;margin:30px auto"><div class="eyebrow">Account</div><h1>${esc(account.username)}</h1><p>Your datasets, notes and model files are private. Publishing shares your username, run name, scores and mixture percentages, while uploaded filenames and contents stay private.</p><div class="actions"><a class="primary" href="#new">New training run →</a><button class="secondary" id="logout">Sign out</button></div><div class="divider"></div><h2>Hugging Face</h2>${account.huggingface_username ? `<p>Connected as <b>${esc(account.huggingface_username)}</b>.</p>` : `<p class="muted">Connect your HF account to sign in to this same workspace.</p><button class="secondary" id="hf-connect">🤗 Connect Hugging Face</button>`}<div class="divider"></div><h2>${account.has_password ? "Change password" : "Set a Track password"}</h2><form id="password-form"><label class="field"><span>Current password</span><input name="current_password" type="password" autocomplete="current-password" maxlength="128" required></label><label class="field"><span>New password</span><input name="new_password" type="password" autocomplete="new-password" minlength="12" maxlength="128" required></label><p class="muted">Changing your password signs out other sessions and revokes your API key.</p><button class="primary">Update password</button></form><div class="divider"></div><h2>SDK API key</h2><p class="muted">Use an API key with the Python tracker. Generating a key replaces the previous one.</p><form id="key-form"><label class="field"><span>Confirm password</span><input name="password" type="password" autocomplete="current-password" maxlength="128" required></label><button class="secondary">Generate API key</button><button type="button" class="secondary" id="revoke-key">Revoke API key</button></form><div id="key-result"></div></section>`;
+        if ($("#hf-connect")) $("#hf-connect").onclick = () => startHuggingFace(true);
+        if (!account.has_password) {
+          for (const selector of ['#password-form [name=current_password]', '#key-form [name=password]']) {
+            const input = $(selector); input.required = false; input.closest("label").hidden = true;
+          }
+          $("#password-form").insertAdjacentHTML("afterbegin", '<p class="muted">You can keep signing in with HF. Set a password only if you also want a Track login. Credential changes require a Hugging Face sign-in within the last 5 minutes.</p>');
+        }
         $("#logout").onclick = async () => { try { await post("/auth/logout", {}); account = null; restoreDraft(); accountNav(); location.hash = "leaderboard"; } catch(e) { error(e); } };
         $("#password-form").onsubmit = async event => {
           event.preventDefault(); const f = event.currentTarget; const b=f.querySelector("button"); b.disabled=true;
-          try { await post("/auth/password", {current_password:f.elements.current_password.value,new_password:f.elements.new_password.value}); f.reset(); $("#key-result").replaceChildren(); toast("Password updated. Other sessions and API keys revoked."); } catch(e) { error(e); } finally { b.disabled=false; }
+          try { await post("/auth/password", {current_password:f.elements.current_password.value,new_password:f.elements.new_password.value}); f.reset(); await accountPage(); toast("Password updated. Other sessions and API keys revoked."); } catch(e) { error(e); } finally { b.disabled=false; }
         };
         $("#key-form").onsubmit = async event => {
           event.preventDefault(); const f=event.currentTarget; const b=f.querySelector("button"); b.disabled=true;
@@ -1177,7 +1193,7 @@
         try {
           if (["login", "register"].includes(hash)) { authForm(hash === "register"); return; }
           if (!account && hash !== "leaderboard") { authNext = hash; authForm(); return; }
-          if (hash === "account") { accountPage(); return; }
+          if (hash === "account") { await accountPage(); return; }
           if (hash.startsWith("run/")) await detail(hash.slice(4), token);
           else if (hash.startsWith("compare/"))
             await compare(hash.slice(8).split(","));

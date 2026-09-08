@@ -14,7 +14,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 
 from .database import session_scope
-from .models import Account, AccountSession, Run
+from .models import Account, AccountSession, HuggingFaceIdentity, Run
 
 router = APIRouter(prefix="/api/auth")
 passwords = PasswordHasher(time_cost=2, memory_cost=19456, parallelism=1)
@@ -47,7 +47,7 @@ def throttle(request, username=""):
 
 
 def public_account(user):
-    return {"id": user.id, "username": user.username, "has_api_key": bool(user.api_key_hash)}
+    return {"id": user.id, "username": user.username, "has_api_key": bool(user.api_key_hash), "has_password": bool(user.password_hash)}
 
 
 def current_user(request: Request, session=Depends(session_scope)):
@@ -77,6 +77,8 @@ def owned_run(session, run_id, user):
 
 
 def verify(password, hashed):
+    if not hashed:
+        return False
     try:
         return passwords.verify(hashed, password)
     except VerificationError:
@@ -94,12 +96,12 @@ class Credentials(BaseModel):
 
 
 class PasswordChange(BaseModel):
-    current_password: str = Field(min_length=1, max_length=128)
+    current_password: str = Field(min_length=0, max_length=128)
     new_password: str = Field(min_length=12, max_length=128)
 
 
 class PasswordCheck(BaseModel):
-    password: str = Field(min_length=1, max_length=128)
+    password: str = Field(default="", max_length=128)
 
 
 def new_session(request, response, session, user):
@@ -117,8 +119,12 @@ def new_session(request, response, session, user):
 
 
 @router.get("/me")
-def me(user=Depends(current_user)):
-    return {"user": public_account(user) if user else None}
+def me(user=Depends(current_user), session=Depends(session_scope)):
+    data = public_account(user) if user else None
+    if user:
+        identity = session.scalar(select(HuggingFaceIdentity).where(HuggingFaceIdentity.account_id == user.id))
+        data["huggingface_username"] = identity.username if identity else None
+    return {"user": data}
 
 
 @router.post("/register", status_code=201)
@@ -156,12 +162,22 @@ def logout(request: Request, response: Response, session=Depends(session_scope))
     return {"ok": True}
 
 
+def confirm_credentials(request, session, user, password):
+    if user.password_hash:
+        if not verify(password, user.password_hash):
+            raise HTTPException(401, "Incorrect current password.")
+    else:
+        stored = session.get(AccountSession, digest(request.cookies.get(COOKIE, '')))
+        if (not stored or stored.account_id != user.id or request.headers.get('authorization') or
+                stored.expires_at.replace(tzinfo=timezone.utc) - timedelta(days=14) < datetime.now(timezone.utc) - timedelta(minutes=5)):
+            raise HTTPException(401, "Sign in with Hugging Face again before changing credentials.")
+
+
 @router.post("/password")
 def change_password(body: PasswordChange, request: Request, response: Response,
                     user=Depends(require_user), session=Depends(session_scope)):
     throttle(request, user.username)
-    if not verify(body.current_password, user.password_hash):
-        raise HTTPException(401, "Incorrect current password.")
+    confirm_credentials(request, session, user, body.current_password)
     user.password_hash = passwords.hash(body.new_password)
     user.api_key_hash = None
     session.execute(delete(AccountSession).where(AccountSession.account_id == user.id))
@@ -171,8 +187,7 @@ def change_password(body: PasswordChange, request: Request, response: Response,
 @router.post("/api-key")
 def api_key(body: PasswordCheck, request: Request, user=Depends(require_user), session=Depends(session_scope)):
     throttle(request, user.username)
-    if not verify(body.password, user.password_hash):
-        raise HTTPException(401, "Incorrect password.")
+    confirm_credentials(request, session, user, body.password)
     token = "ft_" + secrets.token_urlsafe(32)
     user.api_key_hash = digest(token)
     session.commit()
