@@ -5,6 +5,13 @@ EMA plus raw curves, run visibility, range focus, PNG export and a dense compari
 workspace. Benchmarks has a navbar route, queue controls and paginated owner history.
 Smoke results are explicitly diagnostic, not a reliable quality ranking.
 
+For Polish checkpoints the ladder exposes a separate Polish MultiBLiMP suite. It
+uses the real `jumelet/multiblimp` `pol` configuration and compares byte log
+probability for the grammatical sentence against its ungrammatical minimal pair.
+The 50% baseline and normalized score are reported separately from the English
+TinyScore. Smoke evaluates 100 pairs; full mode evaluates the complete split and
+records the immutable Hugging Face revision.
+
 Finished studio runs expose an owner-only Sample generations tab. Prompts continue
 through the actual saved native byte model. Temperature zero is greedy; other values
 use top-K sampling with a recorded seed. Responses include checkpoint SHA256, saved
