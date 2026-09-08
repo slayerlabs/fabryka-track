@@ -165,6 +165,12 @@ def recover_evaluations():
                 row.status='running'
                 continue
             if row.status=='queued':continue
+            if row.provenance.get('runner'):
+                import time
+                if time.time()-row.provenance.get('heartbeat',0)<180:continue
+                row.status='queued';row.current_task=None;row.error=None
+                row.provenance={k:v for k,v in row.provenance.items() if k not in ('runner','lease','heartbeat')}
+                continue
             row.status='failed';row.error='Evaluation worker stopped. Partial results were retained; enqueue a new evaluation to retry.'
             row.ended_at=datetime.now(timezone.utc)
         db.commit()
@@ -172,6 +178,8 @@ def recover_evaluations():
 
 def queue_tick():
     recover_evaluations()
+    from .benchmark_remote import runners
+    if runners():return
     with lock, SessionLocal() as db:
         # Includes a cancelled worker which has not exited yet.
         if worker_pids() or processes:return

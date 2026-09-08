@@ -27,3 +27,25 @@ still need downsampling for very large histories.
 Validation: 53 backend tests; Chrome checks for comparison controls and polling,
 benchmark navigation, sample request controls, safe text rendering, namespace tree
 and 390px mobile layout. Three actual 8M checkpoint samples generated locally.
+
+## Persistent GPU benchmark workers
+
+`python -m fabryka_track.benchmark_agent` runs on a dedicated GPU host, using
+`TRACK_RUNNER_TOKEN`, `TRACK_URL`, `TRACK_BENCHMARK_WORKDIR` and optionally
+`TRACK_BENCHMARK_DEVICE` (default CUDA). The server's
+`FABRYKA_BENCHMARK_RUNNER_TOKENS` maps worker names to independent bearer secrets.
+These secrets authorize only benchmark assignment, assigned checkpoint reads and
+results for the current lease. They are not user or SSH credentials.
+
+Configured remote runners each claim one FIFO job. Local dispatch is disabled while
+remote runners are configured; existing local processes retain their jobs. Heartbeats
+arrive every five seconds. A disconnected agent terminates its child after 60 seconds
+without acknowledgement; the server requeues expired leases after 180 seconds.
+Cancellation invalidates the lease; the agent then terminates the child. Each child
+has a two-hour cap. Successful task results and dataset revisions survive retries,
+so resumed evaluations skip completed tasks. Runner, GPU, Torch, scoring implementation
+and checkpoint hash are recorded. TF32 is disabled for evaluation.
+
+Run one web process for claim serialization (the current deployment); horizontal
+API replication needs transactional row claiming before deployment. GPU/CPU floating
+point results can differ slightly; provenance records the hardware transition.

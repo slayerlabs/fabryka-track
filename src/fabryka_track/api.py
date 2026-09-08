@@ -50,6 +50,8 @@ app.include_router(gpu_router)
 app.include_router(namespace_router)
 from .generation import router as generation_router
 app.include_router(generation_router)
+from .benchmark_remote import router as benchmark_remote_router
+app.include_router(benchmark_remote_router)
 
 
 @app.middleware("http")

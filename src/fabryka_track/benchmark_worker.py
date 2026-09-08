@@ -49,31 +49,43 @@ def summarize(name, output):
     return row
 
 
-def run(eid):
+def run(eid, job=None, reporter=None):
+    from pathlib import Path
     torch.set_num_threads(1)
-    with SessionLocal() as db:
-        row=db.get(BenchmarkEvaluation,eid)
-        if not row or row.status not in ('queued','running'):return
-        parent=db.get(Run,row.run_id)
-        path=checkpoint_path(db,parent)
-        provenance=dict(row.provenance); tasks=list(row.tasks); mode=row.mode
-        if hashlib.sha256(path.read_bytes()).hexdigest()!=provenance['checkpoint_sha256']:
-            raise ValueError('Checkpoint changed')
-        payload=torch.load(path,map_location='cpu',weights_only=True)
-        cfg=payload['config']; best_step=payload.get('best_step')
-        length=min(cfg['context_length'],min(int(d['bytes']*.9)-1 for d in cfg['mix']))
-        tokens=best_step*cfg['batch_size']*length if best_step is not None else None
-        provenance.update(harness_version=version('lm-eval'),torch_version=torch.__version__,
-            checkpoint_step=best_step,training_tokens=tokens,token_unit='utf8_bytes',
-            context_length=cfg['context_length'],parameters=cfg['parameters'],
-            approximate_training_flops=6*cfg['parameters']*tokens if tokens is not None else None,
-            flops_method='6*N*D estimate; excludes evaluation',
-            empty_context_prefix='space byte (32)',scoring='every continuation byte, maximal sliding context',
-            validation_loss=payload.get('best_val_loss'),dataset_revisions={})
-    persist(eid,status='running',provenance=provenance)
-    model=ByteCheckpointLM(path); manager=TaskManager(); api=HfApi(); results={}; failures=[]
+    save = reporter or (lambda **values: persist(eid, **values))
+    if job is None:
+        with SessionLocal() as db:
+            row=db.get(BenchmarkEvaluation,eid)
+            if not row or row.status not in ('queued','running'):return
+            path=checkpoint_path(db,db.get(Run,row.run_id))
+            job={'provenance':dict(row.provenance),'tasks':list(row.tasks),'mode':row.mode,'results':dict(row.results)}
+    else:
+        path=Path(job['checkpoint'])
+    provenance=dict(job['provenance']);tasks=job['tasks'];mode=job['mode']
+    if hashlib.sha256(path.read_bytes()).hexdigest()!=provenance['checkpoint_sha256']:
+        raise ValueError('Checkpoint changed')
+    payload=torch.load(path,map_location='cpu',weights_only=True)
+    cfg=payload['config'];best_step=payload.get('best_step')
+    length=min(cfg['context_length'],min(int(d['bytes']*.9)-1 for d in cfg['mix']))
+    tokens=best_step*cfg['batch_size']*length if best_step is not None else None
+    device=job.get('device','cpu')
+    if device.startswith('cuda'):
+        torch.backends.cuda.matmul.allow_tf32=False
+        torch.backends.cudnn.allow_tf32=False
+    provenance.update(harness_version=version('lm-eval'),torch_version=torch.__version__,
+        checkpoint_step=best_step,training_tokens=tokens,token_unit='utf8_bytes',
+        context_length=cfg['context_length'],parameters=cfg['parameters'],
+        approximate_training_flops=6*cfg['parameters']*tokens if tokens is not None else None,
+        flops_method='6*N*D estimate; excludes evaluation',
+        empty_context_prefix='space byte (32)',scoring='every continuation byte, maximal sliding context',
+        validation_loss=payload.get('best_val_loss'),dataset_revisions=provenance.get('dataset_revisions',{}),
+        device=device,gpu=torch.cuda.get_device_name() if device.startswith('cuda') else None,
+        scoring_implementation='fused-causal-prefix-v1')
+    save(status='running',provenance=provenance)
+    model=ByteCheckpointLM(path,device=device);manager=TaskManager();api=HfApi();results=dict(job.get('results',{}));failures=[]
     for name in tasks:
-        persist(eid,current_task=name)
+        if name in results and not results[name].get('error'):continue
+        save(current_task=name)
         try:
             entry=manager.task_index[name]
             names=entry.cfg['task'] if name=='blimp' else [name]
@@ -81,11 +93,11 @@ def run(eid):
             for leaf in names:
                 config=load_yaml(manager.task_index[leaf].yaml_path,resolve_func=True)
                 repo=config['dataset_path']
-                if repo not in revisions:revisions[repo]=api.dataset_info(repo).sha
+                if repo not in revisions:revisions[repo]=provenance['dataset_revisions'].get(repo) or api.dataset_info(repo).sha
                 config['dataset_kwargs']={**(config.get('dataset_kwargs') or {}),'revision':revisions[repo]}
                 configs.append(config)
             provenance['dataset_revisions']={**provenance['dataset_revisions'],**revisions}
-            persist(eid,provenance=provenance)
+            save(provenance=provenance)
             output=simple_evaluate(model=model,tasks=configs,num_fewshot=0,
                 limit=10 if mode=='smoke' else None,bootstrap_iters=0,log_samples=True,
                 random_seed=42,numpy_random_seed=42,torch_random_seed=42,fewshot_random_seed=42,
@@ -98,9 +110,9 @@ def run(eid):
             failures.append(name)
             results[name]={'error':'Dataset loading or evaluation failed ('+type(exc).__name__+'). Retry after checking dataset availability.'}
             print(name,type(exc).__name__,str(exc),file=sys.stderr)
-        provenance.update(context_limited_requests=model.truncated_requests,total_requests=model.total_requests)
-        persist(eid,results=results,provenance=provenance)
-    persist(eid,status='failed' if failures else 'finished',current_task=None,
+        provenance.update(context_limited_requests=job['provenance'].get('context_limited_requests',0)+model.truncated_requests,total_requests=job['provenance'].get('total_requests',0)+model.total_requests)
+        save(results=results,provenance=provenance)
+    save(status='failed' if failures else 'finished',current_task=None,
             error='Failed tasks: '+', '.join(failures) if failures else None,
             ended_at=datetime.now(timezone.utc))
 
