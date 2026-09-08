@@ -825,6 +825,17 @@
         "Zwiększenie skali 2× → koszt około 4×.":"2× the scale → about 4× the compute.",
         "To plan skali, nie zmiana uruchamianego modelu.":"This plans scale; it does not change the model being launched.",
         "Ręczna zmiana milionów tokenów ustawia własny budżet.":"Changing millions of tokens sets a custom budget.",
+        "Twoja biblioteka":"Your dataset library", "Próbki rzeczywistych korpusów do treningu CPU.":"Real corpus samples for training.",
+        "Tokeny treningowe (mln)":"Training tokens (millions)", "Parametry modelu N (miliony)":"Model parameters N (millions)",
+        "Reguła 20:1":"The 20:1 rule", "Wybierz profil lub ustaw własną mieszankę suwakami.":"Choose a profile or set a custom mix with the sliders.",
+        "Proporcje według rozmiaru dostępnego tekstu (bajty UTF-8).":"Shares based on available text size (UTF-8 bytes).",
+        "Brak źródeł w kategorii":"No sources are available for the", "Obecna mieszanka pozostaje bez zmian.":"The current mix was left unchanged.",
+        "Literatura":"Literature", "Prawo / administracja":"Law / administration", "Encyklopedia":"Encyclopedia", "Nauka":"Science", "Internet":"Internet", "Kod":"Code", "Inne / nieprzypisane":"Other / uncategorized",
+        "Ten profil wymaga podłączenia odpowiedniego korpusu.":"This profile needs a matching corpus.", "Rozmiary dotyczą pobranej próbki, nie całego korpusu.":"Sizes refer to the downloaded sample, not the full corpus.",
+        "Wybór rozmiaru zmienia rzeczywisty model GPU i ustawia budżet 20×.":"Choosing a size changes the actual GPU model and sets a 20× budget.", "Bajty tego trenera nie są tokenami subword i nie gwarantują tego samego optimum.":"This trainer uses bytes rather than subword tokens, so the same optimum is not guaranteed.",
+        "Model CPU i limit kroków wybierzesz dalej.":"Choose the CPU model and step limit later.", "Szacowane obliczenia:":"Estimated compute:",
+        "Nie udało się pobrać tekstu datasetu.":"Could not load the dataset text.", "Zamknij podgląd":"Close preview",
+        "tekst":"of text", "znaków":"characters", "linii":"lines", "startowa":"initial", "nie pełny korpus ani reprezentatywne losowanie":"not the full corpus or a representative sample",
       };
       function translateUi(root=document) {
         const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);let node;
@@ -936,7 +947,7 @@
       const corpusOf = d => corpusSources[d.id];
       const datasetColor = d => corpusOf(d)?.color || colors[parseInt(d.id.replaceAll('-','').slice(0,6),16)%colors.length];
       const datasetBytes = d => d.bytes >= 1e6 ? `${fmt(d.bytes/1e6,1)} MB` : `${fmt(d.bytes/1000,1)} KB`;
-      const datasetSummary = d => corpusOf(d) ? `Próbka korpusu · ${corpusOf(d).documents} dokumentów · ${datasetBytes(d)} tekstu` : `${d.example ? 'Archiwalny tekst testowy' : 'Twój prywatny plik'} · ${fmt(d.bytes/1000,1)} KB`;
+      const datasetSummary = d => corpusOf(d) ? `Corpus sample · ${corpusOf(d).documents} documents · ${datasetBytes(d)} of text` : `${d.example ? 'Archived test text' : 'Your private file'} · ${fmt(d.bytes/1000,1)} KB`;
       const sourceCategories = {literature:"Literatura", law:"Prawo / administracja", encyclopedia:"Encyklopedia", science:"Nauka", web:"Internet", code:"Kod", other:"Inne / nieprzypisane"};
       const characters = [
         {id:"poet", name:"Poeta / literat", category:"literature"},
@@ -952,13 +963,13 @@
       function characterState(message) {
         document.querySelectorAll('[data-character]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.character === draft.character)));
         const status = $('#character-status');
-        if (status) status.textContent = message || (draft.character ? characters.find(p => p.id === draft.character)?.name + " · Proporcje według rozmiaru dostępnego tekstu (bajty UTF-8)." : "Wybierz profil lub ustaw własną mieszankę suwakami. 1 książka = 1 punkt = 5% mieszanki.");
+        if (status) status.textContent = message || (draft.character ? characters.find(p => p.id === draft.character)?.name + " · Shares based on available text size (UTF-8 bytes)." : "Choose a profile or set a custom mix with the sliders. 1 book = 1 point = 5% of the mix.");
       }
       function applyCharacter(id) {
         const profile = characters.find(p => p.id === id);
         const selected = datasets.filter(d => !profile.category || categoryOf(d) === profile.category);
         if (!selected.length) {
-          characterState(`Brak źródeł w kategorii „${sourceCategories[profile.category]}”. Ten profil wymaga podłączenia odpowiedniego korpusu. Obecna mieszanka pozostaje bez zmian.`);
+          characterState(`No sources are available for the “${sourceCategories[profile.category]}” category. This profile needs a matching corpus. The current mix was left unchanged.`);
           return;
         }
         const total = selected.reduce((n,d) => n + d.bytes, 0);
@@ -1127,7 +1138,7 @@
         $('#compute-select').onchange=e=>{draft.compute=e.target.value;draft.model_size=draft.compute==='runpod'?'8m':'tiny';draft.learning_rate=draft.compute==='runpod'?.0003:.003;draft.budget_mode='chinchilla';save();renderStudio();};
         const w = $("#workspace");
         if (stage === 1) {
-          w.innerHTML = `<div class="row"><div><h2 style="font-size:20px;margin-bottom:6px">Twoja biblioteka</h2></div></div><div>${datasets.map(datasetRow).join("")}</div><div class="upload"><div><b style="font-size:13px">Bring your own data</b><p class="muted">UTF-8 plain text · 100+ characters · up to 2 MB</p></div><button class="secondary" id="upload-button">+ Add text file</button><input type="file" id="upload" accept=".txt,text/plain" hidden></div><div class="actions"><small>Próbki rzeczywistych korpusów do treningu CPU.</small><button class="primary" id="next">Training settings →</button></div>`;
+          w.innerHTML = `<div class="row"><div><h2 style="font-size:20px;margin-bottom:6px">Your dataset library</h2></div></div><div>${datasets.map(datasetRow).join("")}</div><div class="upload"><div><b style="font-size:13px">Bring your own data</b><p class="muted">UTF-8 plain text · 100+ characters · up to 2 MB</p></div><button class="secondary" id="upload-button">+ Add text file</button><input type="file" id="upload" accept=".txt,text/plain" hidden></div><div class="actions"><small>Real corpus samples for training.</small><button class="primary" id="next">Training settings →</button></div>`;
           document
             .querySelectorAll("[data-slider]")
             .forEach(
