@@ -49,3 +49,9 @@ and checkpoint hash are recorded. TF32 is disabled for evaluation.
 Run one web process for claim serialization (the current deployment); horizontal
 API replication needs transactional row claiming before deployment. GPU/CPU floating
 point results can differ slightly; provenance records the hardware transition.
+
+Enqueueing the same checkpoint/protocol/mode resumes the previous partial evaluation
+in place. Completed tasks are retained; failed tasks are retried. A fully completed
+matching suite returns its existing evaluation without creating another job. Extending
+a suite copies compatible completed tasks from one coherent prior evaluation and
+queues only the remainder. Smoke results are never substituted for full results.

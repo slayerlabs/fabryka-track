@@ -37,3 +37,26 @@ def test_runner_claim_authorization_lease_and_resume(client,monkeypatch):
     assert newjob['id']==eid and newjob['results']['sciq']['accuracy']==.3
     assert client.post(url,json={'lease':job['lease']},headers=headers).status_code==409
     assert client.post(url,json={'lease':newjob['lease'],'status':'finished'},headers={'Authorization':'Bearer '+'g'*40}).status_code==200
+
+
+def test_retry_reuses_completed_tasks_and_does_not_repeat_finished_suite(client,monkeypatch):
+    run=finished(client,launch(client).json()['id'])
+    url='/api/runs/'+run['id']+'/benchmarks'
+    eid=client.post(url,json={'suite':'core','mode':'smoke'}).json()['id']
+    with SessionLocal() as db:
+        row=db.get(BenchmarkEvaluation,eid);row.status='failed'
+        row.results={'sciq':{'accuracy':.3},'blimp':{'error':'timeout'}}
+        row.provenance={**row.provenance,'dataset_revisions':{'allenai/sciq':'pinned'}};db.commit()
+    resumed=client.post(url,json={'suite':'core','mode':'smoke'}).json()
+    assert resumed['id']==eid and resumed['results']=={'sciq':{'accuracy':.3}}
+    assert resumed['provenance']['dataset_revisions']=={'allenai/sciq':'pinned'}
+    with SessionLocal() as db:
+        row=db.get(BenchmarkEvaluation,eid);row.status='finished';row.results={k:{'accuracy':.5} for k in benchmarks.CORE};db.commit()
+    ready=client.post(url,json={'suite':'core','mode':'smoke'}).json()
+    assert ready['id']==eid and ready['status']=='finished'
+    extended=client.post(url,json={'suite':'tinylm','mode':'smoke'}).json()
+    assert extended['status']=='queued' and len(extended['results'])==5
+    with SessionLocal() as db:
+        row=db.get(BenchmarkEvaluation,extended['id']);row.status='cancelled';db.commit()
+    full=client.post(url,json={'suite':'core','mode':'full'}).json()
+    assert full['results']=={} and full['mode']=='full'

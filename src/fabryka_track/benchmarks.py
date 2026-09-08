@@ -87,12 +87,37 @@ def start(run_id:str,body:EvaluationInput,user=Depends(require_user),session=Dep
         active=session.scalar(select(BenchmarkEvaluation).where(BenchmarkEvaluation.run_id==run_id, BenchmarkEvaluation.status.in_(['queued','running'])))
         if active:
             raise HTTPException(409,'This run already has a queued or running evaluation.')
+        digest=hashlib.sha256(path.read_bytes()).hexdigest()
+        tasks=SUITES[body.suite]
+        previous=list(session.scalars(select(BenchmarkEvaluation).where(BenchmarkEvaluation.run_id==run_id,
+            BenchmarkEvaluation.mode==body.mode).order_by(BenchmarkEvaluation.created_at.desc())))
+        compatible=[r for r in previous if r.provenance.get('checkpoint_sha256')==digest and
+                    r.provenance.get('protocol')==PROTOCOL and r.provenance.get('seed')==42 and
+                    r.provenance.get('fewshot')==0 and r.provenance.get('limit_per_subtask')==(10 if body.mode=='smoke' else None)]
+        # Reuse one coherent pinned evaluation; never mix smoke/full measurements.
+        source=max(compatible,key=lambda r:sum(k in r.results and not r.results[k].get('error') for k in tasks),default=None)
+        completed={k:v for k,v in (source.results.items() if source else []) if k in tasks and not v.get('error')}
+        if source and set(source.tasks)==set(tasks) and len(completed)==len(tasks):
+            return serialize(source,session)
         if session.scalar(select(func.count()).select_from(BenchmarkEvaluation).where(BenchmarkEvaluation.status=='queued'))>=20:
             raise HTTPException(409,'The benchmark queue is full (20 waiting evaluations).')
-        row=BenchmarkEvaluation(run_id=run.id,mode=body.mode,tasks=SUITES[body.suite],
-            provenance={'checkpoint_sha256':hashlib.sha256(path.read_bytes()).hexdigest(),'protocol':PROTOCOL,
-                        'fewshot':0,'seed':42,'limit_per_subtask':10 if body.mode=='smoke' else None})
-        session.add(row);session.commit();session.refresh(row)
+        if source and set(source.tasks)==set(tasks):
+            row=source
+            if live_worker_pid(row):raise HTTPException(409,'Previous worker is still stopping. Retry shortly.')
+            row.status='queued';row.current_task=None;row.error=None;row.ended_at=None
+            row.provenance={**{k:v for k,v in row.provenance.items() if k not in ('runner','lease','heartbeat','worker_pid')},
+                            'resumed_at':datetime.now(timezone.utc).isoformat(),'reused_tasks':list(completed)}
+            row.results=completed
+        else:
+            provenance={k:v for k,v in (source.provenance.items() if source else []) if k not in ('runner','lease','heartbeat','worker_pid')}
+            provenance.update(checkpoint_sha256=digest,protocol=PROTOCOL,fewshot=0,seed=42,
+                              limit_per_subtask=10 if body.mode=='smoke' else None,reused_tasks=list(completed))
+            if source:provenance['reused_from_evaluation']=source.id
+            row=BenchmarkEvaluation(run_id=run.id,mode=body.mode,tasks=tasks,results=completed,provenance=provenance,
+                                    status='finished' if len(completed)==len(tasks) else 'queued',
+                                    ended_at=datetime.now(timezone.utc) if len(completed)==len(tasks) else None)
+            session.add(row)
+        session.commit();session.refresh(row)
     return serialize(row,session)
 
 
