@@ -146,3 +146,18 @@ def test_fused_prefix_scoring_matches_bytewise_reference(tmp_path):
         score,actual_greedy=model.score(context,target)
         assert score==pytest.approx(expected,abs=3e-5)
         assert actual_greedy==greedy
+
+
+def test_batched_requests_match_individual_scores(tmp_path):
+    pytest.importorskip('lm_eval')
+    from fabryka_track.benchmark_model import ByteCheckpointLM
+    from fabryka_track.native_model import TinyTransformer
+    cfg=dict(width=8,layers=1,heads=2,context_length=16);path=tmp_path/'checkpoint.pt'
+    torch.save({'config':cfg,'state_dict':TinyTransformer(**cfg).state_dict()},path)
+    model=ByteCheckpointLM(path)
+    pairs=[('A','first continuation'),('B','ą druga'),('long prefix '*4,'third')]
+    individual=[model.score(*pair) for pair in pairs]
+    batched=model.score_many(pairs)
+    for actual,expected in zip(batched,individual):
+        assert actual[0]==pytest.approx(expected[0],abs=1e-5)
+        assert actual[1]==expected[1]

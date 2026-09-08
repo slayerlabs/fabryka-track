@@ -18,37 +18,42 @@ class ByteCheckpointLM(LM):
         self.total_requests = 0
 
     def score(self, context, continuation):
-        prefix = list(context.encode('utf-8')) or [32]
-        target = list(continuation.encode('utf-8'))
-        self.total_requests += 1
-        if len(prefix)+len(target)-1 > self.context_length:
-            self.truncated_requests += 1
-        # Causality allows all growing-prefix positions in one forward pass.
-        # Beyond the context boundary use the original shifted-window protocol.
-        tokens = prefix + target
-        total, greedy = 0., True
-        initial_end = min(len(tokens)-1, self.context_length)
+        return self.score_many([(context, continuation)])[0]
+
+    def score_many(self, pairs, batch_size=512):
+        """Score many likelihood requests in batched causal-window forwards.
+
+        Windows are grouped by length because learned byte positions make padding
+        on the left change the score. The byte protocol and truncation semantics
+        remain identical to ``score``.
+        """
+        totals=[0.0 for _ in pairs]; greedy=[True for _ in pairs]; buckets={}
+        for request,(context,continuation) in enumerate(pairs):
+            prefix=list(context.encode('utf-8')) or [32];target=list(continuation.encode('utf-8'))
+            self.total_requests += 1
+            if len(prefix)+len(target)-1 > self.context_length:self.truncated_requests += 1
+            tokens=prefix+target
+            for index,byte in enumerate(target,len(prefix)):
+                window=tokens[max(0,index-self.context_length):index]
+                buckets.setdefault(len(window),[]).append((request,window,byte))
         with torch.inference_mode():
-            if len(prefix) <= initial_end:
-                x = torch.tensor([tokens[:initial_end]], dtype=torch.long, device=self._device)
-                y = torch.tensor(tokens[len(prefix):initial_end+1], dtype=torch.long, device=self._device)
-                logits = self.model(x)[0, len(prefix)-1:initial_end]
-                total += logits.log_softmax(-1).gather(1, y[:,None]).sum().item()
-                greedy = bool((logits.argmax(-1)==y).all())
-            for start in range(max(len(prefix), initial_end+1), len(tokens), 128):
-                end = min(start+128, len(tokens))
-                x = torch.tensor([tokens[i-self.context_length:i] for i in range(start,end)], dtype=torch.long, device=self._device)
-                y = torch.tensor(tokens[start:end], dtype=torch.long, device=self._device)
-                logits = self.model(x)[:,-1,:]
-                total += logits.log_softmax(-1).gather(1,y[:,None]).sum().item()
-                greedy = greedy and bool((logits.argmax(-1)==y).all())
-        return total, greedy
+            for rows in buckets.values():
+                for start in range(0,len(rows),batch_size):
+                    chunk=rows[start:start+batch_size]
+                    x=torch.tensor([item[1] for item in chunk],dtype=torch.long,device=self._device)
+                    y=torch.tensor([item[2] for item in chunk],dtype=torch.long,device=self._device)
+                    logits=self.model(x)[:,-1,:].log_softmax(-1)
+                    values=logits.gather(1,y[:,None]).flatten().tolist()
+                    guesses=logits.argmax(-1).eq(y).tolist()
+                    for (request,_,_),value,guess in zip(chunk,values,guesses):
+                        totals[request]+=value;greedy[request]=greedy[request] and guess
+        return list(zip(totals,greedy))
 
     def loglikelihood(self, requests):
-        return [self.score(*r.args) for r in requests]
+        return self.score_many([tuple(r.args) for r in requests])
 
     def loglikelihood_rolling(self, requests):
-        return [self.score('',r.args[0])[0] for r in requests]
+        return [pair[0] for pair in self.score_many([('',r.args[0]) for r in requests])]
 
     def generate_until(self, requests):
         raise NotImplementedError('TinyLM suite uses likelihood tasks only.')
