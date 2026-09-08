@@ -13,6 +13,22 @@ class Base(DeclarativeBase):
     pass
 
 
+class Account(Base):
+    __tablename__ = "accounts"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    username: Mapped[str] = mapped_column(String(32), unique=True, index=True)
+    password_hash: Mapped[str] = mapped_column(String(256))
+    api_key_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class AccountSession(Base):
+    __tablename__ = "account_sessions"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    account_id: Mapped[str] = mapped_column(String(36), ForeignKey("accounts.id"), index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+
+
 class Project(Base):
     __tablename__ = "projects"
     id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -24,6 +40,8 @@ class Project(Base):
 class Run(Base):
     __tablename__ = "runs"
     id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True)
+    owner_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    is_public: Mapped[bool] = mapped_column(default=False)
     project_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), ForeignKey("projects.id"), index=True)
     name: Mapped[str] = mapped_column(String(300), index=True)
     state: Mapped[str] = mapped_column(String(20), default="running", index=True)
@@ -71,3 +89,14 @@ class IngestedEvent(Base):
     __tablename__ = "ingested_events"
     id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True)
     ingested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class Dataset(Base):
+    __tablename__ = "datasets"
+    owner_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()))
+    name: Mapped[str] = mapped_column(String(200))
+    content: Mapped[str] = mapped_column(Text)
+    sha256: Mapped[str] = mapped_column(String(64), index=True)
+    example: Mapped[bool] = mapped_column(default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)

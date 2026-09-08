@@ -1,19 +1,1207 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Fabryka Track</title><style>
-:root{--bg:#0d0f12;--panel:#15181d;--line:#292e37;--muted:#89919f;--text:#e9edf2;--accent:#e0ff68;--blue:#75a7ff;--red:#ff756f}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px ui-monospace,SFMono-Regular,Menlo,monospace}header{height:58px;border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 4vw;gap:18px;position:sticky;top:0;background:#0d0f12ee;z-index:2}.brand{font-weight:800;letter-spacing:-.5px}.mark{color:var(--accent)}main{max-width:1200px;margin:38px auto;padding:0 24px}h1{font:600 28px system-ui;margin:0 0 7px}h2{font:600 17px system-ui;margin:0}.muted{color:var(--muted)}.toolbar,.row{display:flex;align-items:center;gap:10px}.toolbar{margin:26px 0 14px}.grow{flex:1}input,select,textarea,button{font:inherit;color:var(--text);border:1px solid var(--line);background:var(--panel);border-radius:6px;padding:9px 11px}button{cursor:pointer}button.primary{background:var(--accent);color:#111;border:0;font-weight:700}button:disabled{opacity:.35}.table{border:1px solid var(--line);border-radius:8px;overflow:hidden}.tr{display:grid;grid-template-columns:38px 2fr 1fr 1fr 1fr 1fr;min-height:47px;align-items:center;padding:0 15px;border-bottom:1px solid var(--line)}.tr:last-child{border:0}.tr.head{font-size:11px;color:var(--muted);letter-spacing:.08em}.tr:not(.head):hover{background:#15181d}.link{cursor:pointer}.state-running{color:var(--accent)}.state-failed{color:var(--red)}.state-finished{color:var(--blue)}.back{color:var(--muted);cursor:pointer;margin-bottom:25px}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:8px;overflow:hidden;margin:22px 0}.card{background:var(--panel);padding:16px}.label{font-size:11px;color:var(--muted);margin-bottom:8px}.value{font-size:16px}.charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(390px,1fr));gap:14px}.chart{border:1px solid var(--line);border-radius:8px;padding:16px;background:var(--panel)}svg{width:100%;height:170px;overflow:visible}.gridline{stroke:#30353e;stroke-width:1}.chart-title{margin-bottom:12px}.notes{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:22px 0}.notes textarea{width:100%;min-height:115px;resize:vertical}.logs{background:#080a0c;border:1px solid var(--line);padding:14px;border-radius:8px;max-height:260px;overflow:auto;white-space:pre-wrap}.compare-table{width:100%;border-collapse:collapse;margin:20px 0}.compare-table th,.compare-table td{text-align:right;padding:11px;border-bottom:1px solid var(--line)}.compare-table th:first-child,.compare-table td:first-child{text-align:left;color:var(--muted)}@media(max-width:650px){.tr{grid-template-columns:34px 2fr 1fr 1fr}.hide-sm{display:none}.charts,.notes{grid-template-columns:1fr}main{padding:0 14px}.toolbar{flex-wrap:wrap}}
-</style></head><body><header><div class="brand"><span class="mark">◆</span> FABRYKA TRACK</div><span class="muted">experiments, without the archaeology</span></header><main id="app"></main><script>
-const app=document.querySelector('#app'), esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const api=async(url,opt)=>{const r=await fetch(url,opt);if(!r.ok)throw Error(await r.text());return r.json()};
-const age=d=>{let s=(Date.now()-new Date(d))/1000;for(const [n,u] of [[86400,'d'],[3600,'h'],[60,'m']])if(s>=n)return Math.floor(s/n)+u;return Math.max(0,Math.floor(s))+'s'};
-const fmt=x=>typeof x==='number'?x.toLocaleString(undefined,{maximumFractionDigits:3}):esc(x??'—');
-const duration=r=>{let s=(new Date(r.ended_at||Date.now())-new Date(r.started_at))/1000;return [s/3600,s%3600/60,s%60].map(x=>String(Math.floor(x)).padStart(2,'0')).join(':')};
-function plot(series,names){let all=Object.values(series).flat();if(!all.length)return '<div class="muted">No data yet</div>';let min=Math.min(...all.map(x=>x.value)),max=Math.max(...all.map(x=>x.value));if(min===max){min-=1;max+=1}let xmax=Math.max(...all.map(x=>x.step),1),colors=['#e0ff68','#75a7ff','#ff756f','#c58cff'];let lines=Object.entries(series).map(([name,pts],i)=>{let p=pts.map(x=>`${18+x.step/xmax*360},${150-(x.value-min)/(max-min)*125}`).join(' ');return `<polyline points="${p}" fill="none" stroke="${colors[i%colors.length]}" stroke-width="2"/><text x="${20+i*110}" y="168" fill="${colors[i%colors.length]}" font-size="10">${esc(names?.[name]||name)}</text>`}).join('');return `<svg viewBox="0 0 400 175" preserveAspectRatio="none"><line class="gridline" x1="18" y1="25" x2="390" y2="25"/><line class="gridline" x1="18" y1="88" x2="390" y2="88"/><line class="gridline" x1="18" y1="150" x2="390" y2="150"/>${lines}</svg>`}
-let selected=new Set();
-async function home(){let ps=await api('/api/projects');if(!ps.length){app.innerHTML='<h1>No runs yet</h1><p class="muted">Initialize your first run with the Python SDK.</p>';return}showRuns(ps[0].name,ps)}
-async function showRuns(project,projects){history.replaceState({},'',`/?project=${encodeURIComponent(project)}`);let runs=await api(`/api/projects/${encodeURIComponent(project)}/runs`);app.innerHTML=`<div class="row"><div><h1>${esc(project)}</h1><span class="muted">${runs.length} runs</span></div><div class="grow"></div><select id="project">${projects.map(p=>`<option ${p.name===project?'selected':''}>${esc(p.name)}</option>`).join('')}</select></div><div class="toolbar"><input id="search" placeholder="Filter runs…"><select id="state"><option value="">All states</option><option>running</option><option>finished</option><option>failed</option></select><select id="sort"><option value="started">Newest</option><option value="name">Run name</option><option value="loss">Lowest loss</option><option value="tps">Highest tok/s</option></select><div class="grow"></div><button class="primary" id="compare" disabled>Compare (<span>0</span>)</button></div><div class="table"><div class="tr head"><span></span><span>RUN</span><span>STATE</span><span>LOSS</span><span class="hide-sm">TOK/S</span><span class="hide-sm">AGE</span></div>${runs.map(r=>`<div class="tr item" data-name="${esc(r.name.toLowerCase())}" data-state="${r.state}" data-started="${new Date(r.started_at).getTime()}" data-loss="${r.latest_metrics['train/loss']??r.latest_metrics.loss??Infinity}" data-tps="${r.latest_metrics['throughput/tokens_sec']??-Infinity}"><input type="checkbox" data-id="${r.id}"><span class="link" data-run="${r.id}">${esc(r.name)}</span><span class="state-${r.state}">${r.state==='running'?'●':'✓'} ${r.state.toUpperCase()}</span><span>${fmt(r.latest_metrics['train/loss']??r.latest_metrics.loss)}</span><span class="hide-sm">${fmt(r.latest_metrics['throughput/tokens_sec'])}</span><span class="hide-sm">${age(r.started_at)}</span></div>`).join('')}</div>`;
-document.querySelector('#project').onchange=e=>showRuns(e.target.value,projects);document.querySelectorAll('[data-run]').forEach(x=>x.onclick=()=>detail(x.dataset.run));document.querySelectorAll('[data-id]').forEach(x=>x.onchange=()=>{x.checked?selected.add(x.dataset.id):selected.delete(x.dataset.id);let b=document.querySelector('#compare');b.disabled=selected.size<2;b.querySelector('span').textContent=selected.size});document.querySelector('#compare').onclick=()=>comparison([...selected]);let filter=()=>document.querySelectorAll('.item').forEach(x=>x.style.display=(!x.dataset.name.includes(document.querySelector('#search').value.toLowerCase())||document.querySelector('#state').value&&x.dataset.state!==document.querySelector('#state').value)?'none':'grid');document.querySelector('#search').oninput=filter;document.querySelector('#state').onchange=filter;document.querySelector('#sort').onchange=e=>{let rows=[...document.querySelectorAll('.item')],key=e.target.value,cmp=key==='name'?(a,b)=>a.dataset.name.localeCompare(b.dataset.name):key==='loss'?(a,b)=>+a.dataset.loss-+b.dataset.loss:key==='tps'?(a,b)=>+b.dataset.tps-+a.dataset.tps:(a,b)=>+b.dataset.started-+a.dataset.started;let table=document.querySelector('.table');rows.sort(cmp).forEach(x=>table.append(x))}}
-async function detail(id){let r=await api('/api/runs/'+id),gpu=r.metadata.gpu_count?`${r.metadata.gpu_count}× ${r.metadata.gpu_models?.[0]}`:'—';app.innerHTML=`<div class="back" id="back">← All runs</div><div class="row"><h1>${esc(r.name)}</h1><div class="grow"></div><span class="state-${r.state}">${r.state==='running'?'●':'✓'} ${r.state.toUpperCase()}</span></div><div class="cards"><div class="card"><div class="label">STARTED</div><div class="value">${new Date(r.started_at).toLocaleString()}</div></div><div class="card"><div class="label">DURATION</div><div class="value">${duration(r)}</div></div><div class="card"><div class="label">GPU</div><div class="value">${esc(gpu)}</div></div><div class="card"><div class="label">GIT</div><div class="value">${esc(r.metadata.git_commit?.slice(0,8)||'—')}${r.metadata.git_dirty?' +':''}</div></div>${Object.entries(r.config).map(([k,v])=>`<div class="card"><div class="label">${esc(k.toUpperCase())}</div><div class="value">${fmt(v)}</div></div>`).join('')}</div><div class="charts">${Object.entries(r.metrics).map(([k,v])=>`<div class="chart"><div class="chart-title">${esc(k)}</div>${plot({[k]:v})}</div>`).join('')}</div><div class="notes"><label><div class="label">WHY THIS RUN EXISTS</div><textarea id="note">${esc(r.note)}</textarea></label><label><div class="label">CONCLUSION</div><textarea id="conclusion">${esc(r.conclusion)}</textarea></label></div><button id="save">Save notes</button><h2 style="margin:28px 0 12px">Raw logs</h2><div class="logs">${r.logs.length?r.logs.map(x=>`[${new Date(x.timestamp).toLocaleTimeString()}] ${esc(x.message)}`).join('\n'):'No logs captured.'}</div>`;document.querySelector('#back').onclick=home;document.querySelector('#save').onclick=async()=>{await api(`/api/runs/${id}/notes`,{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify({note:document.querySelector('#note').value,conclusion:document.querySelector('#conclusion').value})});document.querySelector('#save').textContent='Saved ✓'}}
-async function comparison(ids){let rs=await api('/api/compare?'+ids.map(x=>'ids='+encodeURIComponent(x)).join('&')),diff=false;let render=()=>{let cfg=[...new Set(rs.flatMap(r=>Object.keys(r.config)))],met=[...new Set(rs.flatMap(r=>Object.keys(r.metrics)))],rows=[...cfg.map(k=>[k,...rs.map(r=>r.config[k])]),...met.map(k=>[k,...rs.map(r=>r.metrics[k]?.at(-1)?.value)])];if(diff)rows=rows.filter(x=>new Set(x.slice(1).map(JSON.stringify)).size>1);app.innerHTML=`<div class="back" id="back">← All runs</div><div class="row"><h1>Compare runs</h1><div class="grow"></div><label><input type="checkbox" id="diff" ${diff?'checked':''}> Show differences only</label></div><table class="compare-table"><thead><tr><th>FIELD</th>${rs.map(r=>`<th>${esc(r.name)}</th>`).join('')}</tr></thead><tbody>${rows.map(x=>`<tr>${x.map(v=>`<td>${fmt(v)}</td>`).join('')}</tr>`).join('')}</tbody></table><div class="charts">${met.map(k=>`<div class="chart"><div class="chart-title">${esc(k)}</div>${plot(Object.fromEntries(rs.filter(r=>r.metrics[k]).map(r=>[r.id,r.metrics[k]])),Object.fromEntries(rs.map(r=>[r.id,r.name])))}</div>`).join('')}</div>`;document.querySelector('#back').onclick=home;document.querySelector('#diff').onchange=e=>{diff=e.target.checked;render()}};render()}
-home().catch(e=>app.innerHTML=`<h1>Could not load tracker</h1><p class="muted">${esc(e.message)}</p>`);
-</script></body></html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Training studio · Fabryka Track</title>
+    <style>
+      :root {
+        --bg: #f5f3ed;
+        --paper: #fffefa;
+        --ink: #292b25;
+        --muted: #74766c;
+        --line: #dedfd5;
+        --accent: #a84d33;
+        --green: #527660;
+        --blue: #647d96;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font:
+          15px -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+      }
+      button,
+      input,
+      select,
+      textarea {
+        font: inherit;
+      }
+      button,
+      a,
+      input,
+      select,
+      textarea {
+        outline-offset: 4px;
+      }
+      button {
+        cursor: pointer;
+      }
+      button:disabled {
+        cursor: not-allowed;
+        opacity: 0.45;
+      }
+      a {
+        color: inherit;
+      }
+      header {
+        height: 82px;
+        border-bottom: 1px solid var(--line);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 5vw;
+        background: var(--paper);
+      }
+      .brand {
+        font-weight: 750;
+        letter-spacing: -0.6px;
+        text-decoration: none;
+        font-size: 19px;
+      }
+      .brand span {
+        color: var(--accent);
+        margin-right: 10px;
+      }
+      nav {
+        display: flex;
+        gap: 25px;
+      }
+      nav a {
+        text-decoration: none;
+        color: var(--muted);
+        padding: 29px 0;
+      }
+      nav a.active {
+        color: var(--ink);
+        border-bottom: 2px solid var(--accent);
+      }
+      main {
+        max-width: 1160px;
+        padding: 45px 30px 60px;
+        margin: auto;
+      }
+      h1,
+      h2,
+      h3,
+      p {
+        margin-top: 0;
+      }
+      h1 {
+        font:
+          normal clamp(32px, 4vw, 45px) Georgia,
+          serif;
+        letter-spacing: -1.5px;
+        margin-bottom: 12px;
+      }
+      h2 {
+        font:
+          normal 26px Georgia,
+          serif;
+        letter-spacing: -0.5px;
+      }
+      h3 {
+        font-size: 16px;
+      }
+      p {
+        line-height: 1.6;
+      }
+      .muted,
+      small {
+        color: var(--muted);
+      }
+      small {
+        font-size: 12px;
+      }
+      .eyebrow {
+        font-size: 11px;
+        letter-spacing: 1.8px;
+        text-transform: uppercase;
+        color: var(--accent);
+        font-weight: 700;
+        margin-bottom: 15px;
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .intro {
+        margin-bottom: 32px;
+      }
+      .steps {
+        display: flex;
+        border-bottom: 1px solid var(--line);
+        margin-bottom: 30px;
+        gap: 36px;
+      }
+      .step {
+        padding: 0 0 18px;
+        color: var(--muted);
+        border: 0;
+        border-bottom: 2px solid transparent;
+        background: none;
+      }
+      .step.active {
+        color: var(--accent);
+        border-color: var(--accent);
+      }
+      .step b {
+        display: inline-grid;
+        place-items: center;
+        width: 25px;
+        height: 25px;
+        border: 1px solid var(--line);
+        border-radius: 50%;
+        margin-right: 9px;
+        font-size: 12px;
+      }
+      .step.active b {
+        background: var(--accent);
+        color: white;
+        border-color: var(--accent);
+      }
+      .layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 300px;
+        gap: 24px;
+        align-items: start;
+      }
+      .panel {
+        background: var(--paper);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 26px;
+      }
+      .panel + .panel {
+        margin-top: 18px;
+      }
+      .aside {
+        position: sticky;
+        top: 24px;
+      }
+      .dataset {
+        padding: 23px 0;
+        border-top: 1px solid var(--line);
+      }
+      .dataset:first-child {
+        border: 0;
+      }
+      .dataset h3 {
+        margin: 0 0 5px;
+      }
+      .dot {
+        display: inline-block;
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        margin-right: 9px;
+      }
+      .dataset input[type="range"] {
+        width: 100%;
+        margin: 19px 0 5px;
+        accent-color: var(--accent);
+        cursor: pointer;
+      }
+      .percent {
+        font-size: 24px;
+        font-variant-numeric: tabular-nums;
+      }
+      .stack {
+        display: flex;
+        overflow: hidden;
+        height: 12px;
+        background: var(--line);
+        border-radius: 5px;
+        margin: 20px 0;
+      }
+      .stack span {
+        transition: width 0.15s;
+      }
+      .legend {
+        display: flex;
+        justify-content: space-between;
+        padding: 8px 0;
+        font-size: 13px;
+        gap: 10px;
+      }
+      .divider {
+        border-top: 1px solid var(--line);
+        margin: 20px 0;
+      }
+      .primary,
+      .secondary {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 9px;
+        border-radius: 7px;
+        padding: 12px 18px;
+        font-size: 14px;
+        font-weight: 600;
+        text-decoration: none;
+      }
+      .primary {
+        background: var(--accent);
+        border: 1px solid var(--accent);
+        color: white;
+      }
+      .secondary {
+        background: transparent;
+        border: 1px solid var(--line);
+        color: var(--ink);
+      }
+      .wide {
+        width: 100%;
+      }
+      .upload {
+        padding: 18px;
+        border: 1px dashed #b7b9ae;
+        border-radius: 8px;
+        margin-top: 12px;
+        display: flex;
+        gap: 15px;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .upload p {
+        font-size: 13px;
+        margin: 3px 0;
+      }
+      .field {
+        display: block;
+        margin-bottom: 23px;
+      }
+      .field > span {
+        display: block;
+        font-size: 13px;
+        font-weight: 600;
+        margin-bottom: 9px;
+      }
+      input:not([type="range"]):not([type="checkbox"]),
+      select,
+      textarea {
+        width: 100%;
+        padding: 12px;
+        border: 1px solid #cfd1c5;
+        border-radius: 6px;
+        background: white;
+        color: var(--ink);
+      }
+      .field small {
+        display: block;
+        line-height: 1.5;
+        margin-top: 7px;
+      }
+      .fields {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 18px;
+      }
+      .choice {
+        padding: 20px;
+        border: 1px solid var(--green);
+        background: #f3f6ef;
+        border-radius: 8px;
+        margin-bottom: 25px;
+      }
+      .choice h3 {
+        margin: 0 0 7px;
+      }
+      .choice p {
+        font-size: 13px;
+        margin: 0;
+      }
+      .badge {
+        font-size: 11px;
+        font-weight: 600;
+        display: inline-block;
+        padding: 5px 8px;
+        border-radius: 4px;
+        background: #eceee6;
+        color: var(--green);
+        white-space: nowrap;
+      }
+      .badge.failed,
+      .badge.interrupted {
+        color: #a13e30;
+        background: #f8e4df;
+      }
+      .badge.running {
+        background: #e3efdf;
+      }
+      .badge.queued,
+      .badge.stopping {
+        color: #866426;
+        background: #f5eddc;
+      }
+      .notice {
+        background: #eeeee5;
+        padding: 13px 16px;
+        border-radius: 7px;
+        color: #656856;
+        font-size: 13px;
+        line-height: 1.6;
+      }
+      .actions {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        margin-top: 28px;
+      }
+      .error {
+        color: #9c352a;
+        background: #fbeae5;
+        border: 1px solid #e9c0b8;
+        padding: 14px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+      }
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 14px;
+        margin: 24px 0;
+      }
+      .metric {
+        background: var(--paper);
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        padding: 20px;
+      }
+      .metric small {
+        display: block;
+        margin-bottom: 10px;
+      }
+      .metric strong {
+        font-size: 26px;
+        font-weight: 500;
+        letter-spacing: -0.6px;
+      }
+      .charts {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+      }
+      .chart {
+        background: var(--paper);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 22px;
+        min-width: 0;
+      }
+      .chart h3 {
+        margin: 0 0 16px;
+      }
+      .chart svg {
+        width: 100%;
+        height: auto;
+      }
+      .empty {
+        text-align: center;
+        padding: 55px 20px;
+      }
+      .empty h2 {
+        margin-bottom: 10px;
+      }
+      .run-list {
+        display: grid;
+        gap: 12px;
+      }
+      .run-item {
+        background: var(--paper);
+        border: 1px solid var(--line);
+        padding: 20px;
+        border-radius: 9px;
+        display: flex;
+        align-items: center;
+        gap: 18px;
+      }
+      .run-item > a {
+        flex: 1;
+        text-decoration: none;
+      }
+      .run-item h3 {
+        margin: 0 0 6px;
+      }
+      .run-item input {
+        width: 18px;
+        height: 18px;
+        accent-color: var(--accent);
+      }
+      pre {
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        font-size: 12px;
+        line-height: 1.7;
+        max-height: 230px;
+        overflow: auto;
+        margin: 0;
+      }
+      details {
+        margin-top: 22px;
+      }
+      summary {
+        cursor: pointer;
+        color: var(--muted);
+        font-size: 13px;
+        margin-bottom: 17px;
+      }
+      footer {
+        display: flex;
+        justify-content: space-between;
+        border-top: 1px solid var(--line);
+        padding: 22px 5vw;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .toast {
+        position: fixed;
+        bottom: 25px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: var(--ink);
+        color: white;
+        padding: 12px 22px;
+        border-radius: 8px;
+        z-index: 5;
+      }
+      .table-scroll {
+        overflow: auto;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 13px;
+      }
+      td,
+      th {
+        padding: 12px;
+        text-align: left;
+        border-bottom: 1px solid var(--line);
+      }
+      progress {
+        width: 100%;
+        height: 8px;
+        accent-color: var(--green);
+      }
+      @media (max-width: 760px) {
+        header {
+          height: 65px;
+          padding: 0 20px;
+        }
+        .brand {
+          font-size: 16px;
+        }
+        nav {
+          gap: 16px;
+        }
+        nav a {
+          padding: 21px 0;
+          font-size: 13px;
+        }
+        main {
+          padding: 28px 18px;
+        }
+        .layout,
+        .charts {
+          grid-template-columns: 1fr;
+        }
+        .aside {
+          position: static;
+        }
+        .metrics {
+          grid-template-columns: 1fr 1fr;
+        }
+        .steps {
+          gap: 14px;
+        }
+        .step {
+          font-size: 12px;
+        }
+        .step b {
+          margin-right: 4px;
+        }
+        .panel {
+          padding: 20px;
+        }
+        .intro.row {
+          align-items: start;
+          flex-wrap: wrap;
+        }
+        .run-item {
+          gap: 10px;
+        }
+        .run-item .loss-label {
+          display: none;
+        }
+        .fields {
+          grid-template-columns: 1fr;
+        }
+        .upload {
+          flex-wrap: wrap;
+        }
+        footer {
+          gap: 20px;
+        }
+        .percent {
+          font-size: 21px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <a class="brand" href="#new"><span>✳</span>fabryka / track</a>
+      <nav aria-label="Main">
+        <a href="#new" id="nav-new">Training studio</a
+        ><a href="#runs" id="nav-runs">My runs</a
+        ><a href="#leaderboard" id="nav-leaderboard">Leaderboard</a><a href="#login" id="nav-account">Sign in</a>
+      </nav>
+    </header>
+    <main id="app"></main>
+    <footer>
+      <span>Small experiments. Clear results.</span
+      ><span>Fabryka Track · Local training</span>
+    </footer>
+    <div id="toast" role="status" aria-live="polite"></div>
+    <script>
+      const $ = (s) => document.querySelector(s),
+        app = $("#app");
+      const esc = (s) =>
+        String(s ?? "").replace(
+          /[&<>"']/g,
+          (c) =>
+            ({
+              "&": "&amp;",
+              "<": "&lt;",
+              ">": "&gt;",
+              '"': "&quot;",
+              "'": "&#39;",
+            })[c],
+        );
+      const colors = ["#a84d33", "#527660", "#647d96", "#b49953", "#967c98"];
+      const fmt = (n, d = 2) =>
+        Number.isFinite(n)
+          ? n.toLocaleString(undefined, { maximumFractionDigits: d })
+          : "—";
+      let account = null, authNext = "leaderboard";
+      async function api(path, opt = {}) {
+        const r = await fetch("/api" + path, {...opt, headers: {"X-Track-Request": "1", ...opt.headers}});
+        if (!r.ok) {
+          let b;
+          try {
+            b = await r.json();
+          } catch {}
+          throw Error(
+            typeof b?.detail === "string"
+              ? b.detail
+              : Array.isArray(b?.detail)
+                ? b.detail.map((x) => x.msg).join(" ")
+                : "Could not connect. Please try again.",
+          );
+        }
+        return r.json();
+      }
+      const post = (path, body) =>
+        api(path, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+      function toast(message) {
+        const t = $("#toast");
+        t.className = "toast";
+        t.textContent = message;
+        setTimeout(() => {
+          t.textContent = "";
+          t.className = "";
+        }, 3500);
+      }
+      function error(e) {
+        let box = $("#error");
+        if (!box) {
+          box = document.createElement("div");
+          box.id = "error";
+          box.className = "error";
+          box.setAttribute("role", "alert");
+          app.prepend(box);
+        }
+        box.textContent = e.message;
+      }
+      let datasets = [],
+        draft = {
+          weights: {},
+          name: "New training run",
+          steps: 100,
+          batch_size: 8,
+          learning_rate: 0.003,
+          seed: 42,
+          model_size: "tiny",
+          budget_mode: "manual",
+          target_tokens: 100000000,
+        },
+        stage = 1,
+        timer,
+        generation = 0,
+        selected = new Set();
+      const initialDraft = structuredClone(draft);
+      function draftKey() { return "training-draft-v3:" + (account?.id || "guest"); }
+      function restoreDraft() {
+        draft = structuredClone(initialDraft);
+        try { Object.assign(draft, JSON.parse(localStorage.getItem(draftKey()) || "{}")); } catch {}
+        if (!String(draft.name || "").trim()) draft.name = "New training run";
+        datasets = []; selected.clear(); stage = 1;
+      }
+      function save() {
+        if (!account) return;
+        try { localStorage.setItem(draftKey(), JSON.stringify(draft)); } catch {}
+      }
+      function accountNav() {
+        $("#nav-account").textContent = account ? account.username : "Sign in";
+        $("#nav-account").href = account ? "#account" : "#login";
+      }
+      function authForm(register = false) {
+        app.innerHTML = `<section class="panel" style="max-width:480px;margin:35px auto"><div class="eyebrow">Your workspace</div><h1>${register ? "Create an account" : "Welcome back"}</h1><p class="muted">Keep datasets and training runs private. Publish selected scores to the leaderboard.</p><form id="auth-form"><label class="field"><span>Username</span><input name="username" autocomplete="username" pattern="[A-Za-z0-9_-]{3,32}" minlength="3" maxlength="32" required><small>3–32 letters, numbers, underscores or hyphens.</small></label><label class="field"><span>Password</span><input name="password" type="password" autocomplete="${register ? "new-password" : "current-password"}" minlength="12" maxlength="128" required><small>At least 12 characters. Keep it in your password manager; email recovery is not available.</small></label><button class="primary" type="submit">${register ? "Create account" : "Sign in"}</button></form><p style="margin-top:20px"><a href="${register ? "#login" : "#register"}">${register ? "Already have an account? Sign in" : "Create an account"}</a></p><a href="#leaderboard">Browse the public leaderboard →</a></section>`;
+        $("#auth-form").onsubmit = async event => {
+          event.preventDefault();
+          const form = event.currentTarget, button = form.querySelector("button"); button.disabled = true;
+          try {
+            const result = await post(register ? "/auth/register" : "/auth/login", {username: form.elements.username.value, password: form.elements.password.value});
+            account = result.user; restoreDraft(); accountNav();
+            if (location.hash === "#" + authNext) await route(); else location.hash = authNext;
+          } catch (e) { error(e); button.disabled = false; }
+        };
+      }
+      function accountPage() {
+        app.innerHTML = `<section class="panel" style="max-width:600px;margin:30px auto"><div class="eyebrow">Account</div><h1>${esc(account.username)}</h1><p>Your datasets, notes and model files are private. Publishing shares your username, run name, scores and mixture percentages, while uploaded filenames and contents stay private.</p><div class="actions"><a class="primary" href="#new">New training run →</a><button class="secondary" id="logout">Sign out</button></div><div class="divider"></div><h2>Change password</h2><form id="password-form"><label class="field"><span>Current password</span><input name="current_password" type="password" autocomplete="current-password" maxlength="128" required></label><label class="field"><span>New password</span><input name="new_password" type="password" autocomplete="new-password" minlength="12" maxlength="128" required></label><p class="muted">Changing your password signs out other sessions and revokes your API key.</p><button class="primary">Update password</button></form><div class="divider"></div><h2>SDK API key</h2><p class="muted">Use an API key with the Python tracker. Generating a key replaces the previous one.</p><form id="key-form"><label class="field"><span>Confirm password</span><input name="password" type="password" autocomplete="current-password" maxlength="128" required></label><button class="secondary">Generate API key</button><button type="button" class="secondary" id="revoke-key">Revoke API key</button></form><div id="key-result"></div></section>`;
+        $("#logout").onclick = async () => { try { await post("/auth/logout", {}); account = null; restoreDraft(); accountNav(); location.hash = "leaderboard"; } catch(e) { error(e); } };
+        $("#password-form").onsubmit = async event => {
+          event.preventDefault(); const f = event.currentTarget; const b=f.querySelector("button"); b.disabled=true;
+          try { await post("/auth/password", {current_password:f.elements.current_password.value,new_password:f.elements.new_password.value}); f.reset(); $("#key-result").replaceChildren(); toast("Password updated. Other sessions and API keys revoked."); } catch(e) { error(e); } finally { b.disabled=false; }
+        };
+        $("#key-form").onsubmit = async event => {
+          event.preventDefault(); const f=event.currentTarget; const b=f.querySelector("button"); b.disabled=true;
+          try { const result=await post("/auth/api-key", {password:f.elements.password.value}); f.reset(); $("#key-result").innerHTML=`<p>Copy this key now. It is shown only once.</p><label class="field"><span>API key</span><input readonly value="${esc(result.api_key)}"></label><p class="muted">Set FABRYKA_API_KEY and FABRYKA_API_URL=https://track.fabryka.ai in your training environment.</p>`; } catch(e) { error(e); } finally { b.disabled=false; }
+        };
+        $("#revoke-key").onclick = async () => { try { await api("/auth/api-key", {method:"DELETE"}); $("#key-result").replaceChildren(); toast("API key revoked."); } catch(e) { error(e); } };
+      }
+      function mix() {
+        return datasets
+          .filter((d) => (draft.weights[d.id] || 0) > 0)
+          .map((d) => ({ ...d, weight: draft.weights[d.id] }));
+      }
+      function balance(id, value) {
+        const others = datasets.filter((d) => d.id !== id),
+          remaining = 100 - value,
+          total = others.reduce((s, d) => s + (draft.weights[d.id] || 0), 0);
+        draft.weights[id] = others.length ? value : 100;
+        let used = 0;
+        others.forEach((d, i) => {
+          const n =
+            i === others.length - 1
+              ? remaining - used
+              : Math.floor(
+                  remaining *
+                    (total
+                      ? (draft.weights[d.id] || 0) / total
+                      : 1 / others.length),
+                );
+          draft.weights[d.id] = n;
+          used += n;
+        });
+        save();
+        updateMix();
+      }
+      function updateMix() {
+        datasets.forEach((d) => {
+          const input = $(`[data-slider="${d.id}"]`),
+            value = draft.weights[d.id] || 0;
+          if (input) {
+            input.value = value;
+            $(`[data-value="${d.id}"]`).textContent = value + "%";
+          }
+        });
+        if ($("#recipe")) $("#recipe").innerHTML = recipe();
+        if ($("#data-warning")) $("#data-warning").outerHTML = dataWarning();
+      }
+      function trainingPlan() {
+        const small = draft.model_size === "small";
+        const parameters = small ? 391008 : 134912;
+        const context = small ? 64 : 32;
+        const length = Math.min(context, ...mix().map(d => Math.floor(d.bytes * .9) - 1));
+        const target = parameters * 20;
+        const count = draft.budget_mode === "chinchilla" ? Math.ceil(target / (draft.batch_size * length)) : draft.steps;
+        return {parameters, context, length, target, steps: count, tokens: count * draft.batch_size * length, available: mix().reduce((n, d) => n + Math.floor(d.bytes * .9), 0), reuse: Math.max(0, ...mix().map(d => count * draft.batch_size * length * d.weight / 100 / Math.floor(d.bytes * .9)))};
+      }
+      function refreshTrainingPlan() {
+        const p = trainingPlan();
+        const f = $("#setup");
+        if (f) {
+          f.elements.steps.disabled = draft.budget_mode === "chinchilla";
+          f.elements.steps.value = p.steps;
+          $("#budget-summary").textContent = `Up to ${fmt(p.tokens, 0)} byte tokens in ${fmt(p.steps, 0)} updates. Available training text: ${fmt(p.available, 0)} bytes. Most reused source: approximately ${fmt(p.reuse, 1)}× at the step limit. Early stopping can finish sooner.`;
+          $(".choice h3").textContent = `${draft.model_size === "small" ? "Small" : "Tiny"} transformer · CPU`;
+          $(".choice p").textContent = `${fmt(p.parameters, 0)} parameters, ${draft.model_size === "small" ? 3 : 2} layers, ${p.context}-byte context. Initialized from scratch.`;
+        }
+        $("#recipe").innerHTML = recipe();
+        if ($("#data-warning")) $("#data-warning").outerHTML = dataWarning();
+      }
+      function dataWarning() {
+        const p = trainingPlan();
+        return `<div class="notice" id="data-warning">${p.available < 10000 ? "Very little training text: this run is a workflow test. Upload more varied text before increasing the model or budget. " : ""}${p.reuse > 4 ? `At the step limit, the most reused source would be sampled approximately ${fmt(p.reuse, 1)} times its training size. These are repeated byte tokens, not fresh data. ` : ""}Validation uses a small fixed sample from the last 10% of each source; its score is only a diagnostic for this mix.</div>`;
+      }
+      function recipe() {
+        return `<h3>Your recipe</h3><small>${mix().length} sources · 100% allocated</small><div class="stack" aria-label="Dataset mix">${mix()
+          .map(
+            (d) =>
+              `<span style="width:${d.weight}%;background:${colors[datasets.indexOf(datasets.find((x) => x.id === d.id)) % colors.length]}"></span>`,
+          )
+          .join("")}</div>${mix()
+          .map(
+            (d) =>
+              `<div class="legend"><span>${esc(d.name)}</span><b>${d.weight}%</b></div>`,
+          )
+          .join(
+            "",
+          )}<div class="divider"></div><div class="legend"><span>Future GPU corpus budget</span><b>${fmt(draft.target_tokens, 0)} tokens</b></div><div class="legend"><span>Model</span><b>${draft.model_size === "small" ? "Small" : "Tiny"} transformer</b></div><div class="legend"><span>Maximum training byte tokens</span><b>${fmt(trainingPlan().tokens, 0)}</b></div><div class="legend"><span>Tokens / parameter</span><b>${(trainingPlan().tokens / trainingPlan().parameters).toFixed(2)}</b></div><div class="legend"><span>Compute</span><b>Local CPU</b></div><div class="legend"><span>Validation</span><b>10% held out</b></div><p class="muted" style="font-size:12px;margin:15px 0 0">Percentages control how often each source is sampled. Small datasets are sampled repeatedly.</p>`;
+      }
+      function steps() {
+        return `<div class="steps" aria-label="Training setup">${["Mix datasets", "Set up training", "Review & start"].map((s, i) => `<button class="step ${stage === i + 1 ? "active" : ""}" data-stage="${i + 1}" ${i + 1 > stage ? "disabled" : ""}><b>${i + 1}</b>${s}</button>`).join("")}</div>`;
+      }
+      async function studio() {
+        datasets = await api("/datasets");
+        draft.weights = Object.fromEntries(
+          datasets.map((d) => [
+            d.id,
+            Math.max(0, Math.min(100, Number(draft.weights[d.id]) || 0)),
+          ]),
+        );
+        if (Object.values(draft.weights).reduce((a, b) => a + b, 0) !== 100) {
+          datasets.forEach(
+            (d, i) =>
+              (draft.weights[d.id] =
+                i === 0 ? 60 : i === 1 ? 25 : i === 2 ? 15 : 0),
+          );
+          if (datasets.length < 3) draft.weights[datasets[0].id] = 100;
+        }
+        renderStudio();
+      }
+      function capture() {
+        if (!$("#setup")) return true;
+        const f = $("#setup");
+        if (!f.reportValidity()) return false;
+          for (const key of [
+          "name",
+          "steps",
+          "batch_size",
+          "learning_rate",
+          "seed",
+          "model_size",
+        ])
+          if (key !== "steps" || draft.budget_mode !== "chinchilla") draft[key] =
+            key === "name" || key === "model_size"
+              ? f.elements[key].value.trim()
+              : Number(f.elements[key].value);
+        save();
+        return true;
+      }
+      function renderStudio() {
+        app.innerHTML = `<div class="intro"><div class="eyebrow">Training studio</div><h1>A model starts with a mix.</h1><p class="muted">Choose your data, set up a small training run, and see what changes.</p></div>${steps()}<div id="error-slot"></div><div class="layout"><section class="panel" id="workspace"></section><aside class="panel aside" id="recipe">${recipe()}</aside></div>`;
+        const w = $("#workspace");
+        if (stage === 1) {
+          w.innerHTML = `<div class="row"><div><h2 style="margin-bottom:8px">Mix your datasets</h2><p class="muted" style="font-size:13px">Move a slider. The rest of the mix adjusts to stay at 100%.</p></div></div><div>${datasets.map((d, i) => `<div class="dataset"><div class="row"><div><h3><span class="dot" style="background:${colors[i % colors.length]}"></span>${esc(d.name)}</h3><small>${d.example ? "Included example text" : "Your uploaded text"} · ${fmt(d.bytes / 1000, 1)} KB</small></div><output class="percent" data-value="${d.id}" for="slider-${d.id}">${draft.weights[d.id] || 0}%</output></div><input id="slider-${d.id}" type="range" min="0" max="100" step="1" value="${draft.weights[d.id] || 0}" aria-label="${esc(d.name)} percentage" data-slider="${d.id}"></div>`).join("")}</div><div class="upload"><div><b style="font-size:13px">Bring your own data</b><p class="muted">UTF-8 plain text · 100+ characters · up to 2 MB</p></div><button class="secondary" id="upload-button">+ Add text file</button><input type="file" id="upload" accept=".txt,text/plain" hidden></div><div class="actions"><small>Example texts are for trying the workflow.</small><button class="primary" id="next">Training settings →</button></div>`;
+          document
+            .querySelectorAll("[data-slider]")
+            .forEach(
+              (el) =>
+                (el.oninput = () => balance(el.dataset.slider, +el.value)),
+            );
+          $("#upload-button").onclick = () => $("#upload").click();
+          $("#upload").onchange = async (e) => {
+            if (!e.target.files[0]) return;
+            const b = $("#upload-button");
+            b.disabled = true;
+            b.textContent = "Uploading…";
+            try {
+              const form = new FormData();
+              form.append("file", e.target.files[0]);
+              await api("/datasets", { method: "POST", body: form });
+              await studio();
+              toast("Text added. Adjust its slider to include it.");
+            } catch (e) {
+              error(e);
+              b.disabled = false;
+              b.textContent = "+ Add text file";
+            }
+          };
+          if (stage === 1) {
+            w.insertAdjacentHTML("afterbegin", `<div class="panel" style="background:var(--panel);margin-bottom:20px"><div class="eyebrow">Quick start</div><div class="presets" id="mix-presets"><button type="button" class="chip" data-preset="balanced">Balanced</button><button type="button" class="chip" data-preset="polish">Polish-heavy</button><button type="button" class="chip" data-preset="code">Code-heavy</button></div><label class="field" style="margin:0"><span>Target training tokens</span><input id="target-tokens" type="number" min="100000" max="10000000000" step="1000000" value="${draft.target_tokens}"><small>Planning only. At 20:1, 1 billion training tokens suggests about 50 million parameters. The GPU runner is not connected; CPU runs use the budget selected in the next step.</small></label></div>`);
+            const presets = {balanced: [50, 30, 20], polish: [20, 70, 10], code: [15, 15, 70]};
+            document.querySelectorAll("[data-preset]").forEach((button) => button.onclick = () => { const values = presets[button.dataset.preset]; datasets.forEach((dataset, index) => draft.weights[dataset.id] = values[index] || 0); save(); updateMix(); document.querySelectorAll("[data-preset]").forEach((item) => item.classList.toggle("active", item === button)); });
+            $("#target-tokens").oninput = (event) => { draft.target_tokens = Math.max(100000, Number(event.target.value) || 100000); save(); updateMix(); };
+          }
+        } else if (stage === 2) {
+          w.innerHTML = `<h2>Keep the first run simple.</h2><div class="choice"><h3>Tiny transformer <span class="badge">CPU ready</span></h3><p>A two-layer causal language model with a 32-byte context. 134,912 trainable parameters, initialized from scratch.</p></div><form id="setup"><label class="field"><span>Run name</span><input name="name" required maxlength="120" placeholder="e.g. Polish-heavy baseline" value="${esc(draft.name)}"></label><div class="fields"><label class="field"><span>Maximum training steps</span><input name="steps" type="number" min="10" max="2000" required value="${draft.steps}"><small>Early stopping is on: stop after 20 validation checks without an improvement of at least 0.01. The step count is an upper limit.</small></label><label class="field"><span>Batch size</span><select name="batch_size">${[1, 2, 4, 8, 16, 32].map((n) => `<option ${draft.batch_size === n ? "selected" : ""}>${n}</option>`).join("")}</select><small>Each sequence uses the selected model’s context, shortened for small datasets.</small></label></div><details><summary>Advanced settings</summary><div class="fields"><label class="field"><span>Learning rate</span><input name="learning_rate" type="number" min="0.0001" max="0.1" step="0.0001" required value="${draft.learning_rate}"><small>How much each update changes the model.</small></label><label class="field"><span>Random seed</span><input name="seed" type="number" min="0" max="4294967295" required value="${draft.seed}"><small>Use the same seed to repeat an experiment.</small></label></div></details></form><div class="notice">Runs use this server’s CPU. Training and validation loss are measured during training; a model file is saved when it finishes.</div><div class="actions"><button class="secondary" id="previous">← Dataset mix</button><button class="primary" id="next">Review run →</button></div>`;
+        } else {
+          w.innerHTML = `<div class="eyebrow">Ready when you are</div><h2>${esc(draft.name)}</h2><p class="muted">Your data mix and settings will be saved with this run.</p>${[
+            ["Maximum steps", fmt(trainingPlan().steps, 0)],
+            ["Early stopping", "On · 20 checks without improvement"],
+            ["Saved model", "Lowest validation loss checkpoint"],
+            ["Batch size", draft.batch_size + " sequences"],
+            ["Learning rate", draft.learning_rate],
+            ["Random seed", draft.seed],
+            [
+              "Maximum training budget",
+              fmt(trainingPlan().tokens, 0) +
+                " byte tokens",
+            ],
+          ]
+            .map(
+              ([k, v]) =>
+                `<div class="legend"><span>${k}</span><b>${v}</b></div>`,
+            )
+            .join(
+              "",
+            )}<div class="divider"></div><div class="notice">The last 10% of each text is reserved for validation. Early stopping can finish before the step limit; the best validation checkpoint is saved.</div>${dataWarning()}<div class="actions"><button class="secondary" id="previous">← Settings</button><button class="primary" id="launch">Start training ↗</button></div>`;
+          $("#launch").onclick = async () => {
+            const b = $("#launch");
+            b.disabled = true;
+            b.textContent = "Starting…";
+            try {
+              const r = await post("/training", {
+                name: draft.name,
+                steps: draft.budget_mode === "chinchilla" ? 100 : draft.steps,
+                budget_mode: draft.budget_mode,
+                early_stopping: true,
+                patience: 20,
+                min_delta: 0.01,
+                batch_size: draft.batch_size,
+                learning_rate: draft.learning_rate,
+                seed: draft.seed,
+                model_size: draft.model_size,
+                target_tokens: draft.target_tokens,
+                mix: mix().map((d) => ({ dataset_id: d.id, weight: d.weight })),
+              });
+              location.hash = "run/" + r.id;
+            } catch (e) {
+              error(e);
+              b.disabled = false;
+              b.textContent = "Start training ↗";
+            }
+          };
+        }
+        if (stage === 2 && $("#setup")) {
+          $("#setup").insertAdjacentHTML("afterbegin", `<label class="field"><span>Training budget</span><select id="budget-mode"><option value="chinchilla" ${draft.budget_mode === "chinchilla" ? "selected" : ""}>Chinchilla upper limit · 20 tokens per parameter</option><option value="manual" ${draft.budget_mode === "manual" ? "selected" : ""}>Validation-guided · manual step limit</option></select><small id="budget-summary"></small></label><div class="notice">Early stopping is enabled in both modes. Validation is checked every update for the first 100 updates, then every 10. Downloaded model.pt contains the checkpoint with the lowest validation loss. Chinchilla is an optional upper limit, not a requirement to keep training.</div>`);
+          $("#budget-mode").onchange = event => { draft.budget_mode = event.target.value; save(); refreshTrainingPlan(); };
+          $("#setup").insertAdjacentHTML("afterbegin", `<label class="field"><span>Model size</span><select name="model_size"><option value="tiny" ${draft.model_size === "tiny" ? "selected" : ""}>Tiny · 134,912 parameters</option><option value="small" ${draft.model_size === "small" ? "selected" : ""}>Small · 391,008 parameters</option></select><small>Both train from scratch on this server CPU. Small has more capacity but takes longer.</small></label>`);
+        }
+        if (stage === 1 || stage === 2) w.insertAdjacentHTML("afterbegin", dataWarning());
+        if (stage === 2) refreshTrainingPlan();
+        if ($("#next"))
+          $("#next").onclick = () => {
+            if (stage === 2 && !capture()) return;
+            stage++;
+            renderStudio();
+          };
+        if ($("#previous"))
+          $("#previous").onclick = () => {
+            capture();
+            stage--;
+            renderStudio();
+          };
+        document.querySelectorAll("[data-stage]").forEach(
+          (b) =>
+            (b.onclick = () => {
+              if (stage === 2 && !capture()) return;
+              stage = +b.dataset.stage;
+              renderStudio();
+            }),
+        );
+        if ($("#setup"))
+          $("#setup").oninput = () => {
+            const f = $("#setup");
+            for (const k of [
+              "name",
+              "steps",
+              "batch_size",
+              "learning_rate",
+              "seed",
+              "model_size",
+            ])
+              if (k !== "steps" || draft.budget_mode !== "chinchilla") draft[k] =
+                k === "name" || k === "model_size"
+                  ? f.elements[k].value
+                  : Number(f.elements[k].value);
+            save();
+            refreshTrainingPlan();
+          };
+      }
+      function chart(series) {
+        const all = series
+          .flatMap((s) => s.points)
+          .filter((p) => Number.isFinite(p.value));
+        if (!all.length)
+          return '<div class="empty muted">Waiting for the first measurement…</div>';
+        let min = Math.min(...all.map((p) => p.value)),
+          max = Math.max(...all.map((p) => p.value));
+        if (min === max) {
+          min -= 0.1;
+          max += 0.1;
+        }
+        const xmax = Math.max(1, ...all.map((p) => p.step));
+        return `<svg viewBox="0 0 460 220" role="img" aria-label="${esc(series.map((s) => s.name).join(" and "))} by training step">${[0, 0.5, 1].map((t) => `<line x1="48" x2="446" y1="${20 + t * 155}" y2="${20 + t * 155}" stroke="#e5e5dc"/><text x="0" y="${24 + t * 155}" font-size="11" fill="#74766c">${fmt(max - t * (max - min))}</text>`).join("")}${series.map((s, i) => `<polyline fill="none" stroke="${colors[i % colors.length]}" stroke-width="2.5" points="${s.points.map((p) => `${48 + (p.step / xmax) * 398},${20 + ((max - p.value) / (max - min)) * 155}`).join(" ")}"/>${s.points.length === 1 ? `<circle cx="${48 + (s.points[0].step / xmax) * 398}" cy="${20 + ((max - s.points[0].value) / (max - min)) * 155}" r="3" fill="${colors[i % colors.length]}"/>` : ""}`).join("")}<text x="48" y="197" font-size="11" fill="#74766c">0</text><text x="446" y="197" font-size="11" text-anchor="end" fill="#74766c">${xmax} steps</text></svg><div class="row" style="flex-wrap:wrap;justify-content:start">${series.map((s, i) => `<small><span class="dot" style="background:${colors[i % colors.length]}"></span>${esc(s.name)}</small>`).join("")}</div>`;
+      }
+      const latest = (r, k) => r.metrics?.[k]?.at(-1)?.value;
+      async function runs() {
+        const ps = await api("/projects"),
+          rs = (
+            await Promise.all(
+              ps.map((p) =>
+                api("/projects/" + encodeURIComponent(p.name) + "/runs"),
+              ),
+            )
+          )
+            .flat()
+            .sort((a, b) => new Date(b.started_at) - new Date(a.started_at));
+        selected = new Set(
+          [...selected].filter((id) => rs.some((r) => r.id === id)),
+        );
+        app.innerHTML = `<div class="intro row"><div><div class="eyebrow">Your experiments</div><h1>Every mix tells a story.</h1><p class="muted">${rs.length} saved runs. Select two or more to compare.</p></div><a class="primary" href="#new">+ New training run</a></div><div class="row" style="margin-bottom:20px"><input id="search" aria-label="Search runs" placeholder="Search runs…" style="max-width:300px"><button id="compare" class="secondary" ${selected.size < 2 ? "disabled" : ""}>Compare (${selected.size})</button></div><div class="run-list">${rs.length ? rs.map((r) => `<div class="run-item" data-name="${esc(r.name.toLowerCase())}"><input type="checkbox" aria-label="Compare ${esc(r.name)}" data-select="${r.id}" ${selected.has(r.id) ? "checked" : ""}><a href="#run/${r.id}"><h3>${esc(r.name)}</h3><small>${esc(r.project)} · ${new Date(r.started_at).toLocaleString()}</small></a><span class="loss-label muted">Loss ${fmt(r.latest_metrics["train/loss"] ?? r.latest_metrics.loss)}</span><span class="badge ${esc(r.state)}">${esc(r.state)}</span></div>`).join("") : '<div class="panel empty"><h2>Your first experiment starts here.</h2><p class="muted">Mix a few datasets and train a small model in your browser.</p><a class="primary" href="#new">Create a training run →</a></div>'}</div><p id="no-match" class="empty muted" hidden>No runs match your search.</p>`;
+        $("#search").oninput = (e) => {
+          let count = 0;
+          document.querySelectorAll("[data-name]").forEach((row) => {
+            row.hidden = !row.dataset.name.includes(
+              e.target.value.toLowerCase(),
+            );
+            row.style.display = row.hidden ? "none" : "flex";
+            if (!row.hidden) count++;
+          });
+          $("#no-match").hidden = count > 0 || !rs.length;
+        };
+        document.querySelectorAll("[data-select]").forEach(
+          (b) =>
+            (b.onchange = () => {
+              if (b.checked && selected.size === 10) {
+                b.checked = false;
+                toast("Compare up to 10 runs at a time.");
+                return;
+              }
+              b.checked
+                ? selected.add(b.dataset.select)
+                : selected.delete(b.dataset.select);
+              $("#compare").disabled = selected.size < 2;
+              $("#compare").textContent = `Compare (${selected.size})`;
+            }),
+        );
+        $("#compare").onclick = () => {
+          location.hash = "compare/" + [...selected].join(",");
+        };
+      }
+      async function detail(id, token) {
+        const r = await api("/runs/" + encodeURIComponent(id));
+        if (token !== generation) return;
+        const local = r.metadata.engine === "tiny-transformer";
+        const modelLabel = r.config.model || "Tiny transformer · 134,912 parameters";
+        app.innerHTML = `<a href="#runs" class="muted" style="display:inline-block;margin-bottom:25px;text-decoration:none">← My runs</a><div class="intro row"><div><div class="eyebrow">${local ? "Training results" : "Tracked experiment"}</div><h1>${esc(r.name)}</h1><p class="muted">${local ? esc(modelLabel) + " · Local CPU · " : ""}${new Date(r.started_at).toLocaleString()}</p></div><span class="badge ${esc(r.state)}" id="run-state">${esc(r.state)}</span></div><div id="live"></div><div class="actions"><div id="run-actions"></div><a class="secondary" href="#new">New training run →</a></div><details><summary>Dataset mix & settings</summary><div class="panel"><pre>${esc(JSON.stringify(r.config, null, 2))}</pre></div></details><details><summary>Run notes</summary><label class="field"><span>What are you testing?</span><textarea id="note">${esc(r.note)}</textarea></label><label class="field"><span>Conclusion</span><textarea id="conclusion">${esc(r.conclusion)}</textarea></label><button class="secondary" id="save-note">Save notes</button></details><details><summary>Training log</summary><div class="panel"><pre id="logs"></pre></div></details>`;
+        $("#save-note").onclick = async () => {
+          try {
+            await api("/runs/" + id + "/notes", {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                note: $("#note").value,
+                conclusion: $("#conclusion").value,
+              }),
+            });
+            toast("Notes saved.");
+          } catch (e) {
+            error(e);
+          }
+        };
+        function paint(r) {
+          const active = ["queued", "running", "stopping"].includes(r.state);
+          $("#run-state").textContent = r.state;
+          $("#run-state").className = "badge " + r.state;
+          const result = r.metadata?.training_result;
+          const percent = latest(r, "progress") || 0;
+          $("#live").innerHTML =
+            `${local ? `<div class="row"><small>${r.state === "queued" ? "Queued — waiting for the current run" : r.state === "finished" ? (result?.stop_reason === "early_stopping" ? "Stopped early — validation stopped improving" : "Training complete") : r.state === "cancelled" ? "Training cancelled" : r.state === "interrupted" ? "Training interrupted — start a new run to retry" : r.state === "failed" ? "Training failed — see the log below" : r.state === "stopping" ? "Stopping training…" : "Training in progress"}</small><small>${fmt(percent, 0)}% · step ${r.metrics.progress?.at(-1)?.step || 0} / ${r.config.steps}</small></div><progress max="100" value="${percent}" aria-label="Training progress"></progress>` : ""}<div class="metrics">${[
+              ["Training loss", latest(r, "train/loss") ?? latest(r, "loss")],
+              ["Validation loss", latest(r, "val/loss")],
+              ["Validation perplexity", latest(r, "val/perplexity")],
+              ["Byte tokens / sec", latest(r, "throughput/tokens_sec")],
+            ]
+              .map(
+                ([k, v]) =>
+                  `<div class="metric"><small>${k}</small><strong>${fmt(v)}</strong></div>`,
+              )
+              .join(
+                "",
+              )}</div>${result && r.state === "finished" ? `<div class="notice">Saved best model from step ${result.best_step}: validation loss ${fmt(result.best_val_loss, 4)}, perplexity ${fmt(result.best_val_perplexity)}. Completed ${result.completed_steps} of ${r.config.steps} maximum updates. The curves and metric cards show training history; model.pt contains the best checkpoint.</div>` : ""}<div class="charts"><div class="chart"><h3>Learning progress</h3>${chart(
+              [
+                {
+                  name: "Training loss",
+                  points: r.metrics["train/loss"] || r.metrics.loss || [],
+                },
+                {
+                  name: "Validation loss",
+                  points: r.metrics["val/loss"] || [],
+                },
+              ],
+            )}</div><div class="chart"><h3>Validation perplexity</h3>${chart([{ name: "Perplexity", points: r.metrics["val/perplexity"] || [] }])}</div>${Object.entries(
+              r.metrics,
+            )
+              .filter(
+                ([k]) =>
+                  ![
+                    "train/loss",
+                    "loss",
+                    "val/loss",
+                    "val/perplexity",
+                    "progress",
+                  ].includes(k),
+              )
+              .map(
+                ([k, v]) =>
+                  `<div class="chart"><h3>${esc(k)}</h3>${chart([{ name: k, points: v }])}</div>`,
+              )
+              .join(
+                "",
+              )}</div><p class="muted" style="font-size:12px;margin-top:15px">Lower loss and perplexity mean better next-byte predictions. Compare runs with the same validation data. ${active ? "Refreshes every 2 seconds." : ""}</p>`;
+          $("#logs").textContent =
+            r.logs.map((l) => `[${l.level}] ${l.message}`).join("\n") ||
+            "No logs yet.";
+          $("#run-actions").innerHTML =
+            `${local && active ? '<button class="secondary" id="stop">Stop training</button>' : ""}${local && r.state === "finished" ? `<button class="secondary" id="publish">${r.is_public ? "Remove from leaderboard" : "Publish score to leaderboard"}</button>` : ""}${r.artifacts.map((a) => `<button class="primary" data-artifact="${a.id}">↓ Download ${esc(a.name)}</button>`).join(" ")}`;
+          if ($("#publish")) $("#publish").onclick = async () => {
+            try { $("#publish").disabled = true; await api("/training/" + id + "/visibility", {method:"PATCH", headers:{"Content-Type":"application/json"}, body:JSON.stringify({is_public:!r.is_public})}); await refresh(); } catch(e) { error(e); if ($("#publish")) $("#publish").disabled=false; }
+          };
+          if ($("#stop")) {
+            $("#stop").disabled = r.state === "stopping";
+            $("#stop").onclick = async () => {
+              try {
+                $("#stop").disabled = true;
+                await post("/training/" + id + "/stop", {});
+                await refresh();
+              } catch (e) {
+                error(e);
+                if ($("#stop")) $("#stop").disabled = false;
+              }
+            };
+          }
+          document.querySelectorAll("[data-artifact]").forEach(
+            (b) =>
+              (b.onclick = async () => {
+                try {
+                  const response = await fetch(
+                    "/api/artifacts/" + b.dataset.artifact,
+                  );
+                  if (!response.ok) throw Error("Download failed. Try again.");
+                  if (
+                    response.headers
+                      .get("content-type")
+                      ?.includes("application/json")
+                  ) {
+                    const content = await response.clone().json();
+                    if (content.url) {
+                      location.href = content.url;
+                      return;
+                    }
+                  }
+                  const url = URL.createObjectURL(await response.blob()),
+                    a = document.createElement("a");
+                  a.href = url;
+                  a.download = r.artifacts.find(
+                    (a) => a.id === b.dataset.artifact,
+                  ).name;
+                  a.click();
+                  setTimeout(() => URL.revokeObjectURL(url), 1000);
+                } catch (e) {
+                  error(e);
+                }
+              }),
+          );
+          return active;
+        }
+        async function refresh() {
+          clearTimeout(timer);
+          try {
+            const data = await api("/runs/" + id);
+            if (token !== generation) return;
+            $("#error")?.remove();
+            if (paint(data)) timer = setTimeout(refresh, 2000);
+          } catch (e) {
+            if (token === generation) {
+              error(e);
+              timer = setTimeout(refresh, 5000);
+            }
+          }
+        }
+        if (paint(r)) timer = setTimeout(refresh, 2000);
+      }
+      async function compare(ids) {
+        const rs = await api(
+          "/compare?" +
+            ids.map((id) => "ids=" + encodeURIComponent(id)).join("&"),
+        );
+        const keys = [
+          ...new Set(rs.flatMap((r) => Object.keys(r.metrics))),
+        ].filter((k) => k !== "progress");
+        app.innerHTML = `<a href="#runs" class="muted">← My runs</a><div class="intro" style="margin-top:25px"><div class="eyebrow">Side by side</div><h1>See what your mix changed.</h1><p class="muted">Compare measured results. Different validation mixtures are not a like-for-like quality ranking.</p></div><div class="panel table-scroll"><table><thead><tr><th>Run</th>${rs.map((r) => `<th>${esc(r.name)}</th>`).join("")}</tr></thead><tbody>${["state", ...keys].map((k) => `<tr><td>${esc(k)}</td>${rs.map((r) => `<td>${k === "state" ? esc(r.state) : fmt(latest(r, k))}</td>`).join("")}</tr>`).join("")}<tr><td>Dataset mix</td>${rs.map((r) => `<td>${(r.config.mix || []).map((d) => `${esc(d.name)} ${d.weight}%`).join("<br>") || "—"}</td>`).join("")}</tr>${["model", "steps", "batch_size", "learning_rate", "seed"].map((k) => `<tr><td>${k}</td>${rs.map((r) => `<td>${esc(r.config[k] ?? "—")}</td>`).join("")}</tr>`).join("")}</tbody></table></div><div class="charts" style="margin-top:20px">${keys.map((k) => `<div class="chart"><h3>${esc(k)}</h3>${chart(rs.map((r) => ({ name: r.name, points: r.metrics[k] || [] })))}</div>`).join("")}</div>`;
+      }
+      async function leaderboard() {
+        const sort = document.querySelector("#leader-sort")?.value || "val_loss";
+        const data = await api("/leaderboard?sort=" + sort + "&order=" + (sort === "throughput" ? "desc" : "asc"));
+        const models = data.models;
+        app.innerHTML = `<div class="intro row"><div><div class="eyebrow">Model leaderboard</div><h1>Measured progress, side by side.</h1><p class="muted">Published scores ranked by saved-checkpoint validation. Create an account to train and publish your own results.</p></div><a class="primary" href="#new">+ New training run</a></div><div class="row" style="margin-bottom:20px"><label class="field" style="margin:0;max-width:240px"><span>Rank by</span><select id="leader-sort"><option value="val_loss" ${sort === "val_loss" ? "selected" : ""}>Lowest validation loss</option><option value="perplexity" ${sort === "perplexity" ? "selected" : ""}>Lowest perplexity</option><option value="throughput" ${sort === "throughput" ? "selected" : ""}>Highest throughput</option><option value="started_at" ${sort === "started_at" ? "selected" : ""}>Newest run</option></select></label><small class="muted">Lower loss and perplexity are better.</small></div>${models.length ? `<div class="panel table-scroll"><table><thead><tr><th>#</th><th>Model</th><th>Author</th><th>Validation loss</th><th>Perplexity</th><th>Last train loss</th><th>Tokens / sec</th><th>Recipe</th></tr></thead><tbody>${models.map((r) => `<tr><td><strong>${r.rank}</strong></td><td>${r.is_owner ? `<a href="#run/${r.id}">${esc(r.name)}</a>` : esc(r.name)}<br><small>${new Date(r.started_at).toLocaleString()} · ${r.steps} steps</small></td><td>${esc(r.owner)}</td><td><strong>${fmt(r.val_loss)}</strong></td><td>${fmt(r.perplexity)}</td><td>${fmt(r.train_loss)}</td><td>${fmt(r.throughput, 0)}</td><td>${r.mix.map((d) => `${esc(d.name)} ${d.weight}%`).join("<br>")}</td></tr>`).join("")}</tbody></table></div>` : `<div class="panel empty"><h2>No completed models yet.</h2><p class="muted">Finish a training run and its measured validation metrics will appear here.</p><a class="primary" href="#new">Start your first run →</a></div>`}<p class="muted" style="font-size:12px;margin-top:18px">This is a smoke-test leaderboard. Scores are comparable when runs use the same validation data and model settings.</p>`;
+        $("#leader-sort").onchange = leaderboard;
+      }
+      async function route() {
+        clearTimeout(timer);
+        const token = ++generation,
+          hash = location.hash.slice(1) || "new";
+        $("#nav-new").classList.toggle("active", hash === "new");
+        $("#nav-runs").classList.toggle("active", hash === "runs" || hash.startsWith("run/") || hash.startsWith("compare/"));
+        $("#nav-leaderboard").classList.toggle("active", hash === "leaderboard");
+        app.innerHTML = '<p class="muted" role="status">Loading workspace…</p>';
+        try {
+          if (["login", "register"].includes(hash)) { authForm(hash === "register"); return; }
+          if (!account && hash !== "leaderboard") { authNext = hash; authForm(); return; }
+          if (hash === "account") { accountPage(); return; }
+          if (hash.startsWith("run/")) await detail(hash.slice(4), token);
+          else if (hash.startsWith("compare/"))
+            await compare(hash.slice(8).split(","));
+          else if (hash === "runs") await runs();
+          else if (hash === "leaderboard") await leaderboard();
+          else {
+            stage = 1;
+            await studio();
+          }
+        } catch (e) {
+          error(e);
+          const b = document.createElement("button");
+          b.className = "secondary";
+          b.textContent = "Try again";
+          b.onclick = route;
+          app.append(b);
+        }
+      }
+      let authReady = false;
+      window.addEventListener("hashchange", () => { if (authReady) route(); });
+      (async () => {
+        try { account = (await api("/auth/me")).user; restoreDraft(); accountNav(); authReady=true; await route(); }
+        catch(e) { error(e); }
+      })();
+    </script>
+  </body>
+</html>

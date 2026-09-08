@@ -48,6 +48,7 @@ class RunClient:
     """Process-global run client. Public calls are non-blocking after local persistence."""
 
     def __init__(self, api_url: str | None = None, spool_dir: str | Path | None = None):
+        self.api_key = settings.api_key
         self.api_url = (api_url or settings.api_url).rstrip("/")
         self.spool_dir = Path(spool_dir or settings.spool_dir)
         self.run_id: str | None = None
@@ -133,6 +134,7 @@ class RunClient:
         self._system_worker.start()
 
     def _upload_loop(self):
+        headers = {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
         while not self._stop.is_set() or not self._queue.empty():
             try:
                 path = self._queue.get(timeout=.25)
@@ -144,9 +146,9 @@ class RunClient:
                     artifact_path = Path(event["payload"]["local_path"])
                     with artifact_path.open("rb") as handle:
                         response = httpx.post(f"{self.api_url}/api/runs/{event['payload']['run_id']}/artifacts",
-                            files={"file": (event["payload"]["name"], handle)}, timeout=30)
+                            files={"file": (event["payload"]["name"], handle)}, headers=headers, timeout=30)
                 else:
-                    response = httpx.post(f"{self.api_url}/api/events", json={"events": [event]}, timeout=3)
+                    response = httpx.post(f"{self.api_url}/api/events", json={"events": [event]}, headers=headers, timeout=3)
                 response.raise_for_status()
                 if event["type"] == "run.artifact":
                     artifact_path.unlink(missing_ok=True)

@@ -1,8 +1,8 @@
 # Fabryka Track
 
-A deliberately small experiment tracker for training runs: projects, runs, metrics,
-system metrics, logs, artifacts, and notes. It provides exactly three views: runs,
-one run, and comparison.
+A minimal training studio: mix text datasets with sliders, run a tiny transformer
+smoke test, and watch real metrics. Includes experiment tracking, run comparison,
+logs, checkpoints, and notes.
 
 ## Start locally
 
@@ -53,3 +53,139 @@ Interactive documentation is at `/docs`. Useful endpoints include:
 - `PATCH /api/runs/{id}/notes` — update the run purpose and conclusion
 - `POST /api/runs/{id}/artifacts` — store locally or in R2
 
+
+## Training studio
+
+The homepage is a three-step workflow: mix datasets with percentage sliders, set
+up training, then review and start. The sliders redistribute the remaining share
+so the total stays at 100%. Upload UTF-8 text files (100+ characters, up to 2 MB)
+or use the three short, original example texts. Draft settings stay in your browser.
+
+The built-in smoke-test model is a **134,912-parameter causal transformer** trained
+from scratch on CPU: two layers, four heads, width 64, a 256-byte vocabulary, and
+32-byte context. The default is 100 steps with eight sequences per batch. This is
+a workflow smoke test, not a production-quality LLM. It needs no external model,
+dataset download, API key, or GPU.
+
+Each batch samples sources according to the chosen percentages. The last 10% of
+each source is held out before sampling; short splits use shorter contexts.
+Training is sampled with replacement. Validation uses a fixed seeded batch.
+The UI polls real training loss, validation loss/perplexity and byte-token
+throughput every two seconds. Compare quality only with matched validation data;
+changing the mix also changes validation sampling.
+
+Runs persist in the tracker database. Completed runs provide `model.pt` and
+`recipe.json`, including source SHA-256 hashes and settings. Load a checkpoint:
+
+```python
+import torch
+from fabryka_track.training import TinyTransformer
+
+checkpoint = torch.load("model.pt", map_location="cpu", weights_only=True)
+model = TinyTransformer()
+model.load_state_dict(checkpoint["state_dict"])
+model.eval()
+```
+
+Run this local MVP with **one server process / one Uvicorn worker**. It trains one
+job at a time and allows up to five active or queued jobs. Stop controls cancel a
+job; a server restart marks unfinished local jobs interrupted. There is no resume
+or external GPU scheduler. Existing SDK tracking endpoints remain available.
+The app requires an account for private workspace access. Public leaderboard scores are opt-in.
+
+New endpoints: `GET/POST /api/datasets`, `POST /api/training`, and
+`POST /api/training/{id}/stop`. Runner integration endpoints are
+`GET /api/training/{id}/manifest` and `GET /api/datasets/{id}/content`. The
+manifest contains immutable dataset IDs, byte counts, weights, SHA-256 hashes,
+and content URLs. Dataset content responds with `ETag` and
+`X-Dataset-SHA256`; a runner should verify both before materializing a mix.
+
+RunPod runner lifecycle is terminate-after-sync: it must upload and verify
+metrics, logs, manifest, and retained checkpoints before terminating the
+instance. A failed run should upload diagnostics and then shut the instance down
+unless an explicit keep-alive/debug mode is selected. This prevents paid
+instances being left running after a job completes.
+
+## Chinchilla budget planning
+
+The UI defaults to a 100-step upper limit with validation-guided early stopping.
+A 20 training tokens per parameter heuristic remains an optional upper limit for
+the chosen Tiny or Small model. The API keeps manual steps as its backward-compatible
+default; send `budget_mode: "chinchilla"` to calculate steps automatically.
+The server computes `ceil(20 * parameters / (batch_size * training_context_length))`,
+using the shortest selected source's training split to match actual batching.
+Manual mode retains its 2,000-step limit. Automatic mode permits the calculated
+longer run. Config and recipe include the planned token count and ratio;
+`training/tokens_seen` records actual processed byte tokens, excluding validation.
+
+This is an extrapolated heuristic, not a measured optimum for tiny byte models.
+Repeated sampling is not fresh data. The separate future GPU corpus budget stays
+planning metadata and does not launch a GPU job or resize the CPU model.
+
+## Preventing overfitting on small sources
+
+New runs enable early stopping by default (`early_stopping: true`, `patience: 20`,
+`min_delta: 0.01`). Validation uses the same seeded held-out batch throughout a
+run, at initialization, every update through step 100, then every 10 updates and
+at the step limit. Twenty checks without a cumulative improvement of 0.01 stop
+the run. This small validation sample is a diagnostic, not a general benchmark.
+
+`model.pt` saves the weights with the lowest measured validation loss, even when
+early stopping is disabled. It includes `best_step` and `best_val_loss`. Completed
+runs store `training_result` in metadata and in `recipe.json`: actual updates,
+tokens processed, best score, checkpoint step, and stop reason. Early stopping
+finishes successfully; progress remains the actual fraction of the requested
+upper limit. Cancelled/interrupted runs retain their existing no-artifact behavior.
+The leaderboard uses saved-checkpoint validation scores; curves retain all history.
+
+The studio shows available training bytes and the largest expected per-source
+reuse at the step limit, weighted by the selected mix. This is expected sampled
+volume divided by source size, not a count of complete epochs or unique tokens.
+A one-time draft migration changes previous drafts to a maximum of 100 manual
+steps while preserving their datasets, model and other settings. Existing runs
+and checkpoints are not rewritten. More varied data is still necessary before
+larger models or longer budgets can produce meaningful generalization.
+
+## User accounts
+
+Register at `/#register` using a username (3–32 ASCII letters, digits, hyphens or
+underscores) and a password of 12–128 characters. No email address is collected.
+`/#account` provides sign-out, password changes and an API key for the SDK.
+Passwords use Argon2id; random session tokens live in HttpOnly, SameSite=Lax
+cookies (Secure over HTTPS), expire after 14 days, and are stored only as hashes.
+Changing a password revokes all other sessions and the API key. Auth endpoints
+limit attempts per IP and username; the service still runs with one worker.
+Browser mutations require X-Track-Request: 1 and reject foreign Origin headers.
+
+Datasets, run details, notes, logs, manifests and artifacts are owner-only.
+Included example datasets are available to every signed-in account. Publishing
+is explicit after a studio run finishes and shares only leaderboard data:
+username, run name, metrics, date, update count and mixture percentages. Uploaded
+filenames, content, logs, notes and model downloads stay private. Unpublishing
+removes the public score. The SDK cannot overwrite studio metrics or checkpoints.
+
+Set `FABRYKA_API_URL=https://track.fabryka.ai` and `FABRYKA_API_KEY` in the SDK
+process environment. HTTP API clients send `Authorization: Bearer <key>`.
+API keys can be rotated or revoked in Account, and are shown only when generated.
+The server does not need a global API key. Existing SDK processes must configure
+their owner's new credential; anonymous event ingestion is no longer permitted.
+
+Startup applies an idempotent additive migration. Existing runs and uploaded
+sources keep null ownership; old scores remain public as Legacy. No registrant
+is automatically granted access to those private artifacts or sources. After
+the workspace owner registers and identifies their username, a server operator
+can assign the old workspace:
+
+```bash
+python -m fabryka_track.account_admin claim-legacy USERNAME
+```
+
+Email password recovery is not configured. An operator can reset a password
+after verifying the account holder, without putting a password in shell history:
+
+```bash
+python -m fabryka_track.account_admin reset-password USERNAME
+```
+
+Before upgrading, back up the database with its native consistent-backup tool
+and preserve the installed source. Do not restart while training runs are active.

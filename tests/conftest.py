@@ -17,7 +17,11 @@ from fabryka_track.models import Base
 def client():
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
-    with TestClient(app) as test_client:
+    from fabryka_track.accounts import _attempts
+    _attempts.clear()
+    with TestClient(app, headers={"X-Track-Request": "1"}) as test_client:
+        response = test_client.post('/api/auth/register', json={'username': 'tester', 'password': 'testing-password-123'})
+        assert response.status_code == 201
         yield test_client
     Base.metadata.drop_all(engine)
     shutil.rmtree("test-artifacts", ignore_errors=True)
