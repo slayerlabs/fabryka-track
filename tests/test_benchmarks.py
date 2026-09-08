@@ -52,6 +52,48 @@ def test_recovery_marks_interrupted(client):
         row=db.scalar(select(BenchmarkEvaluation));assert row.status=='failed' and row.ended_at
 
 
+def test_queue_accepts_different_models_and_preserves_fifo_on_restart(client,monkeypatch):
+    original=benchmarks.importlib.util.find_spec
+    monkeypatch.setattr(benchmarks.importlib.util,'find_spec',lambda n:True if n=='lm_eval' else original(n))
+    first=finished(client,launch(client).json()['id'])
+    second=finished(client,launch(client).json()['id'])
+    a=client.post('/api/runs/'+first['id']+'/benchmarks',json={})
+    b=client.post('/api/runs/'+second['id']+'/benchmarks',json={})
+    assert a.status_code==b.status_code==202
+    assert a.json()['queue_position']==1 and b.json()['queue_position']==2
+    benchmarks.recover_evaluations()
+    q=client.get('/api/benchmarks/queue').json()
+    assert q['waiting']==2 and [e['id'] for e in q['items']]==[a.json()['id'],b.json()['id']]
+    started=[]
+    class ImmediateThread:
+        def __init__(self,target,args,**kw):self.target,self.args=target,args
+        def start(self):started.append(self.args[0])
+    monkeypatch.setattr(benchmarks.threading,'Thread',ImmediateThread)
+    monkeypatch.setattr(benchmarks,'worker_pids',lambda:{})
+    benchmarks.queue_tick();assert started==[a.json()['id']]
+    with SessionLocal() as db:
+        db.get(BenchmarkEvaluation,a.json()['id']).status='finished';db.commit()
+    benchmarks.queue_tick();assert started==[a.json()['id'],b.json()['id']]
+    client.post('/api/auth/logout')
+    assert client.get('/api/benchmarks/queue').status_code==401
+
+
+def test_queue_does_not_overlap_external_or_cancelled_worker(client,monkeypatch):
+    run=finished(client,launch(client).json()['id'])
+    with SessionLocal() as db:
+        running=BenchmarkEvaluation(run_id=run['id'],status='running',mode='full',tasks=['sciq'])
+        waiting=BenchmarkEvaluation(run_id=run['id'],status='queued',mode='full',tasks=['piqa'])
+        db.add_all([running,waiting]);db.commit();eid=running.id
+    monkeypatch.setattr(benchmarks,'worker_pids',lambda:{eid:12345})
+    def unexpected(*a,**kw):raise AssertionError('Must not start another worker')
+    monkeypatch.setattr(benchmarks.threading,'Thread',unexpected)
+    benchmarks.queue_tick()
+    with SessionLocal() as db:
+        row=db.get(BenchmarkEvaluation,eid);assert row.status=='running'
+        row.status='cancelled';db.commit()
+    benchmarks.queue_tick()
+
+
 def test_byte_scoring_does_not_drop_long_continuations(client):
     pytest.importorskip('lm_eval')
     from fabryka_track.benchmark_model import ByteCheckpointLM

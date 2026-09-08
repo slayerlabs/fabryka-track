@@ -9,7 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from .accounts import router as accounts_router, require_user, current_user, owned_run
-from .benchmarks import router as benchmarks_router, recover_evaluations
+from .benchmarks import router as benchmarks_router, recover_evaluations, start_queue as start_benchmark_queue, stop_queue as stop_benchmark_queue
 from .hf_publish import router as hf_publish_router, recover_uploads
 from .huggingface_auth import router as huggingface_router
 from .gpu_training import router as gpu_router, start_supervisor, stop_supervisor, status as gpu_status
@@ -26,10 +26,12 @@ async def lifespan(_app: FastAPI):
     start_worker()
     recover_uploads()
     recover_evaluations()
+    start_benchmark_queue()
     start_supervisor()
     try:
         yield
     finally:
+        stop_benchmark_queue()
         stop_supervisor()
         stop_worker()
 

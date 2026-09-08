@@ -22,8 +22,26 @@ Queued waiting does not consume the selected execution budget. Owners choose
 1/4/12/24 hours within the operator cap and see a compute cost ceiling on review.
 The cleanup lifecycle remains artifact verification followed by pod deletion.
 
-Validation: 44 backend tests; Chrome checks using 295 actual metric samples from
+Validation: 46 backend tests; Chrome checks using 295 actual metric samples from
 run `f66fe072-91bf-499b-918d-2b13df73cb8a`, including zoom retained across polling,
 log/EMA/elapsed controls, hover, expansion, PNG export and 390px mobile layout.
 GPU setup was checked through review and its intercepted request (no paid test
 run), including a 4-hour selection and the corresponding cost ceiling.
+
+
+## Benchmark queue
+
+Owner requests are persisted FIFO in SQLite before dispatch. Up to 20 evaluations
+can wait; one evaluation per run may be queued/running at a time. A three-second
+scheduler starts the next job after the worker slot is free, including after a
+failure or cancellation. Queue state survives web restarts. Existing external
+workers are recognized by exact module/ID in their process command and keep
+running; no new job starts while any such worker is still alive. A cancelled
+worker retains its slot until its process exits. Newly launched evaluations keep
+the existing two-hour timeout and retained partial task results on failure.
+
+My runs shows the owner's benchmark queue, task progress, position and Cancel.
+Run details show queue position and allow Add to benchmark queue. Global counts
+are visible to signed-in users; other owners' run names and evaluation details
+remain private. Tests cover cross-model enqueueing, FIFO advancement, restart
+persistence, cancellation, permissions and external-worker exclusion.

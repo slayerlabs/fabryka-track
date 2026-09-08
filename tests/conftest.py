@@ -14,7 +14,8 @@ from fabryka_track.models import Base
 
 
 @pytest.fixture()
-def client():
+def client(monkeypatch):
+    monkeypatch.setattr("fabryka_track.api.start_benchmark_queue",lambda:None)
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
     from fabryka_track.accounts import _attempts

@@ -53,7 +53,7 @@ def run(eid):
     torch.set_num_threads(1)
     with SessionLocal() as db:
         row=db.get(BenchmarkEvaluation,eid)
-        if not row or row.status!='queued':return
+        if not row or row.status not in ('queued','running'):return
         parent=db.get(Run,row.run_id)
         path=checkpoint_path(db,parent)
         provenance=dict(row.provenance); tasks=list(row.tasks); mode=row.mode
