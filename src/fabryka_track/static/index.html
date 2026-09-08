@@ -606,6 +606,32 @@
       .point-book {height:48px;}
       .upload {padding:16px;margin-top:16px;}
       @media(max-width:700px) { .compact-dataset {grid-template-columns:1fr;gap:8px;} .dataset-controls {grid-template-columns:28px minmax(60px,1fr) 28px 100px;} }
+      main:has(.studio-intro) {padding-top:20px;}
+      .studio-intro {margin-bottom:8px;}
+      .studio-intro .eyebrow {display:none;}
+      .studio-intro h1 {font-size:28px;margin:0 0 6px;}
+      .studio-intro p {font-size:13px;margin:0;}
+      .studio-steps {margin:12px 0 18px;}
+      .studio-steps .step {font-size:13px;padding:10px 0;}
+      .studio-steps .step b {width:24px;height:24px;font-size:12px;}
+      #workspace {padding:20px;}
+      #workspace > .character {padding:0 0 12px;border:0;border-bottom:1px solid var(--line);}
+      #workspace > .character .eyebrow {font-size:10px;margin-bottom:4px;}
+      #workspace > .character h2 {font-size:22px;margin:4px 0 10px;}
+      #workspace > .character > small {display:none;}
+      #character-status {font-size:11px;margin:6px 0;}
+      .studio-sidebar {position:sticky;top:18px;align-self:start;display:grid;gap:12px;}
+      .studio-sidebar .aside {position:static;margin:0;padding:20px;}
+      #studio-next:empty {display:none;}
+      #studio-next .primary {width:100%;text-align:center;padding:12px 16px;}
+      #chinchilla-fold {padding:14px;font-size:12px;}
+      #chinchilla-fold .character {padding:12px 0 0;border:0;margin:0;}
+      #chinchilla-fold .fields {grid-template-columns:1fr;gap:8px;}
+      #chinchilla-fold input {padding:8px;}
+      #chinchilla-fold h2 {font-size:20px;}
+      #chinchilla-fold .character-buttons button {font-size:12px;padding:5px 8px;}
+      @media(max-width:900px) { .studio-sidebar {position:static;} }
+      @media(max-width:760px) { #studio-next:not(:empty) {position:fixed;bottom:0;left:0;right:0;z-index:20;background:var(--paper,#fff);padding:10px 16px;box-shadow:0 -2px 12px #0001;} main:has(.studio-intro) {padding-bottom:85px;} }
     </style>
   </head>
   <body>
@@ -897,7 +923,7 @@
           )}<div class="divider"></div><div class="legend"><span>Future GPU corpus budget</span><b>${fmt(draft.target_tokens, 0)} tokens</b></div><div class="legend"><span>Model</span><b>${draft.model_size === "small" ? "Small" : "Tiny"} transformer</b></div><div class="legend"><span>Maximum training byte tokens</span><b>${fmt(trainingPlan().tokens, 0)}</b></div><div class="legend"><span>Tokens / parameter</span><b>${(trainingPlan().tokens / trainingPlan().parameters).toFixed(2)}</b></div><div class="legend"><span>Compute</span><b>Local CPU</b></div><div class="legend"><span>Validation</span><b>10% held out</b></div><p class="muted" style="font-size:12px;margin:15px 0 0">Percentages control how often each source is sampled. Small datasets are sampled repeatedly.</p>`;
       }
       function steps() {
-        return `<div class="steps" aria-label="Training setup">${["Mix datasets", "Set up training", "Review & start"].map((s, i) => `<button class="step ${stage === i + 1 ? "active" : ""}" data-stage="${i + 1}" ${i + 1 > stage ? "disabled" : ""}><b>${i + 1}</b>${s}</button>`).join("")}</div>`;
+        return `<div class="steps studio-steps" aria-label="Training setup">${["Mix datasets", "Set up training", "Review & start"].map((s, i) => `<button class="step ${stage === i + 1 ? "active" : ""}" data-stage="${i + 1}" ${i + 1 > stage ? "disabled" : ""}><b>${i + 1}</b>${s}</button>`).join("")}</div>`;
       }
       async function studio() {
         datasets = await api("/datasets");
@@ -943,10 +969,10 @@
         return `<div class="dataset compact-dataset" data-empty="${!value}"><div class="dataset-heading"><div class="dataset-cover" style="--book-color:${datasetColor(d)}" aria-hidden="true"><b>${esc(d.name.slice(0,2).toUpperCase())}</b><small>DATASET</small></div><div class="dataset-title"><h3>${esc(d.name)}</h3><small>${esc(datasetSummary(d))}</small><button type="button" class="preview-link" data-preview-dataset="${d.id}">Zajrzyj do książki →</button></div></div><div class="dataset-controls"><button type="button" class="point-control" data-remove-point="${d.id}" aria-label="Odejmij punkt: ${esc(d.name)}">−</button><input id="slider-${d.id}" type="range" min="0" max="20" step="1" value="${value/5}" aria-label="${esc(d.name)} points" data-slider="${d.id}" style="accent-color:${datasetColor(d)}"><button type="button" class="point-control" data-add-point="${d.id}" aria-label="Dodaj punkt: ${esc(d.name)}">+</button><output class="percent" data-value="${d.id}" for="slider-${d.id}">${value/5} pkt · ${value}%</output></div></div>`;
       }
       function renderStudio() {
-        app.innerHTML = `<div class="intro"><div class="eyebrow">Training studio</div><h1>A model starts with a mix.</h1><p class="muted">Choose your data, set up a small training run, and see what changes.</p></div>${steps()}<div id="error-slot"></div><div class="layout"><section class="panel" id="workspace"></section><aside class="panel aside" id="recipe">${recipe()}</aside></div>`;
+        app.innerHTML = `<div class="intro studio-intro"><div class="eyebrow">Training studio</div><h1>A model starts with a mix.</h1><p class="muted">Choose your data, set up a small training run, and see what changes.</p></div>${steps()}<div id="error-slot"></div><div class="layout"><section class="panel" id="workspace"></section><div class="studio-sidebar"><div id="studio-next"></div><aside class="panel aside" id="recipe">${recipe()}</aside><details class="panel" id="chinchilla-fold" hidden><summary id="chinchilla-summary">Chinchilla scaling laws</summary><div id="chinchilla-slot"></div></details></div></div>`;
         const w = $("#workspace");
         if (stage === 1) {
-          w.innerHTML = `<div class="row"><div><h2 style="margin-bottom:8px">Mix your datasets</h2><p class="muted" style="font-size:13px">Rozdaj dokładnie 20 punktów. 1 punkt = 5% danych treningowych. Odejmij punkt, aby przenieść go do innego źródła.</p></div></div><div>${datasets.map(datasetRow).join("")}</div><div class="upload"><div><b style="font-size:13px">Bring your own data</b><p class="muted">UTF-8 plain text · 100+ characters · up to 2 MB</p></div><button class="secondary" id="upload-button">+ Add text file</button><input type="file" id="upload" accept=".txt,text/plain" hidden></div><div class="actions"><small>Próbki rzeczywistych korpusów do treningu CPU.</small><button class="primary" id="next">Training settings →</button></div>`;
+          w.innerHTML = `<div class="row"><div><h2 style="font-size:20px;margin-bottom:6px">Twoja biblioteka</h2></div></div><div>${datasets.map(datasetRow).join("")}</div><div class="upload"><div><b style="font-size:13px">Bring your own data</b><p class="muted">UTF-8 plain text · 100+ characters · up to 2 MB</p></div><button class="secondary" id="upload-button">+ Add text file</button><input type="file" id="upload" accept=".txt,text/plain" hidden></div><div class="actions"><small>Próbki rzeczywistych korpusów do treningu CPU.</small><button class="primary" id="next">Training settings →</button></div>`;
           document
             .querySelectorAll("[data-slider]")
             .forEach(
@@ -980,10 +1006,13 @@
             document.querySelectorAll('[data-character]').forEach(button => button.onclick = () => applyCharacter(button.dataset.character));
             $('#reset-points').onclick=()=>{draft.weights=Object.fromEntries(datasets.map(d=>[d.id,0]));draft.character=null;save();updateMix();};
             updateMix();
-            const showChinchilla=()=>{const d=draft.target_tokens,n=d/20;$('#chinchilla-parameters').value=n/1e6;$('#target-tokens').value=d;$('#chinchilla-equation').textContent=`${fmt(n/1e6,3)}M parametrów × 20 ≈ ${fmt(d/1e6,1)}M tokenów`;$('#chinchilla-compute').textContent=`Szacowane obliczenia: C ≈ 6ND ≈ ${(6*n*d).toExponential(2)} FLOPs. Zwiększenie skali 2× → koszt około 4×.`;document.querySelectorAll('[data-chinchilla-size]').forEach(b=>b.setAttribute('aria-pressed',String(+b.dataset.chinchillaSize===n/1e6)));save();updateMix();};
+            const showChinchilla=()=>{const d=draft.target_tokens,n=d/20;$('#chinchilla-summary').textContent=`Chinchilla · ${fmt(n/1e6,1)}M → ${fmt(d/1e6,0)}M tokenów`;$('#chinchilla-parameters').value=n/1e6;$('#target-tokens').value=d;$('#chinchilla-equation').textContent=`${fmt(n/1e6,3)}M parametrów × 20 ≈ ${fmt(d/1e6,1)}M tokenów`;$('#chinchilla-compute').textContent=`Szacowane obliczenia: C ≈ 6ND ≈ ${(6*n*d).toExponential(2)} FLOPs. Zwiększenie skali 2× → koszt około 4×.`;document.querySelectorAll('[data-chinchilla-size]').forEach(b=>b.setAttribute('aria-pressed',String(+b.dataset.chinchillaSize===n/1e6)));save();updateMix();};
             $('#target-tokens').onchange=event=>{draft.target_tokens=Math.max(100000,Math.min(1e10,Number(event.target.value)||100000));showChinchilla();};
             $('#chinchilla-parameters').onchange=event=>{draft.target_tokens=Math.max(100000,Math.min(1e10,(Number(event.target.value)||.005)*20000000));showChinchilla();};
             document.querySelectorAll('[data-chinchilla-size]').forEach(b=>b.onclick=()=>{draft.target_tokens=+b.dataset.chinchillaSize*20000000;showChinchilla();});
+            $('#chinchilla-slot').append(document.querySelector('[aria-labelledby="chinchilla-title"]'));
+            $('#chinchilla-fold').hidden=false;
+            $('#studio-next').append($('#next'));
             showChinchilla();
           }
         } else if (stage === 2) {
@@ -1041,7 +1070,7 @@
           $("#budget-mode").onchange = event => { draft.budget_mode = event.target.value; save(); refreshTrainingPlan(); };
           $("#setup").insertAdjacentHTML("afterbegin", `<label class="field"><span>Model size</span><select name="model_size"><option value="tiny" ${draft.model_size === "tiny" ? "selected" : ""}>Tiny · 134,912 parameters</option><option value="small" ${draft.model_size === "small" ? "selected" : ""}>Small · 391,008 parameters</option></select><small>Both train from scratch on this server CPU. Small has more capacity but takes longer.</small></label>`);
         }
-        if (stage === 1 || stage === 2) w.insertAdjacentHTML("afterbegin", dataWarning());
+        if (stage === 2) w.insertAdjacentHTML("afterbegin", dataWarning());
         if (stage === 2) refreshTrainingPlan();
         if ($("#next"))
           $("#next").onclick = () => {
