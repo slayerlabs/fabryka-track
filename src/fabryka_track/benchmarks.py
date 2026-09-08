@@ -132,6 +132,14 @@ def recover_evaluations():
             try:cmd=Path(f'/proc/{int(pid)}/cmdline').read_bytes().split(b'\0')
             except (OSError,TypeError,ValueError):cmd=[]
             if b'fabryka_track.benchmark_worker' in cmd and row.id.encode() in cmd:continue
+            # Workers from the previous release did not persist their PID.
+            live=False
+            for process in Path('/proc').glob('[0-9]*'):
+                try:args=(process/'cmdline').read_bytes().split(b'\0')
+                except OSError:continue
+                if b'fabryka_track.benchmark_worker' in args and row.id.encode() in args:
+                    live=True;break
+            if live:continue
             row.status='failed';row.error='Server restarted during evaluation. Start a new evaluation.'
             row.ended_at=datetime.now(timezone.utc)
         db.commit()
