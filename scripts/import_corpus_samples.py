@@ -16,7 +16,7 @@ if __name__=='__main__':
     for meta in catalog:
         content=(args.folder/(meta['key']+'.txt')).read_text()
         assert hashlib.sha256(content.encode()).hexdigest()==meta['sha256']
-        assert 300<=len(content.encode())<=2_000_000
+        assert 300<=len(content.encode())<=32_000_000
         verified.append((meta,content))
     if engine.url.drivername=='sqlite':
         backup=Path('backups')/('corpus-import-'+datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S'));backup.mkdir(parents=True,exist_ok=True)

@@ -51,23 +51,6 @@
     "color": "#647d96"
   },
   {
-    "key": "wolne_lektury",
-    "name": "Wolne Lektury",
-    "category": "literature",
-    "repo": "SlayerLab/polish-dynaword",
-    "revision": "02bcb0b5f991a30f8454c6444f701633b71f69d4",
-    "url": "https://huggingface.co/datasets/SlayerLab/polish-dynaword/blob/02bcb0b5f991a30f8454c6444f701633b71f69d4/data/wolne_lektury/wolne_lektury.md",
-    "sampling": "first row group, first eligible whole documents; workflow sample, not representative",
-    "source_documents": 6141,
-    "source_token_estimate": 103009797,
-    "source_tokenizer": "upstream tiktoken proxy",
-    "documents": 56,
-    "id": "ca63a321-ded7-5c38-a6b0-f5b25ce4cd69",
-    "sha256": "8c8f945ef272e1a2275ce5dce93264d0a0b015c4bb2a75597ae8a5a6c6a86a61",
-    "bytes": 918898,
-    "color": "#91733a"
-  },
-  {
     "key": "biblioteka_nauki",
     "name": "Biblioteka Nauki",
     "category": "science",
@@ -136,23 +119,6 @@
     "color": "#944766"
   },
   {
-    "key": "wikisource",
-    "name": "Wikiźródła",
-    "category": "literature",
-    "repo": "SlayerLab/polish-dynaword",
-    "revision": "02bcb0b5f991a30f8454c6444f701633b71f69d4",
-    "url": "https://huggingface.co/datasets/SlayerLab/polish-dynaword/blob/02bcb0b5f991a30f8454c6444f701633b71f69d4/data/wikisource/wikisource.md",
-    "sampling": "first row group, first eligible whole documents; workflow sample, not representative",
-    "source_documents": 632005,
-    "source_token_estimate": 801947427,
-    "source_tokenizer": "upstream tiktoken proxy",
-    "documents": 215,
-    "id": "4bc835b2-9c9c-590b-a077-ab3ec1de5fdb",
-    "sha256": "7a7a4db1ef62187ec7a21f67e2cc9e7758192a161dfd44e6c9bf78d0c0eb9e71",
-    "bytes": 219820,
-    "color": "#677d3e"
-  },
-  {
     "key": "fineweb2_pl",
     "name": "FineWeb2 · polski web",
     "category": "web",
@@ -169,5 +135,45 @@
     "sha256": "be20d5cb4ae837dd3d7ef2acd3955299aef79b245052621f2a7ccd6387022a5b",
     "bytes": 371464,
     "color": "#386b9c"
+  },
+  {
+    "key": "wolne_lektury",
+    "name": "Wolne Lektury",
+    "category": "literature",
+    "repo": "SlayerLab/polish-dynaword",
+    "revision": "02bcb0b5f991a30f8454c6444f701633b71f69d4",
+    "url": "https://huggingface.co/datasets/SlayerLab/polish-dynaword/blob/02bcb0b5f991a30f8454c6444f701633b71f69d4/data/wolne_lektury/wolne_lektury.md",
+    "sampling": "first eligible whole documents in source order; bounded sample, not representative",
+    "source_documents": 6141,
+    "source_token_estimate": 103009797,
+    "source_tokenizer": "upstream tiktoken proxy",
+    "documents": 892,
+    "id": "11e53c89-c305-5fe1-ba3e-90dab7c4b331",
+    "sha256": "e7cb63cf1f485a38db20e7801d4ad8c63c8d4245379d454a31a25bdcee5ee8fa",
+    "bytes": 11990259,
+    "previous_ids": [
+      "ca63a321-ded7-5c38-a6b0-f5b25ce4cd69"
+    ],
+    "color": "#91733a"
+  },
+  {
+    "key": "wikisource",
+    "name": "Wikiźródła",
+    "category": "literature",
+    "repo": "SlayerLab/polish-dynaword",
+    "revision": "02bcb0b5f991a30f8454c6444f701633b71f69d4",
+    "url": "https://huggingface.co/datasets/SlayerLab/polish-dynaword/blob/02bcb0b5f991a30f8454c6444f701633b71f69d4/data/wikisource/wikisource.md",
+    "sampling": "first eligible whole documents in source order; bounded sample, not representative",
+    "source_documents": 632005,
+    "source_token_estimate": 801947427,
+    "source_tokenizer": "upstream tiktoken proxy",
+    "documents": 8073,
+    "id": "7c3feb9c-db56-52b1-95ac-a68ac6c4d335",
+    "sha256": "58bc7b5dddd3e42458d6c21b63e3bbd8d81017170bea708f525d6870086e21cf",
+    "bytes": 11781948,
+    "previous_ids": [
+      "4bc835b2-9c9c-590b-a077-ab3ec1de5fdb"
+    ],
+    "color": "#677d3e"
   }
 ]

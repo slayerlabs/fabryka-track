@@ -109,7 +109,7 @@ instances being left running after a job completes.
 ## Chinchilla budget planning
 
 The UI defaults to a 100-step upper limit with validation-guided early stopping.
-A 20 training tokens per parameter heuristic remains an optional upper limit for
+The studio defaults to a 20 training byte tokens per parameter upper limit for
 the chosen Tiny or Small model. The API keeps manual steps as its backward-compatible
 default; send `budget_mode: "chinchilla"` to calculate steps automatically.
 The server computes `ceil(20 * parameters / (batch_size * training_context_length))`,
@@ -294,7 +294,7 @@ workflow examples.
 
 The generated three-paragraph fixtures are hidden from the studio once a real
 corpus pack is installed. They remain stored to reproduce old runs. The initial
-pack contains 1,317 whole documents / 5,775,763 UTF-8 bytes across ten sources:
+pack contains 10,011 whole documents / 28,409,252 UTF-8 bytes across ten sources:
 Polish FineWeb2, cleaned Polish HPLT, Wikipedia, Wikisource, Wikivoyage, Wikibooks,
 Wolne Lektury, Biblioteka Nauki, EUR-Lex and parliamentary text. These are bounded
 workflow samples, not complete or statistically representative corpora.
@@ -319,3 +319,11 @@ Production imports must retain the complete pack for provenance and recovery.
 The Chinchilla panel calculates D≈20N and C≈6ND in both directions, with 8/16/32/64/
 128M parameter examples. It plans scale; it does not silently change the CPU model
 or turn corpus estimates into downloaded training data.
+
+The literary sources were expanded to approximately 12 MB each. Rebuild selected
+DynaWord sources with `--max-mb 12 --sources wolne_lektury wikisource`; import and
+update the catalog as above. Previous immutable dataset IDs remain available to
+old runs, and the studio migrates their assigned points to the expanded sources.
+Existing browser drafts migrate once to the 20x training budget. Later explicit
+manual-budget choices persist. The scaling calculator accepts training tokens in
+millions while storing full integer token counts in the run payload.

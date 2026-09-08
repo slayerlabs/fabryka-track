@@ -22,26 +22,26 @@ SOURCES=[('wikipedia','Wikipedia PL','encyclopedia'),
          ('wikisource','Wikiźródła','literature')]
 
 
-def build(source,folder):
+def build(source,folder,max_bytes=1_000_000):
     key,name,category=source
     fs=HfFileSystem();records=[];texts=[];used=0;seen=set()
     with fs.open(f'datasets/{REPO}@{REV}/data/{key}/{key}.parquet','rb',block_size=1024*1024) as f:
         parquet=pq.ParquetFile(f)
-        for batch in parquet.iter_batches(batch_size=32,row_groups=[0]):
+        for batch in parquet.iter_batches(batch_size=32,row_groups=None):
             for row in batch.to_pylist():
                 text=row['text'].strip();size=len(text.encode())
                 digest=hashlib.sha256(text.encode()).hexdigest()
                 if size<300 or size>250000 or digest in seen:continue
-                if used+size+2>1_000_000:continue
+                if used+size+2>max_bytes:continue
                 seen.add(digest);texts.append(text);used+=size+2
                 records.append({k:v for k,v in row.items() if k!='text'}|{'text_sha256':digest})
-            if used>=800000 or len(records)>=200:break
+            if used>=max_bytes*0.98:break
     if not records:raise RuntimeError('No records for '+key)
     content='\n\n'.join(texts)
     stats=httpx.get(f'https://huggingface.co/datasets/{REPO}/resolve/{REV}/data/{key}/{key}.stats.json',follow_redirects=True,timeout=30);stats.raise_for_status()
     meta={'key':key,'name':name,'category':category,'repo':REPO,'revision':REV,
           'url':f'https://huggingface.co/datasets/{REPO}/blob/{REV}/data/{key}/{key}.md',
-          'sampling':'first row group, first eligible whole documents; workflow sample, not representative',
+          'sampling':'first eligible whole documents in source order; bounded sample, not representative',
           'source_documents':parquet.metadata.num_rows,'source_token_estimate':stats.json().get('tokens'),
           'source_tokenizer':'upstream tiktoken proxy','documents':len(records),'records':records}
     return save(content,meta,folder)
@@ -93,8 +93,22 @@ def fineweb(folder):
 
 
 if __name__=='__main__':
-    parser=argparse.ArgumentParser();parser.add_argument('folder',type=Path);args=parser.parse_args();args.folder.mkdir(parents=True,exist_ok=True)
-    entries=[web(args.folder),fineweb(args.folder)]
+    parser=argparse.ArgumentParser()
+    parser.add_argument('folder',type=Path)
+    parser.add_argument('--max-mb',type=int,default=1,choices=range(1,33))
+    parser.add_argument('--sources',nargs='+',choices=[s[0] for s in SOURCES])
+    args=parser.parse_args();args.folder.mkdir(parents=True,exist_ok=True)
+    catalog_path=args.folder/'catalog.json'
+    old=json.loads(catalog_path.read_text()) if catalog_path.exists() else []
+    if args.sources:
+        chosen=[s for s in SOURCES if s[0] in args.sources]
+        entries=[d for d in old if d['key'] not in args.sources]
+    else:
+        chosen=SOURCES
+        entries=[web(args.folder),fineweb(args.folder)]
     with ThreadPoolExecutor(max_workers=2) as pool:
-        entries+=list(pool.map(lambda source:build(source,args.folder),SOURCES))
-    (args.folder/'catalog.json').write_text(json.dumps(entries,ensure_ascii=False,indent=2))
+        entries+=list(pool.map(lambda source:build(source,args.folder,args.max_mb*1_000_000),chosen))
+    for d in entries:
+        previous=next((x for x in old if x['key']==d['key'] and x['id']!=d['id']),None)
+        if previous:d['previous_ids']=list(dict.fromkeys(previous.get('previous_ids',[])+[previous['id']]))
+    catalog_path.write_text(json.dumps(entries,ensure_ascii=False,indent=2))
