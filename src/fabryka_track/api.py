@@ -12,7 +12,7 @@ from .accounts import router as accounts_router, require_user, current_user, own
 from .benchmarks import router as benchmarks_router, recover_evaluations
 from .hf_publish import router as hf_publish_router, recover_uploads
 from .huggingface_auth import router as huggingface_router
-from .gpu_training import router as gpu_router, start_supervisor, stop_supervisor
+from .gpu_training import router as gpu_router, start_supervisor, stop_supervisor, status as gpu_status
 from .database import create_tables, session_scope
 from .models import Artifact, IngestedEvent, Metric, Project, Run, RunLog
 from .schemas import EventBatch, LogInput, Notes
@@ -100,7 +100,9 @@ def runs(name: str, state: str | None = None, search: str | None = None,
         latest = {}
         for key, value in rows:
             latest.setdefault(key, value)
-        result.append(serialize_run(item, latest))
+        data=serialize_run(item, latest)
+        data["gpu_status"]=gpu_status(session,item)
+        result.append(data)
     return result
 
 
@@ -131,6 +133,7 @@ def run_detail(run_id: str, session: Session = Depends(db), user=Depends(current
     logs = session.scalars(select(RunLog).where(RunLog.run_id == run_id).order_by(RunLog.timestamp)).all()
     artifacts = session.scalars(select(Artifact).where(Artifact.run_id == run_id)).all()
     data = serialize_run(item)
+    data["gpu_status"] = gpu_status(session,item)
     data.update(metrics=series, logs=[{"timestamp": x.timestamp, "level": x.level, "message": x.message} for x in logs],
                 artifacts=[{"id": x.id, "name": x.name, "size": x.size} for x in artifacts])
     return data
@@ -248,6 +251,13 @@ def download_artifact(artifact_id: str, session: Session = Depends(db), user=Dep
 def health(session: Session = Depends(db)):
     session.scalar(select(func.count()).select_from(Project))
     return {"status": "ok", "time": datetime.now(timezone.utc)}
+
+
+@app.get("/assets/{name}")
+def static_asset(name: str):
+    if name not in {"plotly-basic-3.1.0.min.js", "run-charts.js"}:
+        raise HTTPException(404, "Asset not found")
+    return FileResponse(Path(__file__).parent / "static" / name, media_type="text/javascript")
 
 
 @app.get("/{path:path}", response_class=HTMLResponse)

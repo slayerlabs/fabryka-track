@@ -132,6 +132,7 @@ class TrainingInput(BaseModel):
     model_size: Literal["tiny", "small", "8m", "16m", "32m", "64m", "128m"] = "tiny"
     compute: Literal["cpu", "runpod"] = "cpu"
     budget_mode: Literal["manual", "chinchilla", "tokens"] = "manual"
+    max_runtime_seconds: int = Field(default=3600, ge=600, le=86400)
     early_stopping: bool = True
     patience: int = Field(default=20, ge=5, le=100)
     min_delta: float = Field(default=0.01, ge=0, le=1, allow_inf_nan=False)
@@ -154,12 +155,13 @@ def launch(body: TrainingInput, session=Depends(session_scope), user=Depends(req
     from .models import GPUJob
     if body.compute == 'runpod':
         if not allowed(user):raise HTTPException(403, 'RunPod access is not enabled for this account.')
+        if body.max_runtime_seconds>settings.runpod_max_seconds:raise HTTPException(422, 'Requested duration exceeds the server GPU time limit.')
         if body.model_size in ('tiny','small'):raise HTTPException(422, 'Choose a GPU model from 8M to 128M.')
     elif body.model_size not in ('tiny','small'):
         raise HTTPException(422, 'Models 8M and larger require RunPod.')
     with launch_lock:
-        if body.compute == 'runpod' and session.scalar(select(GPUJob).where(GPUJob.cleanup_done==False)):
-            raise HTTPException(409, 'A GPU run is active or awaiting pod cleanup. Wait for it to finish.')
+        if body.compute == 'runpod' and len(list(session.scalars(select(GPUJob).where(GPUJob.cleanup_done==False))))>=5:
+            raise HTTPException(409, 'The GPU queue is full (five jobs). Wait for a run to finish.')
         active = list(session.scalars(select(Run).where(Run.state.in_(["running", "queued", "stopping"]))))
         if sum(r.metadata_.get("engine") == "tiny-transformer" for r in active) >= 5:
             raise HTTPException(409, "Five runs are already active. Wait for one to finish.")

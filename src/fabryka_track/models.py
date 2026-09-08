@@ -114,6 +114,9 @@ class GPUJob(Base):
     cleanup_done: Mapped[bool] = mapped_column(default=False)
     files: Mapped[dict] = mapped_column(JSON, default=dict)
     bundle_sha256: Mapped[str] = mapped_column(String(64))
+    dispatch_attempts: Mapped[int] = mapped_column(Integer, default=0)
+    missing_checks: Mapped[int] = mapped_column(Integer, default=0)
+    next_retry_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 

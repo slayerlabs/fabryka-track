@@ -16,7 +16,8 @@ class Settings(BaseSettings):
     runpod_api_key: str | None = None
     runpod_gpu_type: str = "NVIDIA RTX A5000"
     runpod_cloud_type: str = "SECURE"
-    runpod_max_seconds: int = 3600
+    runpod_gpu_fallbacks: str = "NVIDIA RTX A4000,NVIDIA RTX 4000 Ada Generation"
+    runpod_max_seconds: int = 86400
     runpod_max_hourly_usd: float = 0.50
     runpod_allowed_users: str = ""
     r2_endpoint: str | None = None

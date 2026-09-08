@@ -42,6 +42,7 @@ def test_gpu_access_no_silent_cpu_fallback(client,monkeypatch):
     r=launch(client);assert r.status_code==201
     run=client.get('/api/runs/'+r.json()['id']).json()
     assert run['config']['compute']=='runpod' and run['state']=='queued'
+    for _ in range(4):assert launch(client).status_code==201
     assert launch(client).status_code==409
     assert client.post('/api/training',json={'name':'bad','compute':'cpu','model_size':'8m',
       'mix':[{'dataset_id':client.get('/api/datasets').json()[0]['id'],'weight':100}]}).status_code==422
@@ -121,3 +122,50 @@ def test_dispatch_uses_scoped_bundle_and_selected_image(client,monkeypatch):
     with SessionLocal() as s:
         j=s.get(GPUJob,rid);assert j.pod_id=='created-pod'
         assert j.token_hash==hashlib.sha256(token.encode()).hexdigest()
+
+
+def test_queue_waits_without_allocating_or_consuming_runtime(client,monkeypatch):
+    first,_=create(client,monkeypatch)
+    second=launch(client).json()['id']
+    def unexpected(*a,**kw):raise AssertionError('Queued run must not contact provider')
+    monkeypatch.setattr(gpu,'provider',unexpected)
+    gpu.advance(second)
+    data=client.get('/api/runs/'+second).json()
+    assert data['gpu_status']['queue_position']==2
+    assert data['gpu_status']['deadline'] is None
+    assert 'token_hash' not in str(data)
+    client.post('/api/training/'+second+'/stop')
+    gpu.advance(second)
+    assert client.get('/api/runs/'+second).json()['state']=='cancelled'
+
+
+def test_capacity_retry_requires_two_empty_reconciliations(client,monkeypatch):
+    import httpx
+    enable(monkeypatch);rid=launch(client).json()['id'];calls=[]
+    def unavailable(method,path,**kw):
+        calls.append(method)
+        if method=='POST':
+            response=httpx.Response(500,request=httpx.Request('POST','https://provider.invalid'))
+            raise httpx.HTTPStatusError('unavailable',request=response.request,response=response)
+        return []
+    monkeypatch.setattr(gpu,'provider',unavailable)
+    gpu.advance(rid)
+    assert 'HTTP 500' in client.get('/api/runs/'+rid).json()['gpu_status']['error']
+    for expected in ('provisioning','queued'):
+        with SessionLocal() as s:
+            j=s.get(GPUJob,rid);j.next_retry_at=gpu.now()-timedelta(seconds=1);s.commit()
+        gpu.advance(rid)
+        with SessionLocal() as s:assert s.get(GPUJob,rid).state==expected
+    assert calls==['POST','GET','GET']
+    gpu.advance(rid)
+    assert calls==['POST','GET','GET','POST']
+
+
+def test_price_cap_terminates_overpriced_pod(client,monkeypatch):
+    rid,_=create(client,monkeypatch);calls=[]
+    def provider(method,path,**kw):
+        calls.append(method)
+        return {'desiredStatus':'RUNNING','costPerHr':settings.runpod_max_hourly_usd+.01}
+    monkeypatch.setattr(gpu,'provider',provider);gpu.advance(rid)
+    assert calls==['GET','DELETE']
+    assert client.get('/api/runs/'+rid).json()['state']=='failed'

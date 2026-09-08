@@ -13,7 +13,7 @@ import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import FileResponse, PlainTextResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import select, update
+from sqlalchemy import select, update, func
 
 from .accounts import require_user
 from .database import SessionLocal, session_scope
@@ -46,7 +46,20 @@ def allowed(user):
 def capabilities(user=Depends(require_user)):
     return {'runpod_available':allowed(user),'models':PRESETS,'gpu':settings.runpod_gpu_type,
             'max_seconds':settings.runpod_max_seconds,'max_hourly_usd':settings.runpod_max_hourly_usd,
-            'image':settings.runner_image}
+            'image':settings.runner_image,'gpu_fallbacks':[s.strip() for s in settings.runpod_gpu_fallbacks.split(',') if s.strip()]}
+
+
+def status(session, run):
+    job=session.get(GPUJob,run.id)
+    if not job:return None
+    ahead=session.scalar(select(func.count()).select_from(GPUJob).where(
+        GPUJob.cleanup_done==False, GPUJob.run_id!=run.id,
+        (GPUJob.state!='queued') | (GPUJob.created_at<job.created_at))) if job.state=='queued' else 0
+    return {'phase':job.state, 'error':job.error, 'heartbeat_at':job.heartbeat_at,
+            'deadline':job.deadline if job.state!='queued' else None,
+            'queue_position':ahead+1 if job.state=='queued' else None,
+            'cleanup_done':job.cleanup_done, 'gpu':run.metadata_.get('gpu'),
+            'hourly_usd':run.metadata_.get('hourly_usd')}
 
 
 def provider(method,path,**kwargs):
@@ -70,7 +83,7 @@ def bundle(run_id):
 
 def enqueue(session,run):
     # Saved before dispatch: a timed-out create can be reconciled by deterministic pod name.
-    job=GPUJob(run_id=run.id,token_hash='',deadline=now()+timedelta(seconds=settings.runpod_max_seconds),
+    job=GPUJob(run_id=run.id,token_hash='',deadline=now()+timedelta(seconds=run.config.get('max_runtime_seconds',3600)),
                bundle_sha256=bundle(run.id))
     session.add(job)
 
@@ -203,7 +216,7 @@ runpy.run_path('runpod_worker.py',run_name='__main__')
 
 def tick():
     with SessionLocal() as session:
-        jobs=list(session.scalars(select(GPUJob).where(GPUJob.cleanup_done==False)))
+        jobs=list(session.scalars(select(GPUJob).where(GPUJob.cleanup_done==False).order_by(GPUJob.created_at)))
     for snapshot in jobs:
         try:
             advance(snapshot.run_id)
@@ -217,25 +230,30 @@ def advance(run_id):
     with SessionLocal() as session:
         j=session.get(GPUJob,run_id);r=session.get(Run,run_id)
         if j.cleanup_done:return
+        if j.state=='queued' and r.state=='stopping':
+            j.state='cancelled';j.cleanup_done=True;r.state='cancelled';r.ended_at=now();session.commit();return
         if j.state=='queued' and r.state!='stopping':
+            if session.scalar(select(GPUJob).where(GPUJob.cleanup_done==False,GPUJob.state!='queued',GPUJob.run_id!=run_id)):return
             token=secrets.token_urlsafe(32)
             claimed=session.execute(update(GPUJob).where(GPUJob.run_id==run_id,GPUJob.state=='queued').values(
-                token_hash=hashlib.sha256(token.encode()).hexdigest(),state='provisioning',heartbeat_at=now()))
+                token_hash=hashlib.sha256(token.encode()).hexdigest(),state='provisioning',heartbeat_at=now(),
+                dispatch_attempts=GPUJob.dispatch_attempts+1,missing_checks=0,next_retry_at=now()+timedelta(seconds=30),
+                deadline=now()+timedelta(seconds=min(r.config.get('max_runtime_seconds',3600),settings.runpod_max_seconds))))
             session.commit()
             if claimed.rowcount!=1:return
             session.refresh(j)
             payload={'name':'fabryka-track-'+run_id,'imageName':settings.runner_image,
                      'computeType':'GPU','cloudType':settings.runpod_cloud_type,'gpuCount':1,
-                     'gpuTypeIds':[settings.runpod_gpu_type],'containerDiskInGb':30,'volumeInGb':0,
+                     'gpuTypeIds':list(dict.fromkeys([settings.runpod_gpu_type]+[x.strip() for x in settings.runpod_gpu_fallbacks.split(',') if x.strip()])),'gpuTypePriority':'availability','containerDiskInGb':30,'volumeInGb':0,
                      'dockerEntrypoint':['python3','-u','-c'],'dockerStartCmd':[BOOTSTRAP],
                      'env':{'TRACK_URL':settings.public_url.rstrip('/'),'TRACK_RUN_ID':run_id,
                             'TRACK_RUN_TOKEN':token,'TRACK_BUNDLE_SHA256':j.bundle_sha256},
                      'ports':[], 'interruptible':False}
             try:pod=provider('POST','/pods',json=payload)
             except httpx.HTTPStatusError as exc:
-                if exc.response.status_code<500:
-                    j.state='failed';j.error=f'RunPod rejected deployment (HTTP {exc.response.status_code}).';session.commit()
-                raise
+                j.error=(f'RunPod allocation unavailable (HTTP {exc.response.status_code}); reconciling before retry.' if exc.response.status_code>=500 or exc.response.status_code==429 else f'RunPod rejected deployment (HTTP {exc.response.status_code}).')
+                if exc.response.status_code<500 and exc.response.status_code!=429:j.state='failed'
+                session.add(RunLog(run_id=run_id,message=j.error));session.commit();return
             # Callback may already have updated the row while provider answered.
             session.expire_all();j=session.get(GPUJob,run_id)
             j.pod_id=pod['id'];j.error=None
@@ -245,9 +263,19 @@ def advance(run_id):
         if not j.pod_id:
             pods=provider('GET','/pods')
             matches=[p for p in pods if p.get('name')=='fabryka-track-'+run_id]
-            if matches:j.pod_id=matches[0]['id'];session.commit()
+            if matches:
+                j.pod_id=matches[0]['id'];j.error=None;session.commit()
+            elif j.state=='provisioning' and (j.next_retry_at is None or now()>=utc(j.next_retry_at)):
+                # Two separate provider-list confirmations precede another create.
+                j.missing_checks+=1;j.next_retry_at=now()+timedelta(seconds=30)
+                if j.missing_checks>=2:
+                    if j.dispatch_attempts<3:
+                        j.state='queued';session.add(RunLog(run_id=run_id,message='No pod exists after reconciliation. Queued another allocation attempt.'))
+                    else:j.state='failed';j.error='RunPod allocation failed after three attempts. No pod was allocated.'
+                session.commit()
+                if j.state=='queued':return
         expired=now()>=utc(j.deadline)
-        boot_failed=j.state=='provisioning' and now()-utc(j.created_at)>timedelta(minutes=12)
+        boot_failed=j.state=='provisioning' and now()-utc(j.heartbeat_at or j.created_at)>timedelta(minutes=12)
         cancel_stalled=r.state=='stopping' and now()-utc(j.heartbeat_at)>timedelta(seconds=120)
         if expired or boot_failed or cancel_stalled or (j.state=='queued' and r.state=='stopping'):
             j.state='cancelled' if r.state=='stopping' else 'failed'
@@ -262,6 +290,8 @@ def advance(run_id):
                 j.state='failed';j.error='RunPod exited before verified artifact synchronization.';session.commit()
             elif float(pod.get('costPerHr') or 0)>settings.runpod_max_hourly_usd:
                 j.state='failed';j.error='Provider hourly price exceeds configured cap.';session.commit()
+            elif pod:
+                r.metadata_={**r.metadata_,'hourly_usd':pod.get('costPerHr'),'pod_id':j.pod_id};session.commit()
         if j.state in ('finished','failed','cancelled'):
             if j.pod_id:provider('DELETE','/pods/'+j.pod_id)
             j.cleanup_done=True;r.state=j.state;r.ended_at=now()

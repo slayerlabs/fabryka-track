@@ -402,7 +402,7 @@
       .chart h3 {
         margin: 0 0 16px;
       }
-      .chart svg {
+      .chart > svg {
         width: 100%;
         height: auto;
       }
@@ -632,6 +632,25 @@
       #chinchilla-fold .character-buttons button {font-size:12px;padding:5px 8px;}
       @media(max-width:900px) { .studio-sidebar {position:static;} }
       @media(max-width:760px) { #studio-next:not(:empty) {position:fixed;bottom:0;left:0;right:0;z-index:20;background:var(--paper,#fff);padding:10px 16px;box-shadow:0 -2px 12px #0001;} main:has(.studio-intro) {padding-bottom:85px;} }
+
+      .chart {min-width:0;padding:18px 14px;}
+      .chart h3 {font-size:17px;margin:0 0 12px 8px;}
+      .plot-controls {display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12px;margin:0 8px 4px;}
+      .plot-controls label {display:flex;align-items:center;gap:5px;margin:0;}
+      .plot-controls select,.plot-controls button {font-size:12px;width:auto;padding:4px 7px;border:1px solid #ddded4;border-radius:5px;background:#fffefa;min-height:28px;}
+      .plot-controls input[type=range] {width:72px;padding:0;}
+      .plot-controls output {min-width:24px;font-variant-numeric:tabular-nums;}
+      .plot-canvas {width:100%;height:320px;}
+      .plot-expanded {position:fixed;inset:5vh 4vw;z-index:1000;background:#fffefa;padding:20px;box-shadow:0 0 0 100vmax #0008;border-radius:10px;overflow:auto;}
+      .plot-expanded .plot-canvas {height:calc(90vh - 100px);}
+      .gpu-status {margin:14px 0;}
+      .gpu-status p {margin:8px 0;}
+      .run-live {min-width:0;width:100%;}
+      .run-view .intro {margin-bottom:20px;}
+      .run-view h1 {font-size:36px;}
+      .run-view .metrics {margin:18px 0;}
+      .run-view .metric {padding:18px;}
+      @media(max-width:600px){.plot-controls{gap:6px}.plot-expanded{inset:2vh 2vw;padding:8px}.chart{padding:12px 4px}.gpu-status .row{align-items:start;flex-direction:column}}
     </style>
   </head>
   <body>
@@ -649,6 +668,8 @@
       ><span>Fabryka Track · Local training</span>
     </footer>
     <div id="toast" role="status" aria-live="polite"></div>
+    <script src="/assets/plotly-basic-3.1.0.min.js"></script>
+    <script src="/assets/run-charts.js?v=1"></script>
     <script>
       const $ = (s) => document.querySelector(s),
         app = $("#app");
@@ -942,6 +963,7 @@
           if(draft.compute==='runpod'){draft.model_size='8m';draft.learning_rate=.0003;draft.budget_mode='chinchilla';}
         }
         if(draft.compute==='runpod' && !gpuCapabilities.runpod_available){draft.compute='cpu';draft.model_size='tiny';}
+        draft.max_runtime_seconds=Math.min(draft.max_runtime_seconds||3600,gpuCapabilities.max_seconds||3600);
         save();
         if(datasets.some(d=>corpusOf(d))) datasets=datasets.filter(d=>!d.example || corpusOf(d));
         // Keep assigned points when a corpus is expanded to a new immutable ID.
@@ -991,7 +1013,7 @@
         return `<div class="dataset compact-dataset" data-empty="${!value}"><div class="dataset-heading"><div class="dataset-cover" style="--book-color:${datasetColor(d)}" aria-hidden="true"><b>${esc(d.name.slice(0,2).toUpperCase())}</b><small>DATASET</small></div><div class="dataset-title"><h3>${esc(d.name)}</h3><small>${esc(datasetSummary(d))}</small><button type="button" class="preview-link" data-preview-dataset="${d.id}">Zajrzyj do książki →</button></div></div><div class="dataset-controls"><button type="button" class="point-control" data-remove-point="${d.id}" aria-label="Odejmij punkt: ${esc(d.name)}">−</button><input id="slider-${d.id}" type="range" min="0" max="20" step="1" value="${value/5}" aria-label="${esc(d.name)} points" data-slider="${d.id}" style="accent-color:${datasetColor(d)}"><button type="button" class="point-control" data-add-point="${d.id}" aria-label="Dodaj punkt: ${esc(d.name)}">+</button><output class="percent" data-value="${d.id}" for="slider-${d.id}">${value/5} pkt · ${value}%</output></div></div>`;
       }
       function renderStudio() {
-        app.innerHTML = `<div class="intro studio-intro"><div class="eyebrow">Training studio</div><h1>A model starts with a mix.</h1><p class="muted">Choose your data, set up a small training run, and see what changes.</p></div>${steps()}<div id="error-slot"></div><div class="layout"><section class="panel" id="workspace"></section><div class="studio-sidebar"><label class="field"><span>Compute</span><select id="compute-select"><option value="runpod" ${draft.compute==='runpod'?'selected':''} ${!gpuCapabilities.runpod_available?'disabled':''}>RunPod GPU · ${esc(gpuCapabilities.gpu||'GPU')}</option><option value="cpu" ${draft.compute!=='runpod'?'selected':''}>Local CPU · tiny workflow test</option></select></label><div id="studio-next"></div><aside class="panel aside" id="recipe">${recipe()}</aside><details class="panel" id="chinchilla-fold" hidden><summary id="chinchilla-summary">Chinchilla scaling laws</summary><div id="chinchilla-slot"></div></details></div></div>`;
+        app.innerHTML = `<div class="intro studio-intro"><div class="eyebrow">Training studio</div><h1>A model starts with a mix.</h1><p class="muted">Choose your data, train a model, and follow its progress live.</p></div>${steps()}<div id="error-slot"></div><div class="layout"><section class="panel" id="workspace"></section><div class="studio-sidebar"><label class="field"><span>Compute</span><select id="compute-select"><option value="runpod" ${draft.compute==='runpod'?'selected':''} ${!gpuCapabilities.runpod_available?'disabled':''}>RunPod GPU · ${esc(gpuCapabilities.gpu||'GPU')}</option><option value="cpu" ${draft.compute!=='runpod'?'selected':''}>Local CPU · tiny workflow test</option></select></label><div id="studio-next"></div><aside class="panel aside" id="recipe">${recipe()}</aside><details class="panel" id="chinchilla-fold" hidden><summary id="chinchilla-summary">Chinchilla scaling laws</summary><div id="chinchilla-slot"></div></details></div></div>`;
         $('#compute-select').onchange=e=>{draft.compute=e.target.value;draft.model_size=draft.compute==='runpod'?'8m':'tiny';draft.learning_rate=draft.compute==='runpod'?.0003:.003;draft.budget_mode='chinchilla';save();renderStudio();};
         const w = $("#workspace");
         if (stage === 1) {
@@ -1046,6 +1068,7 @@
           w.innerHTML = `<h2>Set up your training run.</h2><div class="choice"><h3>Tiny transformer <span class="badge">CPU ready</span></h3><p>A two-layer causal language model with a 32-byte context. 134,912 trainable parameters, initialized from scratch.</p></div><form id="setup"><label class="field"><span>Run name</span><input name="name" required maxlength="120" placeholder="e.g. Polish-heavy baseline" value="${esc(draft.name)}"></label><div class="fields"><label class="field"><span>Maximum training steps</span><input name="steps" type="number" min="10" max="2000" required value="${draft.steps}"><small>Early stopping is on: stop after 20 validation checks without an improvement of at least 0.01. The step count is an upper limit.</small></label><label class="field"><span>Batch size</span><select name="batch_size">${[1, 2, 4, 8, 16, 32].map((n) => `<option ${draft.batch_size === n ? "selected" : ""}>${n}</option>`).join("")}</select><small>Each sequence uses the selected model’s context, shortened for small datasets.</small></label></div><details><summary>Advanced settings</summary><div class="fields"><label class="field"><span>Learning rate</span><input name="learning_rate" type="number" min="0.0001" max="0.1" step="0.0001" required value="${draft.learning_rate}"><small>How much each update changes the model.</small></label><label class="field"><span>Random seed</span><input name="seed" type="number" min="0" max="4294967295" required value="${draft.seed}"><small>Use the same seed to repeat an experiment.</small></label></div></details></form><div class="notice">${draft.compute==='runpod'?`Runs use a RunPod GPU. Maximum runtime: ${Math.round(gpuCapabilities.max_seconds/60)} minutes; hourly price cap: $${gpuCapabilities.max_hourly_usd}. Checkpoints and logs are synchronized before the pod is terminated.`:'Runs use this server’s CPU. A model file is saved when training finishes.'}</div><div class="actions"><button class="secondary" id="previous">← Dataset mix</button><button class="primary" id="next">Review run →</button></div>`;
         } else {
           w.innerHTML = `<div class="eyebrow">Ready when you are</div><h2>${esc(draft.name)}</h2><p class="muted">Your data mix and settings will be saved with this run.</p>${[
+            ...(draft.compute==='runpod'?[["GPU time limit",duration(draft.max_runtime_seconds||3600)],["Compute cost ceiling",`$${fmt((draft.max_runtime_seconds||3600)/3600*gpuCapabilities.max_hourly_usd,2)} · up to $${gpuCapabilities.max_hourly_usd}/h`]]:[]),
             ["Maximum steps", fmt(trainingPlan().steps, 0)],
             ["Early stopping", "On · 20 checks without improvement"],
             ["Saved model", "Lowest validation loss checkpoint"],
@@ -1083,6 +1106,7 @@
                 model_size: draft.model_size,
                 compute: draft.compute || "cpu",
                 target_tokens: draft.target_tokens,
+                max_runtime_seconds: draft.max_runtime_seconds || 3600,
                 mix: mix().map((d) => ({ dataset_id: d.id, weight: d.weight })),
               });
               location.hash = "run/" + r.id;
@@ -1097,6 +1121,10 @@
           $("#setup").insertAdjacentHTML("afterbegin", `<label class="field"><span>Training budget</span><select id="budget-mode"><option value="chinchilla" ${draft.budget_mode === "chinchilla" ? "selected" : ""}>Chinchilla upper limit · 20 tokens per parameter</option><option value="tokens" ${draft.budget_mode === "tokens" ? "selected" : ""}>Custom token budget · ${fmt(draft.target_tokens/1e6,2)}M</option><option value="manual" ${draft.budget_mode === "manual" ? "selected" : ""}>Validation-guided · manual step limit</option></select><small id="budget-summary"></small></label><div class="notice">Early stopping is enabled in both modes. Validation is checked periodically during training. Downloaded model.pt contains the checkpoint with the lowest validation loss. Chinchilla is an optional upper limit, not a requirement to keep training.</div>`);
           $("#budget-mode").onchange = event => { draft.budget_mode = event.target.value; save(); refreshTrainingPlan(); };
           $("#setup").insertAdjacentHTML("afterbegin", `<label class="field"><span>Model size</span><select name="model_size">${draft.compute==='runpod'?Object.entries(gpuCapabilities.models).map(([id,m])=>`<option value="${id}" ${draft.model_size===id?'selected':''}>${esc(m.label)}</option>`).join(''):`<option value="tiny" ${draft.model_size === "tiny" ? "selected" : ""}>Tiny · 134,912 parameters</option><option value="small" ${draft.model_size === "small" ? "selected" : ""}>Small · 391,008 parameters</option>`}</select><small>All models train from scratch on the selected compute. GPU models use a 512-byte context.</small></label>`);
+        }
+        if (stage === 2 && draft.compute==='runpod') {
+          $('#setup').insertAdjacentHTML('beforeend',`<label class="field"><span>GPU time limit</span><select id="gpu-runtime">${[3600,14400,43200,86400].filter(n=>n<=gpuCapabilities.max_seconds).map(n=>`<option value="${n}" ${n===draft.max_runtime_seconds?'selected':''}>${duration(n)} · compute ceiling $${fmt(n/3600*gpuCapabilities.max_hourly_usd,2)}</option>`).join('')}</select><small>Stops and saves before this limit. Startup and artifact transfer use part of the time budget.</small></label>`);
+          $('#gpu-runtime').onchange=e=>{draft.max_runtime_seconds=Number(e.target.value);save();};
         }
         if (stage === 2) w.insertAdjacentHTML("afterbegin", dataWarning());
         if (stage === 2) refreshTrainingPlan();
@@ -1140,23 +1168,20 @@
             refreshTrainingPlan();
           };
       }
-      function chart(series) {
-        const all = series
-          .flatMap((s) => s.points)
-          .filter((p) => Number.isFinite(p.value));
-        if (!all.length)
-          return '<div class="empty muted">Waiting for the first measurement…</div>';
-        let min = Math.min(...all.map((p) => p.value)),
-          max = Math.max(...all.map((p) => p.value));
-        if (min === max) {
-          min -= 0.1;
-          max += 0.1;
-        }
-        const xmax = Math.max(1, ...all.map((p) => p.step));
-        return `<svg viewBox="0 0 460 220" role="img" aria-label="${esc(series.map((s) => s.name).join(" and "))} by training step">${[0, 0.5, 1].map((t) => `<line x1="48" x2="446" y1="${20 + t * 155}" y2="${20 + t * 155}" stroke="#e5e5dc"/><text x="0" y="${24 + t * 155}" font-size="11" fill="#74766c">${fmt(max - t * (max - min))}</text>`).join("")}${series.map((s, i) => `<polyline fill="none" stroke="${colors[i % colors.length]}" stroke-width="2.5" points="${s.points.map((p) => `${48 + (p.step / xmax) * 398},${20 + ((max - p.value) / (max - min)) * 155}`).join(" ")}"/>${s.points.length === 1 ? `<circle cx="${48 + (s.points[0].step / xmax) * 398}" cy="${20 + ((max - s.points[0].value) / (max - min)) * 155}" r="3" fill="${colors[i % colors.length]}"/>` : ""}`).join("")}<text x="48" y="197" font-size="11" fill="#74766c">0</text><text x="446" y="197" font-size="11" text-anchor="end" fill="#74766c">${xmax} steps</text></svg><div class="row" style="flex-wrap:wrap;justify-content:start">${series.map((s, i) => `<small><span class="dot" style="background:${colors[i % colors.length]}"></span>${esc(s.name)}</small>`).join("")}</div>`;
+      function chart(series) { return TrackCharts.placeholder(series); }
+      const duration = seconds => !Number.isFinite(seconds) ? 'Measuring…' : seconds<60 ? `${Math.ceil(seconds)}s` : seconds<3600 ? `${Math.ceil(seconds/60)} min` : `${(seconds/3600).toFixed(1)} h`;
+      function operationalStatus(r) {
+        const g=r.gpu_status;
+        if(!g)return '';
+        const m={...Object.fromEntries(Object.entries(r.metrics||{}).map(([k,v])=>[k,v.at(-1)?.value])),...(r.latest_metrics||{})};
+        const speed=m['throughput/tokens_sec'], seen=m['training/tokens_seen']||0;
+        const remaining=Math.max(0,(r.config.planned_training_tokens||0)-seen);
+        const active=['queued','running','stopping'].includes(r.state);
+        const phase=g.cleanup_done?r.state:r.metadata?.gpu_cleanup==='pending'?'Saving artifacts and terminating GPU':g.phase==='queued'?`Waiting in queue · position ${g.queue_position}`:g.phase==='provisioning'?'Allocating GPU and starting container':seen?'Training':'Starting CUDA and downloading datasets';
+        return `<div class="notice gpu-status"><div class="row"><b>${esc(phase)}</b><span>${esc(g.gpu||'GPU not assigned')}${g.hourly_usd?` · $${fmt(g.hourly_usd,2)}/h`:''}</span></div>${g.error?`<p role="status">${esc(g.error)}</p>`:''}${active?`<small>${speed>0?`ETA to token limit: ${duration(remaining/speed)} · ${fmt(speed,0)} byte tokens/s measured. Early stopping may finish sooner.`:'Waiting for measured throughput to estimate time.'}${g.deadline?` · Time limit: ${new Date(g.deadline).toLocaleTimeString()}`:''}</small>`:''}</div>`;
       }
       const latest = (r, k) => r.metrics?.[k]?.at(-1)?.value;
-      async function runs() {
+      async function runs(token=generation) {
         const ps = await api("/projects"),
           rs = (
             await Promise.all(
@@ -1167,10 +1192,11 @@
           )
             .flat()
             .sort((a, b) => new Date(b.started_at) - new Date(a.started_at));
+        if(token!==generation)return;
         selected = new Set(
           [...selected].filter((id) => rs.some((r) => r.id === id)),
         );
-        app.innerHTML = `<div class="intro row"><div><div class="eyebrow">Your experiments</div><h1>Every mix tells a story.</h1><p class="muted">${rs.length} saved runs. Select two or more to compare.</p></div><a class="primary" href="#new">+ New training run</a></div><div class="row" style="margin-bottom:20px"><input id="search" aria-label="Search runs" placeholder="Search runs…" style="max-width:300px"><button id="compare" class="secondary" ${selected.size < 2 ? "disabled" : ""}>Compare (${selected.size})</button></div><div class="run-list">${rs.length ? rs.map((r) => `<div class="run-item" data-name="${esc(r.name.toLowerCase())}"><input type="checkbox" aria-label="Compare ${esc(r.name)}" data-select="${r.id}" ${selected.has(r.id) ? "checked" : ""}><a href="#run/${r.id}"><h3>${esc(r.name)}</h3><small>${esc(r.project)} · ${new Date(r.started_at).toLocaleString()}</small></a><span class="loss-label muted">Loss ${fmt(r.latest_metrics["train/loss"] ?? r.latest_metrics.loss)}</span><span class="badge ${esc(r.state)}">${esc(r.state)}</span></div>`).join("") : '<div class="panel empty"><h2>Your first experiment starts here.</h2><p class="muted">Mix a few datasets and train a small model in your browser.</p><a class="primary" href="#new">Create a training run →</a></div>'}</div><p id="no-match" class="empty muted" hidden>No runs match your search.</p>`;
+        app.innerHTML = `<div class="intro row"><div><div class="eyebrow">Your experiments</div><h1>Every mix tells a story.</h1><p class="muted">${rs.length} saved runs. Select two or more to compare.</p></div><a class="primary" href="#new">+ New training run</a></div><div class="row" style="margin-bottom:20px"><input id="search" aria-label="Search runs" placeholder="Search runs…" style="max-width:300px"><button id="compare" class="secondary" ${selected.size < 2 ? "disabled" : ""}>Compare (${selected.size})</button></div><section id="active-runs" aria-label="Current training runs"></section><div class="run-list">${rs.length ? rs.map((r) => `<div class="run-item" data-run-id="${r.id}" data-name="${esc(r.name.toLowerCase())}"><input type="checkbox" aria-label="Compare ${esc(r.name)}" data-select="${r.id}" ${selected.has(r.id) ? "checked" : ""}><a href="#run/${r.id}"><h3>${esc(r.name)}</h3><small>${esc(r.project)} · ${new Date(r.started_at).toLocaleString()}</small></a><span class="loss-label muted">Loss ${fmt(r.latest_metrics["train/loss"] ?? r.latest_metrics.loss)}</span><span class="badge ${esc(r.state)}">${esc(r.state)}</span></div>`).join("") : '<div class="panel empty"><h2>Your first experiment starts here.</h2><p class="muted">Mix a few datasets and train a small model in your browser.</p><a class="primary" href="#new">Create a training run →</a></div>'}</div><p id="no-match" class="empty muted" hidden>No runs match your search.</p>`;
         $("#search").oninput = (e) => {
           let count = 0;
           document.querySelectorAll("[data-name]").forEach((row) => {
@@ -1200,8 +1226,23 @@
         $("#compare").onclick = () => {
           location.hash = "compare/" + [...selected].join(",");
         };
+        function showActive(data) {
+          const active=data.filter(r=>['queued','running','stopping'].includes(r.state));
+          $('#active-runs').innerHTML=active.length?`<h2 style="font-size:24px">Current runs</h2>${active.map(r=>`<article class="panel" style="margin-bottom:16px;padding:20px"><div class="row"><a href="#run/${r.id}"><h3>${esc(r.name)}</h3><small>${esc(r.config.model||r.project)}</small></a><a class="secondary" href="#run/${r.id}">Open live dashboard →</a></div>${operationalStatus(r)}<progress max="100" value="${r.latest_metrics.progress||0}" aria-label="${esc(r.name)} progress"></progress><div class="row"><small>${fmt(r.latest_metrics.progress||0,1)}% · ${fmt((r.latest_metrics['training/tokens_seen']||0)/1e6,2)}M tokens</small><small>Train ${fmt(r.latest_metrics['train/loss'],3)} · Validation ${fmt(r.latest_metrics['val/loss'],3)}</small></div></article>`).join('')}`:'';
+          for(const r of data){const row=document.querySelector(`[data-run-id="${r.id}"]`);if(row){row.querySelector('.badge').textContent=r.state;row.querySelector('.badge').className='badge '+r.state;row.querySelector('.loss-label').textContent='Loss '+fmt(r.latest_metrics['train/loss']??r.latest_metrics.loss);}}
+        }
+        showActive(rs);
+        async function refreshRuns(){
+          try {
+            const data=(await Promise.all(ps.map(p=>api('/projects/'+encodeURIComponent(p.name)+'/runs')))).flat();
+            if(token!==generation)return;
+            showActive(data);timer=setTimeout(refreshRuns,5000);
+          }catch(e){if(token===generation){error(e);timer=setTimeout(refreshRuns,10000);}}
+        }
+        timer=setTimeout(refreshRuns,5000);
       }
       async function detail(id, token) {
+        app.classList.add("run-view");
         const r = await api("/runs/" + encodeURIComponent(id));
         if (token !== generation) return;
         const readOnly = !!r.read_only;
@@ -1235,8 +1276,9 @@
           $("#run-state").className = "badge " + r.state;
           const result = r.metadata?.training_result;
           const percent = latest(r, "progress") || 0;
+          const previousCharts = [...$("#live").querySelectorAll(".interactive-chart")];
           $("#live").innerHTML =
-            `${local ? `<div class="row"><small>${r.metadata.gpu_cleanup === "pending" ? "Artifacts verified — terminating RunPod…" : r.state === "queued" ? (r.config.compute==='runpod'?"Provisioning RunPod GPU…":"Queued — waiting for the current run") : r.state === "finished" ? (result?.stop_reason === "early_stopping" ? "Stopped early — validation stopped improving" : "Training complete") : r.state === "cancelled" ? "Training cancelled" : r.state === "interrupted" ? "Training interrupted — start a new run to retry" : r.state === "failed" ? "Training failed — see the log below" : r.state === "stopping" ? "Stopping training…" : "Training in progress"}</small><small>${fmt(percent, 0)}% · step ${r.metrics.progress?.at(-1)?.step || 0} / ${r.config.steps}</small></div><progress max="100" value="${percent}" aria-label="Training progress"></progress>` : ""}<div class="metrics">${[
+            `${operationalStatus(r)}${local ? `<div class="row"><small>${r.metadata.gpu_cleanup === "pending" ? "Artifacts verified — terminating RunPod…" : r.state === "queued" ? (r.config.compute==='runpod'?"Provisioning RunPod GPU…":"Queued — waiting for the current run") : r.state === "finished" ? (result?.stop_reason === "early_stopping" ? "Stopped early — validation stopped improving" : "Training complete") : r.state === "cancelled" ? "Training cancelled" : r.state === "interrupted" ? "Training interrupted — start a new run to retry" : r.state === "failed" ? "Training failed — see the log below" : r.state === "stopping" ? "Stopping training…" : "Training in progress"}</small><small>${fmt(percent, 0)}% · step ${r.metrics.progress?.at(-1)?.step || 0} / ${r.config.steps}</small></div><progress max="100" value="${percent}" aria-label="Training progress"></progress>` : ""}<div class="metrics">${[
               ["Training loss", latest(r, "train/loss") ?? latest(r, "loss")],
               ["Validation loss", latest(r, "val/loss")],
               ["Validation perplexity", latest(r, "val/perplexity")],
@@ -1274,11 +1316,12 @@
               )
               .map(
                 ([k, v]) =>
-                  `<div class="chart"><h3>${esc(k)}</h3>${chart([{ name: k, points: v }])}</div>`,
+                  `<div class="chart"><h3>${esc(({"throughput/tokens_sec":"Training throughput","training/tokens_seen":"Training tokens"})[k]||k)}</h3>${chart([{ name: k, points: v }])}</div>`,
               )
               .join(
                 "",
               )}</div><p class="muted" style="font-size:12px;margin-top:15px">Lower loss and perplexity mean better next-byte predictions. Compare runs with the same validation data. ${active ? "Refreshes every 2 seconds." : ""}</p>`;
+          TrackCharts.render($("#live"), previousCharts).catch(error);
           if ($("#logs")) $("#logs").textContent =
             r.logs.map((l) => `[${l.level}] ${l.message}`).join("\n") ||
             "No logs yet.";
@@ -1402,6 +1445,7 @@
           ...new Set(rs.flatMap((r) => Object.keys(r.metrics))),
         ].filter((k) => k !== "progress");
         app.innerHTML = `<a href="#runs" class="muted">← My runs</a><div class="intro" style="margin-top:25px"><div class="eyebrow">Side by side</div><h1>See what your mix changed.</h1><p class="muted">Compare measured results. Different validation mixtures are not a like-for-like quality ranking.</p></div><div class="panel table-scroll"><table><thead><tr><th>Run</th>${rs.map((r) => `<th>${esc(r.name)}</th>`).join("")}</tr></thead><tbody>${["state", ...keys].map((k) => `<tr><td>${esc(k)}</td>${rs.map((r) => `<td>${k === "state" ? esc(r.state) : fmt(latest(r, k))}</td>`).join("")}</tr>`).join("")}<tr><td>Dataset mix</td>${rs.map((r) => `<td>${(r.config.mix || []).map((d) => `${esc(d.name)} ${d.weight}%`).join("<br>") || "—"}</td>`).join("")}</tr>${["model", "steps", "batch_size", "learning_rate", "seed"].map((k) => `<tr><td>${k}</td>${rs.map((r) => `<td>${esc(r.config[k] ?? "—")}</td>`).join("")}</tr>`).join("")}</tbody></table></div><div class="charts" style="margin-top:20px">${keys.map((k) => `<div class="chart"><h3>${esc(k)}</h3>${chart(rs.map((r) => ({ name: r.name, points: r.metrics[k] || [] })))}</div>`).join("")}</div>`;
+        await TrackCharts.render(app);
       }
       async function leaderboard() {
         const sort = document.querySelector("#leader-sort")?.value || "val_loss";
@@ -1412,6 +1456,8 @@
       }
       async function route() {
         $('#dataset-preview')?.close();
+        TrackCharts.dispose(app);
+        app.classList.remove("run-view");
         clearTimeout(timer);
         clearTimeout(benchmarkTimer);
         const token = ++generation,

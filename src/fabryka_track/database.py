@@ -24,6 +24,10 @@ def create_tables():
                 # Existing leaderboard entries stay visible as unclaimed legacy scores.
                 connection.execute(text("UPDATE runs SET is_public = TRUE WHERE owner_id IS NULL"))
 
+        gpu_columns={c['name'] for c in inspect(connection).get_columns('gpu_jobs')}
+        for name,definition in {'dispatch_attempts':'INTEGER NOT NULL DEFAULT 0','missing_checks':'INTEGER NOT NULL DEFAULT 0','next_retry_at':'DATETIME'}.items():
+            if name not in gpu_columns:connection.execute(text(f'ALTER TABLE gpu_jobs ADD COLUMN {name} {definition}'))
+
 
 def session_scope():
     db = SessionLocal()
