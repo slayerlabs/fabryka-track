@@ -39,7 +39,12 @@ def utc(d): return d.replace(tzinfo=timezone.utc) if d.tzinfo is None else d
 
 def allowed(user):
     users={s.strip().lower() for s in settings.runpod_allowed_users.split(',') if s.strip()}
-    return bool(settings.runpod_api_key and user and user.username.lower() in users)
+    # A successful Hugging Face OAuth connection is an explicit identity signal;
+    # it can use GPU credits without a second manual allowlist entry. Keep the
+    # allowlist for password-only accounts and lab/service users.
+    return bool(settings.runpod_api_key and user and
+                (bool(getattr(user, 'huggingface_username', None)) or
+                 '*' in users or user.username.lower() in users))
 
 
 @router.get('/training/capabilities')

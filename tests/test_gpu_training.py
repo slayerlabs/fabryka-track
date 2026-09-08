@@ -1,5 +1,6 @@
 import hashlib
 from datetime import timedelta
+from types import SimpleNamespace
 
 import pytest
 import torch
@@ -34,6 +35,13 @@ def test_gpu_parameters_match_real_architecture():
     for preset in gpu.PRESETS.values():
         with torch.device('meta'):m=TinyTransformer(**preset['architecture'])
         assert sum(p.numel() for p in m.parameters())==preset['parameters']
+
+
+def test_huggingface_connected_accounts_can_use_gpu(monkeypatch):
+    monkeypatch.setattr(settings,'runpod_api_key','test-provider-secret')
+    monkeypatch.setattr(settings,'runpod_allowed_users','')
+    assert gpu.allowed(SimpleNamespace(username='hf-user',huggingface_username='hf-user'))
+    assert not gpu.allowed(SimpleNamespace(username='password-only',huggingface_username=None))
 
 
 def test_gpu_access_no_silent_cpu_fallback(client,monkeypatch):
