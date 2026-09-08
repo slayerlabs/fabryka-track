@@ -288,3 +288,34 @@ See [dataset-selection.md](docs/dataset-selection.md) for the proposed Polish
 20 points as colored books; source identity determines category, with no editable
 category dropdown. Imported corpus integration is separate from the short built-in
 workflow examples.
+
+
+## Real corpus starter library
+
+The generated three-paragraph fixtures are hidden from the studio once a real
+corpus pack is installed. They remain stored to reproduce old runs. The initial
+pack contains 1,317 whole documents / 5,775,763 UTF-8 bytes across ten sources:
+Polish FineWeb2, cleaned Polish HPLT, Wikipedia, Wikisource, Wikivoyage, Wikibooks,
+Wolne Lektury, Biblioteka Nauki, EUR-Lex and parliamentary text. These are bounded
+workflow samples, not complete or statistically representative corpora.
+
+`docs/corpus-samples.json` records source revisions, sample hashes and counts.
+The server retains per-document IDs, hashes, rights/attribution metadata and sample
+text under `corpus-samples/`, outside Git. Existing datasets are never overwritten.
+The UI's categories and colors come from source identity, not a user dropdown.
+
+```bash
+uv run --extra eval python scripts/build_corpus_samples.py /tmp/corpus-pack
+uv run --extra eval python scripts/update_corpus_catalog.py /tmp/corpus-pack
+uv run python scripts/import_corpus_samples.py /tmp/corpus-pack
+```
+
+Building samples reads the first Parquet row group (some sources exceed 1 GB
+compressed), or the first 100 untruncated HF Viewer rows with an `x-revision`.
+The builder preserves entire selected documents and records the sampling method.
+The import validates every text hash before its transaction and backs up SQLite.
+Production imports must retain the complete pack for provenance and recovery.
+
+The Chinchilla panel calculates D≈20N and C≈6ND in both directions, with 8/16/32/64/
+128M parameter examples. It plans scale; it does not silently change the CPU model
+or turn corpus estimates into downloaded training data.

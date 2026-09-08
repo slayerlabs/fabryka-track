@@ -50,6 +50,9 @@ near-duplicate documents across train and evaluation. Split entire documents,
 books and related sources together; a last-10%-of-text split is only a studio smoke
 diagnostic.
 
-The current web studio's three short built-in examples are workflow fixtures,
-not any of the corpora above. The source recommendation does not mean that the
-full datasets have been downloaded or connected to the CPU trainer.
+The studio now has a bounded starter library from ten real sources; see
+[corpus-samples.json](corpus-samples.json). Full corpora are not loaded.
+FinetextPL-Edu returned HTTP 401 from the unauthenticated Viewer API during this
+review, so the initial library uses the publicly accessible Polish FineWeb2 slice
+as its additional web source. FinetextPL-Edu remains a candidate for a controlled
+comparison once access is available.
