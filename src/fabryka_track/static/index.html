@@ -755,44 +755,32 @@
           return;
         }
         const total = selected.reduce((n,d) => n + d.bytes, 0);
-        const allocations = selected.map(d => { const exact = 100 * d.bytes / total; return {id:d.id, value:Math.floor(exact), remainder:exact % 1}; });
-        let left = 100 - allocations.reduce((n,d) => n+d.value,0);
+        const allocations = selected.map(d => { const exact = 20 * d.bytes / total; return {id:d.id, value:Math.floor(exact), remainder:exact % 1}; });
+        let left = 20 - allocations.reduce((n,d) => n+d.value,0);
         [...allocations].sort((a,b) => b.remainder-a.remainder).forEach(d => {if(left > 0){d.value++;left--;}});
-        draft.weights = Object.fromEntries(datasets.map(d => [d.id, allocations.find(a => a.id===d.id)?.value || 0]));
+        draft.weights = Object.fromEntries(datasets.map(d => [d.id, (allocations.find(a => a.id===d.id)?.value || 0) * 5]));
         draft.character=id; save(); updateMix();
       }
-      function balance(id, value) {
-        draft.character = null;
-        const others = datasets.filter((d) => d.id !== id),
-          remaining = 100 - value,
-          total = others.reduce((s, d) => s + (draft.weights[d.id] || 0), 0);
-        draft.weights[id] = others.length ? value : 100;
-        let used = 0;
-        others.forEach((d, i) => {
-          const n =
-            i === others.length - 1
-              ? remaining - used
-              : Math.floor(
-                  remaining *
-                    (total
-                      ? (draft.weights[d.id] || 0) / total
-                      : 1 / others.length),
-                );
-          draft.weights[d.id] = n;
-          used += n;
-        });
-        save();
-        updateMix();
+      function pointsUsed() { return datasets.reduce((n,d) => n+(draft.weights[d.id] || 0)/5,0); }
+      function balance(id, points) {
+        const current = (draft.weights[id] || 0)/5;
+        const available = 20-pointsUsed()+current;
+        draft.weights[id] = Math.max(0, Math.min(Math.round(points),available))*5;
+        draft.character = null; save(); updateMix();
       }
       function updateMix() {
         characterState();
+        if ($('#point-budget')) $('#point-budget').textContent = `${20-pointsUsed()} z 20 punktów do rozdania`;
+        if (stage === 1 && $('#next')) $('#next').disabled = pointsUsed() !== 20;
+        document.querySelectorAll('[data-add-point]').forEach(b => b.disabled = pointsUsed() >= 20);
+        document.querySelectorAll('[data-remove-point]').forEach(b => b.disabled = !draft.weights[b.dataset.removePoint]);
         datasets.forEach((d) => {
           const input = $(`[data-slider="${d.id}"]`),
             value = draft.weights[d.id] || 0;
           if (input) {
-            input.value = value;
+            input.value = value/5;
             input.closest(".dataset").dataset.empty = String(value === 0);
-            $(`[data-value="${d.id}"]`).textContent = value + "%";
+            $(`[data-value="${d.id}"]`).textContent = `${value/5} pkt · ${value}%`;
           }
         });
         if ($("#recipe")) $("#recipe").innerHTML = recipe();
@@ -825,7 +813,7 @@
         return `<div class="notice" id="data-warning">${p.available < 10000 ? "Very little training text: this run is a workflow test. Upload more varied text before increasing the model or budget. " : ""}${p.reuse > 4 ? `At the step limit, the most reused source would be sampled approximately ${fmt(p.reuse, 1)} times its training size. These are repeated byte tokens, not fresh data. ` : ""}Validation uses a small fixed sample from the last 10% of each source; its score is only a diagnostic for this mix.</div>`;
       }
       function recipe() {
-        return `<h3>Your recipe</h3><small>${mix().length} sources · 100% allocated</small><div class="stack" aria-label="Dataset mix">${mix()
+        return `<h3>Your recipe</h3><small>${mix().length} sources · ${pointsUsed()} / 20 pkt · ${pointsUsed()*5}% allocated</small><div class="stack" aria-label="Dataset mix">${mix()
           .map(
             (d) =>
               `<span style="width:${d.weight}%;background:${colors[datasets.indexOf(datasets.find((x) => x.id === d.id)) % colors.length]}"></span>`,
@@ -850,13 +838,14 @@
             Math.max(0, Math.min(100, Number(draft.weights[d.id]) || 0)),
           ]),
         );
-        if (Object.values(draft.weights).reduce((a, b) => a + b, 0) !== 100) {
-          datasets.forEach(
-            (d, i) =>
-              (draft.weights[d.id] =
-                i === 0 ? 60 : i === 1 ? 25 : i === 2 ? 15 : 0),
-          );
-          if (datasets.length < 3) draft.weights[datasets[0].id] = 100;
+        if (!draft.point_budget_version) {
+          // Convert existing recipes once; later visits preserve unspent points.
+          const total = Object.values(draft.weights).reduce((a,b) => a+b,0);
+          const shares = datasets.map(d => {const exact = total ? 20*draft.weights[d.id]/total : 0; return {id:d.id, n:Math.floor(exact), rest:exact%1};});
+          let remaining = total ? 20-shares.reduce((n,d)=>n+d.n,0) : 0;
+          [...shares].sort((a,b)=>b.rest-a.rest).forEach(d=>{if(remaining>0){d.n++;remaining--;}});
+          draft.weights=Object.fromEntries(shares.map(d=>[d.id,d.n*5]));
+          draft.point_budget_version=1; draft.character=null; save();
         }
         renderStudio();
       }
@@ -883,13 +872,15 @@
         app.innerHTML = `<div class="intro"><div class="eyebrow">Training studio</div><h1>A model starts with a mix.</h1><p class="muted">Choose your data, set up a small training run, and see what changes.</p></div>${steps()}<div id="error-slot"></div><div class="layout"><section class="panel" id="workspace"></section><aside class="panel aside" id="recipe">${recipe()}</aside></div>`;
         const w = $("#workspace");
         if (stage === 1) {
-          w.innerHTML = `<div class="row"><div><h2 style="margin-bottom:8px">Mix your datasets</h2><p class="muted" style="font-size:13px">Move a slider. The rest of the mix adjusts to stay at 100%.</p></div></div><div>${datasets.map((d, i) => `<div class="dataset" data-empty="${!(draft.weights[d.id] || 0)}"><div class="row"><div><h3><span class="dot" style="background:${colors[i % colors.length]}"></span>${esc(d.name)}</h3><small>${d.example ? "Included example text" : "Your uploaded text"} · ${fmt(d.bytes / 1000, 1)} KB</small></div><output class="percent" data-value="${d.id}" for="slider-${d.id}">${draft.weights[d.id] || 0}%</output></div><label class="source-category">Kategoria<select data-category="${d.id}" aria-label="Kategoria: ${esc(d.name)}">${Object.entries(sourceCategories).map(([value,label]) => `<option value="${value}" ${categoryOf(d) === value ? "selected" : ""}>${label}</option>`).join("")}</select></label><input id="slider-${d.id}" type="range" min="0" max="100" step="1" value="${draft.weights[d.id] || 0}" aria-label="${esc(d.name)} percentage" data-slider="${d.id}"></div>`).join("")}</div><div class="upload"><div><b style="font-size:13px">Bring your own data</b><p class="muted">UTF-8 plain text · 100+ characters · up to 2 MB</p></div><button class="secondary" id="upload-button">+ Add text file</button><input type="file" id="upload" accept=".txt,text/plain" hidden></div><div class="actions"><small>Example texts are for trying the workflow.</small><button class="primary" id="next">Training settings →</button></div>`;
+          w.innerHTML = `<div class="row"><div><h2 style="margin-bottom:8px">Mix your datasets</h2><p class="muted" style="font-size:13px">Rozdaj dokładnie 20 punktów. 1 punkt = 5% danych treningowych. Odejmij punkt, aby przenieść go do innego źródła.</p></div></div><div>${datasets.map((d, i) => `<div class="dataset" data-empty="${!(draft.weights[d.id] || 0)}"><div class="row"><div><h3><span class="dot" style="background:${colors[i % colors.length]}"></span>${esc(d.name)}</h3><small>${d.example ? "Included example text" : "Your uploaded text"} · ${fmt(d.bytes / 1000, 1)} KB</small></div><output class="percent" data-value="${d.id}" for="slider-${d.id}">${(draft.weights[d.id] || 0)/5} pkt · ${draft.weights[d.id] || 0}%</output></div><label class="source-category">Kategoria<select data-category="${d.id}" aria-label="Kategoria: ${esc(d.name)}">${Object.entries(sourceCategories).map(([value,label]) => `<option value="${value}" ${categoryOf(d) === value ? "selected" : ""}>${label}</option>`).join("")}</select></label><input id="slider-${d.id}" type="range" min="0" max="20" step="1" value="${(draft.weights[d.id] || 0)/5}" aria-label="${esc(d.name)} points" data-slider="${d.id}"><div style="display:flex;gap:8px"><button type="button" class="secondary" data-remove-point="${d.id}" aria-label="Odejmij punkt: ${esc(d.name)}">−</button><button type="button" class="secondary" data-add-point="${d.id}" aria-label="Dodaj punkt: ${esc(d.name)}">+</button></div></div>`).join("")}</div><div class="upload"><div><b style="font-size:13px">Bring your own data</b><p class="muted">UTF-8 plain text · 100+ characters · up to 2 MB</p></div><button class="secondary" id="upload-button">+ Add text file</button><input type="file" id="upload" accept=".txt,text/plain" hidden></div><div class="actions"><small>Example texts are for trying the workflow.</small><button class="primary" id="next">Training settings →</button></div>`;
           document
             .querySelectorAll("[data-slider]")
             .forEach(
               (el) =>
                 (el.oninput = () => balance(el.dataset.slider, +el.value)),
             );
+          document.querySelectorAll('[data-add-point]').forEach(b=>b.onclick=()=>balance(b.dataset.addPoint,(draft.weights[b.dataset.addPoint] || 0)/5+1));
+          document.querySelectorAll('[data-remove-point]').forEach(b=>b.onclick=()=>balance(b.dataset.removePoint,(draft.weights[b.dataset.removePoint] || 0)/5-1));
           document.querySelectorAll('[data-category]').forEach(el => el.onchange = () => {
             draft.categories = {...draft.categories, [el.dataset.category]:el.value}; draft.character=null; save(); characterState();
           });
@@ -913,9 +904,10 @@
             }
           };
           if (stage === 1) {
-            w.insertAdjacentHTML("afterbegin", `<section class="character" aria-labelledby="character-title"><div class="eyebrow">Charakter datasetu</div><h2 id="character-title">Od czego zaczynamy?</h2><div class="character-buttons" role="group" aria-label="Charakter datasetu">${characters.map(p => `<button type="button" data-character="${p.id}" aria-pressed="false">${p.name}</button>`).join("")}</div><p class="muted" id="character-status" role="status" aria-live="polite"></p><small>Profile korzystają z dostępnych źródeł. Teksty przykładowe służą do testów; korpusy HPLT, EUR-Lex i Wikipedia nie są jeszcze podłączone.</small></section><label class="field"><span>Target training tokens</span><input id="target-tokens" type="number" min="100000" max="10000000000" step="1000000" value="${draft.target_tokens}"><small>Planning only. At 20:1, 1 billion training tokens suggests about 50 million parameters. The GPU runner is not connected; CPU runs use the budget selected in the next step.</small></label>`);
+            w.insertAdjacentHTML("afterbegin", `<section class="character" aria-labelledby="character-title"><div class="eyebrow">Charakter datasetu</div><h2 id="character-title">Od czego zaczynamy?</h2><div class="character-buttons" role="group" aria-label="Charakter datasetu">${characters.map(p => `<button type="button" data-character="${p.id}" aria-pressed="false">${p.name}</button>`).join("")}</div><div class="row" style="margin:16px 0"><b id="point-budget" role="status" aria-live="polite"></b><button class="secondary" type="button" id="reset-points">Rozdaj od zera</button></div><p class="muted" id="character-status" role="status" aria-live="polite"></p><small>Profile korzystają z dostępnych źródeł. Teksty przykładowe służą do testów; korpusy HPLT, EUR-Lex i Wikipedia nie są jeszcze podłączone.</small></section><label class="field"><span>Target training tokens</span><input id="target-tokens" type="number" min="100000" max="10000000000" step="1000000" value="${draft.target_tokens}"><small>Planning only. At 20:1, 1 billion training tokens suggests about 50 million parameters. The GPU runner is not connected; CPU runs use the budget selected in the next step.</small></label>`);
             document.querySelectorAll('[data-character]').forEach(button => button.onclick = () => applyCharacter(button.dataset.character));
-            characterState();
+            $('#reset-points').onclick=()=>{draft.weights=Object.fromEntries(datasets.map(d=>[d.id,0]));draft.character=null;save();updateMix();};
+            updateMix();
             $("#target-tokens").oninput = (event) => { draft.target_tokens = Math.max(100000, Number(event.target.value) || 100000); save(); updateMix(); };
           }
         } else if (stage === 2) {
@@ -977,6 +969,7 @@
         if (stage === 2) refreshTrainingPlan();
         if ($("#next"))
           $("#next").onclick = () => {
+            if (stage === 1 && pointsUsed() !== 20) return;
             if (stage === 2 && !capture()) return;
             stage++;
             renderStudio();
