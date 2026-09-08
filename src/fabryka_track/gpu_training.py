@@ -37,19 +37,23 @@ for key,(width,layers,heads) in SIZES.items():
 def now(): return datetime.now(timezone.utc)
 def utc(d): return d.replace(tzinfo=timezone.utc) if d.tzinfo is None else d
 
-def allowed(user):
+def allowed(user, session=None):
     users={s.strip().lower() for s in settings.runpod_allowed_users.split(',') if s.strip()}
     # A successful Hugging Face OAuth connection is an explicit identity signal;
     # it can use GPU credits without a second manual allowlist entry. Keep the
     # allowlist for password-only accounts and lab/service users.
+    hf_connected = bool(getattr(user, 'huggingface_username', None))
+    if session is not None and user and not hf_connected:
+        from .models import HuggingFaceIdentity
+        hf_connected = session.scalar(select(HuggingFaceIdentity.subject).where(HuggingFaceIdentity.account_id == user.id)) is not None
     return bool(settings.runpod_api_key and user and
-                (bool(getattr(user, 'huggingface_username', None)) or
+                (hf_connected or
                  '*' in users or user.username.lower() in users))
 
 
 @router.get('/training/capabilities')
-def capabilities(user=Depends(require_user)):
-    return {'runpod_available':allowed(user),'models':PRESETS,'gpu':settings.runpod_gpu_type,
+def capabilities(user=Depends(require_user), session=Depends(session_scope)):
+    return {'runpod_available':allowed(user, session),'models':PRESETS,'gpu':settings.runpod_gpu_type,
             'max_seconds':settings.runpod_max_seconds,'max_hourly_usd':settings.runpod_max_hourly_usd,
             'image':settings.runner_image,'gpu_fallbacks':[s.strip() for s in settings.runpod_gpu_fallbacks.split(',') if s.strip()]}
 

@@ -154,7 +154,7 @@ def launch(body: TrainingInput, session=Depends(session_scope), user=Depends(req
     from .gpu_training import allowed, enqueue
     from .models import GPUJob
     if body.compute == 'runpod':
-        if not allowed(user):raise HTTPException(403, 'RunPod access is not enabled for this account.')
+        if not allowed(user, session):raise HTTPException(403, 'RunPod access is not enabled for this account.')
         if body.max_runtime_seconds>settings.runpod_max_seconds:raise HTTPException(422, 'Requested duration exceeds the server GPU time limit.')
         if body.model_size in ('tiny','small'):raise HTTPException(422, 'Choose a GPU model from 8M to 128M.')
     elif body.model_size not in ('tiny','small'):
