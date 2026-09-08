@@ -8,7 +8,8 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from .accounts import router as accounts_router, require_user, owned_run
+from .accounts import router as accounts_router, require_user, current_user, owned_run
+from .hf_publish import router as hf_publish_router, recover_uploads
 from .huggingface_auth import router as huggingface_router
 from .database import create_tables, session_scope
 from .models import Artifact, IngestedEvent, Metric, Project, Run, RunLog
@@ -21,6 +22,7 @@ async def lifespan(_app: FastAPI):
     create_tables()
     settings.artifact_dir.mkdir(parents=True, exist_ok=True)
     start_worker()
+    recover_uploads()
     try:
         yield
     finally:
@@ -30,6 +32,7 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(title="Fabryka Track", version="0.1.0", lifespan=lifespan)
 
 
+app.include_router(hf_publish_router)
 app.include_router(huggingface_router)
 app.include_router(accounts_router)
 app.include_router(training_router)
@@ -95,12 +98,29 @@ def runs(name: str, state: str | None = None, search: str | None = None,
 
 
 @app.get("/api/runs/{run_id}")
-def run_detail(run_id: str, session: Session = Depends(db), user=Depends(require_user)):
-    item = owned_run(session, run_id, user)
+def run_detail(run_id: str, session: Session = Depends(db), user=Depends(current_user)):
+    item = session.get(Run, run_id)
+    owner = bool(item and user and item.owner_id == user.id)
+    if not owner and not (item and item.is_public and item.state == 'finished'):
+        raise HTTPException(404 if user else 401, 'Run not found' if user else 'Sign in to view this run.')
     metrics = session.execute(select(Metric.key, Metric.step, Metric.timestamp, Metric.value).where(Metric.run_id == run_id).order_by(Metric.step, Metric.id)).all()
     series: dict[str, list] = {}
     for key, step, timestamp, value in metrics:
         series.setdefault(key, []).append({"step": step, "timestamp": timestamp, "value": value})
+    if not owner:
+        cfg = {k: item.config.get(k) for k in ('model', 'model_size', 'steps', 'batch_size', 'learning_rate', 'seed',
+               'context_length', 'layers', 'width', 'heads', 'parameters', 'validation_split', 'early_stopping',
+               'budget_mode', 'planned_training_tokens', 'tokens_per_parameter')}
+        cfg['mix'] = [{'name': d.get('name') if d.get('example') else 'Private dataset', 'weight': d.get('weight')}
+                      for d in item.config.get('mix', [])]
+        result = item.metadata_.get('training_result', {})
+        result = {k: result.get(k) for k in ('best_step', 'best_val_loss', 'best_val_perplexity', 'completed_steps', 'tokens_seen', 'stop_reason')}
+        return {'id': item.id, 'name': item.name, 'state': item.state, 'is_public': True, 'read_only': True,
+                'started_at': item.started_at, 'ended_at': item.ended_at, 'config': cfg,
+                'metadata': {'engine': item.metadata_.get('engine'), 'training_result': result},
+                'note': '', 'conclusion': '', 'logs': [], 'artifacts': [],
+                'metrics': {k: v for k, v in series.items() if k in ('train/loss', 'val/loss', 'val/perplexity',
+                            'progress', 'training/tokens_seen', 'throughput/tokens_sec')}}
     logs = session.scalars(select(RunLog).where(RunLog.run_id == run_id).order_by(RunLog.timestamp)).all()
     artifacts = session.scalars(select(Artifact).where(Artifact.run_id == run_id)).all()
     data = serialize_run(item)

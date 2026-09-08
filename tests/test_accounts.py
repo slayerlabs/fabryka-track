@@ -73,7 +73,11 @@ def test_two_accounts_are_isolated_and_publication_only_exposes_scores(client):
         assert board[0]['is_owner'] is False
         assert board[0]['mix'][0]['name'] == 'Private dataset'
         assert 'secret-corpus-name' not in str(board)
-        assert other.get('/api/runs/' + run['id']).status_code == 404
+        public = other.get('/api/runs/' + run['id']).json()
+        assert public['read_only'] is True
+        assert public['artifacts'] == [] and public['logs'] == []
+        assert 'secret-corpus-name' not in str(public)
+        assert public['metrics']['val/loss']
         assert client.patch('/api/training/' + run['id'] + '/visibility',json={'is_public':False}).status_code == 200
         assert other.get('/api/leaderboard').json()['models'] == []
 

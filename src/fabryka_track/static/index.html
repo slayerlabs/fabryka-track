@@ -1026,10 +1026,17 @@
       async function detail(id, token) {
         const r = await api("/runs/" + encodeURIComponent(id));
         if (token !== generation) return;
+        const readOnly = !!r.read_only;
         const local = r.metadata.engine === "tiny-transformer";
         const modelLabel = r.config.model || "Tiny transformer · 134,912 parameters";
-        app.innerHTML = `<a href="#runs" class="muted" style="display:inline-block;margin-bottom:25px;text-decoration:none">← My runs</a><div class="intro row"><div><div class="eyebrow">${local ? "Training results" : "Tracked experiment"}</div><h1>${esc(r.name)}</h1><p class="muted">${local ? esc(modelLabel) + " · Local CPU · " : ""}${new Date(r.started_at).toLocaleString()}</p></div><span class="badge ${esc(r.state)}" id="run-state">${esc(r.state)}</span></div><div id="live"></div><div class="actions"><div id="run-actions"></div><a class="secondary" href="#new">New training run →</a></div><details><summary>Dataset mix & settings</summary><div class="panel"><pre>${esc(JSON.stringify(r.config, null, 2))}</pre></div></details><details><summary>Run notes</summary><label class="field"><span>What are you testing?</span><textarea id="note">${esc(r.note)}</textarea></label><label class="field"><span>Conclusion</span><textarea id="conclusion">${esc(r.conclusion)}</textarea></label><button class="secondary" id="save-note">Save notes</button></details><details><summary>Training log</summary><div class="panel"><pre id="logs"></pre></div></details>`;
-        $("#save-note").onclick = async () => {
+        app.innerHTML = `<a href="${readOnly ? "#leaderboard" : "#runs"}" class="muted" style="display:inline-block;margin-bottom:25px;text-decoration:none">← ${readOnly ? "Leaderboard" : "My runs"}</a><div class="intro row"><div><div class="eyebrow">${local ? "Training results" : "Tracked experiment"}</div><h1>${esc(r.name)}</h1><p class="muted">${local ? esc(modelLabel) + " · Local CPU · " : ""}${new Date(r.started_at).toLocaleString()}</p></div><span class="badge ${esc(r.state)}" id="run-state">${esc(r.state)}</span></div><div id="live"></div><div class="actions"><div id="run-actions"></div><a class="secondary" href="#new">New training run →</a></div><details><summary>Dataset mix & settings</summary><div class="panel"><pre>${esc(JSON.stringify(r.config, null, 2))}</pre></div></details><details id="private-notes"><summary>Run notes</summary><label class="field"><span>What are you testing?</span><textarea id="note">${esc(r.note)}</textarea></label><label class="field"><span>Conclusion</span><textarea id="conclusion">${esc(r.conclusion)}</textarea></label><button class="secondary" id="save-note">Save notes</button></details><details id="private-logs"><summary>Training log</summary><div class="panel"><pre id="logs"></pre></div></details>`;
+        if (readOnly) {
+          $("#private-notes").remove(); $("#private-logs").remove();
+          $("#run-actions").insertAdjacentHTML('afterend', '<p class="muted">Public run details · read only. Uploaded files and notes remain private.</p>');
+        } else if (local && r.state === "finished") {
+          $("#run-actions").closest('.actions').insertAdjacentHTML('afterend', '<section class="panel" id="hf-export" style="margin:20px 0"></section>');
+        }
+        if ($("#save-note")) $("#save-note").onclick = async () => {
           try {
             await api("/runs/" + id + "/notes", {
               method: "PATCH",
@@ -1094,11 +1101,11 @@
               .join(
                 "",
               )}</div><p class="muted" style="font-size:12px;margin-top:15px">Lower loss and perplexity mean better next-byte predictions. Compare runs with the same validation data. ${active ? "Refreshes every 2 seconds." : ""}</p>`;
-          $("#logs").textContent =
+          if ($("#logs")) $("#logs").textContent =
             r.logs.map((l) => `[${l.level}] ${l.message}`).join("\n") ||
             "No logs yet.";
           $("#run-actions").innerHTML =
-            `${local && active ? '<button class="secondary" id="stop">Stop training</button>' : ""}${local && r.state === "finished" ? `<button class="secondary" id="publish">${r.is_public ? "Remove from leaderboard" : "Publish score to leaderboard"}</button>` : ""}${r.artifacts.map((a) => `<button class="primary" data-artifact="${a.id}">↓ Download ${esc(a.name)}</button>`).join(" ")}`;
+            `${!readOnly && local && active ? '<button class="secondary" id="stop">Stop training</button>' : ""}${!readOnly && local && r.state === "finished" ? `<button class="secondary" id="publish">${r.is_public ? "Remove from leaderboard" : "Publish score to leaderboard"}</button>` : ""}${r.artifacts.map((a) => `<button class="primary" data-artifact="${a.id}">↓ Download ${esc(a.name)}</button>`).join(" ")}`;
           if ($("#publish")) $("#publish").onclick = async () => {
             try { $("#publish").disabled = true; await api("/training/" + id + "/visibility", {method:"PATCH", headers:{"Content-Type":"application/json"}, body:JSON.stringify({is_public:!r.is_public})}); await refresh(); } catch(e) { error(e); if ($("#publish")) $("#publish").disabled=false; }
           };
@@ -1156,6 +1163,10 @@
             if (token !== generation) return;
             $("#error")?.remove();
             if (paint(data)) timer = setTimeout(refresh, 2000);
+            else if (!readOnly && local && data.state === "finished" && !$('#hf-export')) {
+              $('#run-actions').closest('.actions').insertAdjacentHTML('afterend', '<section class="panel" id="hf-export" style="margin:20px 0"></section>');
+              await exportPanel();
+            }
           } catch (e) {
             if (token === generation) {
               error(e);
@@ -1163,7 +1174,28 @@
             }
           }
         }
+        async function exportPanel() {
+          try {
+            const data = await api('/training/' + id + '/huggingface');
+            if (token !== generation || !$('#hf-export')) return;
+            const p=data.publication, box=$('#hf-export');
+            if (p?.status === 'finished') {
+              box.innerHTML=`<h2>Published to Hugging Face</h2><p><a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.repo_id)} ↗</a> · ${p.private ? 'Private' : 'Public'}</p><p class="muted">All uploaded files verified. Commit: ${esc(p.commit)}</p>`; return;
+            }
+            if (p?.status === 'uploading') {
+              box.innerHTML='<h2>Publishing to SlayerLab…</h2><p class="muted">Uploading the model and verifying the committed files. You can return to this run later.</p>';
+              timer=setTimeout(exportPanel,2000); return;
+            }
+            box.innerHTML=`<h2>Publish model to SlayerLab</h2><p>Upload the saved checkpoint to the <a href="https://huggingface.co/SlayerLab" target="_blank" rel="noopener">SlayerLab organization</a>.</p>${p?.error ? `<p class="error">${esc(p.error)}</p>` : ''}${!data.hf_username ? '<p>Connect your Hugging Face account first.</p><a class="secondary" href="#account">Connect Hugging Face →</a>' : `<p class="muted">Authorize as ${esc(data.hf_username)}. Your HF account must be allowed to create models in SlayerLab; select SlayerLab when granting organization access.</p><form id="hf-export-form"><label class="field"><span>Repository name · SlayerLab/</span><input name="repo_name" required maxlength="80" value="${esc(p?.repo_id?.split('/')[1] || data.suggested_name)}"></label><label class="field"><span>Repository visibility</span><select name="visibility"><option value="private" ${p?.private !== false ? 'selected' : ''}>Private</option><option value="public" ${p?.private === false ? 'selected' : ''}>Public — anyone can download</option></select></label><p>Files: ${data.files.map(esc).join(', ')}.</p><p class="muted">Includes model weights, byte tokenizer configuration, runnable PyTorch code and training metrics. Raw datasets, private filenames, notes and logs are excluded. This creates a new repository; existing models are not overwritten.</p><button class="primary">Authorize & publish to SlayerLab →</button></form>`}`;
+            if ($('#hf-export-form')) $('#hf-export-form').onsubmit=async event=>{
+              event.preventDefault(); const f=event.currentTarget, b=f.querySelector('button'); b.disabled=true;
+              try { const result=await post('/training/'+id+'/huggingface',{repo_name:f.elements.repo_name.value,private:f.elements.visibility.value==='private',confirm:true}); location.assign(result.url); }
+              catch(e){error(e);b.disabled=false;}
+            };
+          } catch(e) { if(token===generation) error(e); }
+        }
         if (paint(r)) timer = setTimeout(refresh, 2000);
+        if (!readOnly && local && r.state === "finished") await exportPanel();
       }
       async function compare(ids) {
         const rs = await api(
@@ -1179,7 +1211,7 @@
         const sort = document.querySelector("#leader-sort")?.value || "val_loss";
         const data = await api("/leaderboard?sort=" + sort + "&order=" + (sort === "throughput" ? "desc" : "asc"));
         const models = data.models;
-        app.innerHTML = `<div class="intro row"><div><div class="eyebrow">Model leaderboard</div><h1>Measured progress, side by side.</h1><p class="muted">Published scores ranked by saved-checkpoint validation. Create an account to train and publish your own results.</p></div><a class="primary" href="#new">+ New training run</a></div><div class="row" style="margin-bottom:20px"><label class="field" style="margin:0;max-width:240px"><span>Rank by</span><select id="leader-sort"><option value="val_loss" ${sort === "val_loss" ? "selected" : ""}>Lowest validation loss</option><option value="perplexity" ${sort === "perplexity" ? "selected" : ""}>Lowest perplexity</option><option value="throughput" ${sort === "throughput" ? "selected" : ""}>Highest throughput</option><option value="started_at" ${sort === "started_at" ? "selected" : ""}>Newest run</option></select></label><small class="muted">Lower loss and perplexity are better.</small></div>${models.length ? `<div class="panel table-scroll"><table><thead><tr><th>#</th><th>Model</th><th>Author</th><th>Validation loss</th><th>Perplexity</th><th>Last train loss</th><th>Tokens / sec</th><th>Recipe</th></tr></thead><tbody>${models.map((r) => `<tr><td><strong>${r.rank}</strong></td><td>${r.is_owner ? `<a href="#run/${r.id}">${esc(r.name)}</a>` : esc(r.name)}<br><small>${new Date(r.started_at).toLocaleString()} · ${r.steps} steps</small></td><td>${esc(r.owner)}</td><td><strong>${fmt(r.val_loss)}</strong></td><td>${fmt(r.perplexity)}</td><td>${fmt(r.train_loss)}</td><td>${fmt(r.throughput, 0)}</td><td>${r.mix.map((d) => `${esc(d.name)} ${d.weight}%`).join("<br>")}</td></tr>`).join("")}</tbody></table></div>` : `<div class="panel empty"><h2>No completed models yet.</h2><p class="muted">Finish a training run and its measured validation metrics will appear here.</p><a class="primary" href="#new">Start your first run →</a></div>`}<p class="muted" style="font-size:12px;margin-top:18px">This is a smoke-test leaderboard. Scores are comparable when runs use the same validation data and model settings.</p>`;
+        app.innerHTML = `<div class="intro row"><div><div class="eyebrow">Model leaderboard</div><h1>Measured progress, side by side.</h1><p class="muted">Published scores ranked by saved-checkpoint validation. Create an account to train and publish your own results.</p></div><a class="primary" href="#new">+ New training run</a></div><div class="row" style="margin-bottom:20px"><label class="field" style="margin:0;max-width:240px"><span>Rank by</span><select id="leader-sort"><option value="val_loss" ${sort === "val_loss" ? "selected" : ""}>Lowest validation loss</option><option value="perplexity" ${sort === "perplexity" ? "selected" : ""}>Lowest perplexity</option><option value="throughput" ${sort === "throughput" ? "selected" : ""}>Highest throughput</option><option value="started_at" ${sort === "started_at" ? "selected" : ""}>Newest run</option></select></label><small class="muted">Lower loss and perplexity are better.</small></div>${models.length ? `<div class="panel table-scroll"><table><thead><tr><th>#</th><th>Model</th><th>Author</th><th>Validation loss</th><th>Perplexity</th><th>Last train loss</th><th>Tokens / sec</th><th>Recipe</th></tr></thead><tbody>${models.map((r) => `<tr><td><strong>${r.rank}</strong></td><td><a href="#run/${r.id}">${esc(r.name)}</a><br><small>${new Date(r.started_at).toLocaleString()} · ${r.steps} steps</small></td><td>${esc(r.owner)}</td><td><strong>${fmt(r.val_loss)}</strong></td><td>${fmt(r.perplexity)}</td><td>${fmt(r.train_loss)}</td><td>${fmt(r.throughput, 0)}</td><td>${r.mix.map((d) => `${esc(d.name)} ${d.weight}%`).join("<br>")}</td></tr>`).join("")}</tbody></table></div>` : `<div class="panel empty"><h2>No completed models yet.</h2><p class="muted">Finish a training run and its measured validation metrics will appear here.</p><a class="primary" href="#new">Start your first run →</a></div>`}<p class="muted" style="font-size:12px;margin-top:18px">This is a smoke-test leaderboard. Scores are comparable when runs use the same validation data and model settings.</p>`;
         $("#leader-sort").onchange = leaderboard;
       }
       async function route() {
@@ -1192,7 +1224,7 @@
         app.innerHTML = '<p class="muted" role="status">Loading workspace…</p>';
         try {
           if (["login", "register"].includes(hash)) { authForm(hash === "register"); return; }
-          if (!account && hash !== "leaderboard") { authNext = hash; authForm(); return; }
+          if (!account && hash !== "leaderboard" && !hash.startsWith("run/")) { authNext = hash; authForm(); return; }
           if (hash === "account") { await accountPage(); return; }
           if (hash.startsWith("run/")) await detail(hash.slice(4), token);
           else if (hash.startsWith("compare/"))

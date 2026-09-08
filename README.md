@@ -157,9 +157,10 @@ Changing a password revokes all other sessions and the API key. Auth endpoints
 limit attempts per IP and username; the service still runs with one worker.
 Browser mutations require X-Track-Request: 1 and reject foreign Origin headers.
 
-Datasets, run details, notes, logs, manifests and artifacts are owner-only.
+Datasets, private run details, notes, logs, manifests and artifacts are owner-only.
 Included example datasets are available to every signed-in account. Publishing
-is explicit after a studio run finishes and shares only leaderboard data:
+is explicit after a studio run finishes and shares leaderboard data and a read-only
+run detail page with metric curves and selected training settings:
 username, run name, metrics, date, update count and mixture percentages. Uploaded
 filenames, content, logs, notes and model downloads stay private. Unpublishing
 removes the public score. The SDK cannot overwrite studio metrics or checkpoints.
@@ -209,8 +210,41 @@ A local development origin must be configured separately and reachable by HF.
 OAuth attempts are bound to a random HttpOnly browser cookie, expire after ten
 minutes and can be consumed only once. Connecting an identity additionally
 requires the same Track session at the start and callback. Only `openid profile`
-scopes are requested. The server exchanges the authorization code and fetches
+scopes are requested for sign-in. The server exchanges the authorization code and fetches
 userinfo over HTTPS, then discards provider tokens and issues a regular Track
 session. Provider cancellation and failed verification do not change accounts.
 
 Reference: https://huggingface.co/docs/hub/oauth
+
+## Publish a completed model to SlayerLab
+
+Open a finished studio run and use **Publish model to SlayerLab**. Connect your
+Hugging Face account in Account first. Choose a new repository name and private
+(default) or public visibility, then authorize the export with that same HF
+identity. Grant access to SlayerLab; the HF account must have permission to
+create models in that organization. The destination namespace is fixed.
+
+Export authorization requests `openid profile contribute-repos read-memberships`
+with the same PKCE and browser/session binding as sign-in. The upload token is
+held only in the background task's memory. An interrupted upload requires fresh
+authorization. Existing repositories are not adopted or overwritten; retries
+can resume a repository recorded as created by this run's export.
+
+The export contains safetensors weights, architecture and byte tokenizer config,
+training metrics, a model card, standalone PyTorch generation code, requirements,
+and a SHA-256 manifest. Private source text, filenames, hashes, notes and logs
+are excluded. Completion is reported only after downloading every file from the
+uploaded commit and verifying its hash. No license is assigned automatically.
+
+## Working with another developer
+
+GitHub `main` is the shared source history. Fetch before starting work, use a
+feature branch for concurrent changes, and commit and push each finished change.
+Before deployment, check the installed source against the previously deployed
+commit; reconcile any server edits rather than overwriting them. Record the
+new deployed commit in `DEPLOYED_COMMIT` on the server. Back up source and SQLite,
+and deploy only when training and HF uploads are idle.
+
+On 2026-09-08, the 17 ownerless legacy runs were removed from production after a
+consistent database backup. The four owned runs were preserved. Recovery files
+are under `/opt/fabryka-track/backups/remove-legacy-20260908-113443/`.

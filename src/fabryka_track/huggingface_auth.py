@@ -1,4 +1,4 @@
-"""Hugging Face authorization-code flow using CIMD and PKCE, no stored HF tokens."""
+"""Hugging Face authorization-code flow using CIMD and PKCE; publishing grants are used transiently."""
 import base64
 import hashlib
 import re
@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel
 from sqlalchemy import delete, select
@@ -15,7 +15,7 @@ from sqlalchemy.exc import IntegrityError
 
 from .accounts import COOKIE, current_user, digest, new_session, throttle
 from .database import session_scope
-from .models import Account, HuggingFaceIdentity, OAuthAttempt
+from .models import Account, HFPublication, HuggingFaceIdentity, OAuthAttempt
 from .settings import settings
 
 router = APIRouter()
@@ -48,23 +48,33 @@ def start(body: StartInput, request: Request, response: Response,
     throttle(request)
     if body.link and (not user or not request.cookies.get(COOKIE) or request.headers.get('authorization')):
         raise HTTPException(401, 'Sign in to Track before connecting Hugging Face.')
+    url, _ = begin_oauth(request, response, session, user.id if body.link else None, 'openid profile')
+    session.commit()
+    return {"url": url}
+
+
+def begin_oauth(request, response, session, account_id, scopes):
     state, browser, verifier = (secrets.token_urlsafe(32) for _ in range(3))
     challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b'=').decode()
     session.execute(delete(OAuthAttempt).where(OAuthAttempt.expires_at < datetime.now(timezone.utc)))
     session.add(OAuthAttempt(id=digest(state), browser_hash=digest(browser), verifier=verifier,
-                            account_id=user.id if body.link else None,
-                            session_hash=digest(request.cookies[COOKIE]) if body.link else None,
+                            account_id=account_id,
+                            session_hash=digest(request.cookies[COOKIE]) if account_id else None,
                             expires_at=datetime.now(timezone.utc) + timedelta(minutes=10)))
-    session.commit()
     response.set_cookie(FLOW_COOKIE, browser, httponly=True, secure=request.url.scheme == 'https',
                         samesite='lax', max_age=600, path=FLOW_PATH)
-    return {"url": 'https://huggingface.co/oauth/authorize?' + urlencode({
+    url = 'https://huggingface.co/oauth/authorize?' + urlencode({
         "client_id": client_id(), "redirect_uri": redirect_uri(), "response_type": "code",
-        "scope": "openid profile", "state": state, "code_challenge": challenge,
-        "code_challenge_method": "S256"})}
+        "scope": scopes, "state": state, "code_challenge": challenge,
+        "code_challenge_method": "S256"})
+    return url, digest(state)
 
 
 def fetch_profile(code, verifier):
+    return fetch_grant(code, verifier)[0]
+
+
+def fetch_grant(code, verifier):
     with httpx.Client(timeout=15, follow_redirects=False) as client:
         response = client.post('https://huggingface.co/oauth/token', data={
             'grant_type': 'authorization_code', 'client_id': client_id(),
@@ -78,7 +88,7 @@ def fetch_profile(code, verifier):
         profile = response.json()
         if not isinstance(profile.get('sub'), str) or not 1 <= len(profile['sub']) <= 255:
             raise ValueError('Missing subject')
-        return profile
+        return profile, token
 
 
 def failure(request, message, status=400):
@@ -89,7 +99,7 @@ def failure(request, message, status=400):
 
 
 @router.get(FLOW_PATH + '/callback')
-def callback(request: Request, state: str = '', code: str = '', error: str = '',
+def callback(request: Request, background_tasks: BackgroundTasks, state: str = '', code: str = '', error: str = '',
              user=Depends(current_user), session=Depends(session_scope)):
     attempt = session.get(OAuthAttempt, digest(state))
     browser = request.cookies.get(FLOW_COOKIE, '')
@@ -97,15 +107,22 @@ def callback(request: Request, state: str = '', code: str = '', error: str = '',
         return failure(request, 'This sign-in request is invalid. Please start again.')
     if attempt.expires_at.replace(tzinfo=timezone.utc) <= datetime.now(timezone.utc):
         return failure(request, 'This sign-in request expired. Please start again.')
+    publication = session.scalar(select(HFPublication).where(HFPublication.oauth_state == attempt.id))
     verifier, account_id, session_hash = attempt.verifier, attempt.account_id, attempt.session_hash
     consumed = session.execute(delete(OAuthAttempt).where(OAuthAttempt.id == attempt.id)).rowcount
     session.commit()
     if consumed != 1:
         return failure(request, 'This sign-in request has already been used.')
     if error or not code:
+        if publication:
+            publication.status, publication.error = 'failed', 'HF authorization was cancelled. You can try again.'
+            session.commit()
         return failure(request, 'Hugging Face sign-in was cancelled. Your Track account has not changed.')
     if account_id and (not user or user.id != account_id or digest(request.cookies.get(COOKIE, '')) != session_hash):
         return failure(request, 'Your Track session changed. Sign in and connect Hugging Face again.')
+    if publication:
+        from .hf_publish import authorized_upload
+        return authorized_upload(publication, request, code, verifier, session, background_tasks)
     try:
         profile = fetch_profile(code, verifier)
     except (httpx.HTTPError, ValueError, KeyError, TypeError):

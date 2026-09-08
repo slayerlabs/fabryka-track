@@ -117,3 +117,16 @@ class OAuthAttempt(Base):
     account_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     session_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class HFPublication(Base):
+    __tablename__ = "hf_publications"
+    run_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    owner_id: Mapped[str] = mapped_column(String(36), ForeignKey("accounts.id"))
+    repo_id: Mapped[str] = mapped_column(String(200), unique=True)
+    private: Mapped[bool] = mapped_column(default=True)
+    status: Mapped[str] = mapped_column(String(32), default="authorizing")
+    oauth_state: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True)
+    repo_created: Mapped[bool] = mapped_column(default=False)
+    commit: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
