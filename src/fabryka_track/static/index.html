@@ -839,7 +839,7 @@
       };
       function translateUi(root=document) {
         const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);let node;
-        while(node=walker.nextNode()) for(const [from,to] of Object.entries(englishUi)) if(node.nodeValue.includes(from)) node.nodeValue=node.nodeValue.split(from).join(to);
+        while(node=walker.nextNode()){let value=node.nodeValue;for(const [from,to] of Object.entries(englishUi))if(value.includes(from))value=value.split(from).join(to);if(value!==node.nodeValue)node.nodeValue=value;}
         root.querySelectorAll?.("[placeholder],[aria-label]").forEach(el=>["placeholder","aria-label"].forEach(attr=>{let v=el.getAttribute(attr),old=v;for(const [from,to] of Object.entries(englishUi))if(v?.includes(from))v=v.split(from).join(to);if(v!==old)el.setAttribute(attr,v);}));
       }
       const uiObserver=new MutationObserver(()=>translateUi(app));
