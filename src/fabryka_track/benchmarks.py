@@ -87,7 +87,7 @@ def history(run_id:str,user=Depends(current_user),session=Depends(session_scope)
 
 
 class EvaluationInput(BaseModel):
-    suite: Literal['core','tinylm','extended'] = 'tinylm'
+    suite: Literal['core','tinylm','extended','polish'] = 'tinylm'
     mode: Literal['smoke','full'] = 'smoke'
 
 
