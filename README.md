@@ -248,3 +248,43 @@ and deploy only when training and HF uploads are idle.
 On 2026-09-08, the 17 ownerless legacy runs were removed from production after a
 consistent database backup. The four owned runs were preserved. Recovery files
 are under `/opt/fabryka-track/backups/remove-legacy-20260908-113443/`.
+
+## TinyLM evaluation
+
+Install the pinned evaluator with `uv sync --extra eval` (or add
+`lm-eval==0.4.13` to the server environment). Finished studio run details have a
+**Run benchmarks** button. Core covers SciQ, ARC-Easy, PIQA, HellaSwag and all
+67 BLiMP phenomena; TinyLM adds LAMBADA; Extended adds WinoGrande and BoolQ.
+Smoke mode uses ten examples per leaf task and is explicitly not a full benchmark.
+Full mode uses the official evaluation splits. Both use zero shots and seed 42.
+
+The byte checkpoint adapter scores every continuation byte with its maximal
+available sliding context; an empty context is prefixed with byte 32 (space).
+Results record checkpoint SHA-256, HF dataset commit revisions, sample digests,
+harness/task versions, sample counts, context limitations and checkpoint training
+byte tokens. This byte protocol is not interchangeable with a subword model's
+protocol. A short-context studio model cannot exercise LAMBADA's long context.
+
+TinyScore is the equal-weight mean chance-normalized **raw accuracy** over the
+five Core tasks. Random baselines use the actual number of choices, including
+ARC examples with non-four-way choices. BLiMP is a macro-average over phenomena.
+Negative scores are retained. LAMBADA has no fixed-choice random baseline and is
+reported separately. Length-normalized accuracy, where supplied by the harness,
+and LAMBADA perplexity remain available in the detailed results.
+
+One UI-started evaluation runs at a time in an isolated CPU subprocess. It can be
+cancelled and has a two-hour limit. Restarting the app marks interrupted jobs as
+failed; do not restart with active evaluations. Partial results are retained but
+missing Core tasks do not produce TinyScore. Public run details expose aggregate
+benchmark results, never benchmark documents or private training data.
+
+Scaling milestones are 10M, 30M, 100M, 300M and 1B training tokens. Evaluating an
+old final checkpoint cannot recover earlier model states. Current results record
+the saved checkpoint's actual byte-token budget and a labeled `6*N*D` FLOP estimate;
+the app does not fabricate a scaling curve from one checkpoint.
+
+See [dataset-selection.md](docs/dataset-selection.md) for the proposed Polish
+20-point corpus recipe and primary-source references. The studio represents the
+20 points as colored books; source identity determines category, with no editable
+category dropdown. Imported corpus integration is separate from the short built-in
+workflow examples.

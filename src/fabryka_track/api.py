@@ -9,6 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from .accounts import router as accounts_router, require_user, current_user, owned_run
+from .benchmarks import router as benchmarks_router, recover_evaluations
 from .hf_publish import router as hf_publish_router, recover_uploads
 from .huggingface_auth import router as huggingface_router
 from .database import create_tables, session_scope
@@ -23,6 +24,7 @@ async def lifespan(_app: FastAPI):
     settings.artifact_dir.mkdir(parents=True, exist_ok=True)
     start_worker()
     recover_uploads()
+    recover_evaluations()
     try:
         yield
     finally:
@@ -32,6 +34,7 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(title="Fabryka Track", version="0.1.0", lifespan=lifespan)
 
 
+app.include_router(benchmarks_router)
 app.include_router(hf_publish_router)
 app.include_router(huggingface_router)
 app.include_router(accounts_router)

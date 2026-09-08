@@ -571,6 +571,14 @@
       .source-category { display:flex; align-items:center; gap:10px; margin:10px 0; font-size:12px; color:var(--muted); }
       .source-category select { width:auto; max-width:100%; padding:5px 8px; }
       @media(max-width:600px) { .character { padding:16px; } .character-buttons button { flex:1 1 140px; } }
+      .point-shelf { display:grid; grid-template-columns:repeat(20,minmax(0,1fr)); gap:5px; padding:16px 0 8px; border-bottom:5px solid #d3c6b5; margin:0 0 20px; }
+      .point-book { min-width:0; height:70px; background:linear-gradient(90deg,#0003 0 12%,transparent 13%),var(--book-color); border-radius:2px 4px 4px 2px; box-shadow:2px 2px 0 #0002; display:flex; align-items:flex-end; justify-content:center; padding-bottom:7px; color:#fff; font-size:10px; font-weight:700; }
+      .point-book.empty { background:transparent; border:1px dashed #c9c4bb; box-shadow:none; color:var(--muted); }
+      .dataset-cover { width:66px; height:86px; flex:0 0 66px; border-radius:2px 5px 5px 2px; background:linear-gradient(90deg,#0003 0 9%,transparent 10%),var(--book-color); color:#fff; box-shadow:3px 3px 0 #0002; display:flex; flex-direction:column; justify-content:space-between; padding:10px 8px 10px 13px; text-align:left; }
+      .dataset-cover b { font:26px Georgia,serif; color:white; }
+      .dataset-cover small { color:#fff; font-size:8px; letter-spacing:1px; }
+      .dataset-heading { display:flex; align-items:center; gap:18px; }
+      @media(max-width:600px) { .point-shelf {grid-template-columns:repeat(10,minmax(0,1fr));} .point-book {height:55px;} .dataset-cover {width:44px;flex-basis:44px;height:64px;padding:8px;} .dataset-cover b {font-size:20px;} .dataset-cover small {font-size:6px;} .dataset-heading {gap:10px;} .dataset .percent {font-size:18px;} }
     </style>
   </head>
   <body>
@@ -666,6 +674,7 @@
         },
         stage = 1,
         timer,
+        benchmarkTimer,
         generation = 0,
         selected = new Set();
       const initialDraft = structuredClone(draft);
@@ -740,18 +749,18 @@
         {id:"balanced", name:"Zbalansowany (jak korpus)"},
       ];
       function categoryOf(d) {
-        return draft.categories?.[d.id] || (d.example ? {"Polish prose":"literature", "Everyday English":"literature", "Python snippets":"code"}[d.name] : null) || "other";
+        return d.category || (d.example ? {"Polish prose":"literature", "Everyday English":"literature", "Python snippets":"code"}[d.name] : null) || "other";
       }
       function characterState(message) {
         document.querySelectorAll('[data-character]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.character === draft.character)));
         const status = $('#character-status');
-        if (status) status.textContent = message || (draft.character ? characters.find(p => p.id === draft.character)?.name + " · Proporcje według rozmiaru dostępnego tekstu (bajty UTF-8)." : "Wybierz profil lub ustaw własną mieszankę suwakami. Kategorie źródeł możesz zmienić poniżej.");
+        if (status) status.textContent = message || (draft.character ? characters.find(p => p.id === draft.character)?.name + " · Proporcje według rozmiaru dostępnego tekstu (bajty UTF-8)." : "Wybierz profil lub ustaw własną mieszankę suwakami. 1 książka = 1 punkt = 5% mieszanki.");
       }
       function applyCharacter(id) {
         const profile = characters.find(p => p.id === id);
         const selected = datasets.filter(d => !profile.category || categoryOf(d) === profile.category);
         if (!selected.length) {
-          characterState(`Brak źródeł w kategorii „${sourceCategories[profile.category]}”. Dodaj plik i przypisz mu tę kategorię poniżej. Obecna mieszanka pozostaje bez zmian.`);
+          characterState(`Brak źródeł w kategorii „${sourceCategories[profile.category]}”. Ten profil wymaga podłączenia odpowiedniego korpusu. Obecna mieszanka pozostaje bez zmian.`);
           return;
         }
         const total = selected.reduce((n,d) => n + d.bytes, 0);
@@ -760,6 +769,10 @@
         [...allocations].sort((a,b) => b.remainder-a.remainder).forEach(d => {if(left > 0){d.value++;left--;}});
         draft.weights = Object.fromEntries(datasets.map(d => [d.id, (allocations.find(a => a.id===d.id)?.value || 0) * 5]));
         draft.character=id; save(); updateMix();
+      }
+      function bookShelf() {
+        const books = datasets.flatMap((d,i)=>Array.from({length:(draft.weights[d.id]||0)/5},()=>({name:d.name,color:colors[i%colors.length]})));
+        return Array.from({length:20},(_,i)=>books[i]?`<span class="point-book" style="--book-color:${books[i].color}" title="${esc(books[i].name)} · 1 punkt · 5%" role="img" aria-label="${esc(books[i].name)}: 1 punkt">${i+1}</span>`:`<span class="point-book empty" role="img" aria-label="Wolny punkt ${i+1}">${i+1}</span>`).join('');
       }
       function pointsUsed() { return datasets.reduce((n,d) => n+(draft.weights[d.id] || 0)/5,0); }
       function balance(id, points) {
@@ -770,6 +783,7 @@
       }
       function updateMix() {
         characterState();
+        if ($('#point-shelf')) $('#point-shelf').innerHTML=bookShelf();
         if ($('#point-budget')) $('#point-budget').textContent = `${20-pointsUsed()} z 20 punktów do rozdania`;
         if (stage === 1 && $('#next')) $('#next').disabled = pointsUsed() !== 20;
         document.querySelectorAll('[data-add-point]').forEach(b => b.disabled = pointsUsed() >= 20);
@@ -872,7 +886,7 @@
         app.innerHTML = `<div class="intro"><div class="eyebrow">Training studio</div><h1>A model starts with a mix.</h1><p class="muted">Choose your data, set up a small training run, and see what changes.</p></div>${steps()}<div id="error-slot"></div><div class="layout"><section class="panel" id="workspace"></section><aside class="panel aside" id="recipe">${recipe()}</aside></div>`;
         const w = $("#workspace");
         if (stage === 1) {
-          w.innerHTML = `<div class="row"><div><h2 style="margin-bottom:8px">Mix your datasets</h2><p class="muted" style="font-size:13px">Rozdaj dokładnie 20 punktów. 1 punkt = 5% danych treningowych. Odejmij punkt, aby przenieść go do innego źródła.</p></div></div><div>${datasets.map((d, i) => `<div class="dataset" data-empty="${!(draft.weights[d.id] || 0)}"><div class="row"><div><h3><span class="dot" style="background:${colors[i % colors.length]}"></span>${esc(d.name)}</h3><small>${d.example ? "Included example text" : "Your uploaded text"} · ${fmt(d.bytes / 1000, 1)} KB</small></div><output class="percent" data-value="${d.id}" for="slider-${d.id}">${(draft.weights[d.id] || 0)/5} pkt · ${draft.weights[d.id] || 0}%</output></div><label class="source-category">Kategoria<select data-category="${d.id}" aria-label="Kategoria: ${esc(d.name)}">${Object.entries(sourceCategories).map(([value,label]) => `<option value="${value}" ${categoryOf(d) === value ? "selected" : ""}>${label}</option>`).join("")}</select></label><input id="slider-${d.id}" type="range" min="0" max="20" step="1" value="${(draft.weights[d.id] || 0)/5}" aria-label="${esc(d.name)} points" data-slider="${d.id}"><div style="display:flex;gap:8px"><button type="button" class="secondary" data-remove-point="${d.id}" aria-label="Odejmij punkt: ${esc(d.name)}">−</button><button type="button" class="secondary" data-add-point="${d.id}" aria-label="Dodaj punkt: ${esc(d.name)}">+</button></div></div>`).join("")}</div><div class="upload"><div><b style="font-size:13px">Bring your own data</b><p class="muted">UTF-8 plain text · 100+ characters · up to 2 MB</p></div><button class="secondary" id="upload-button">+ Add text file</button><input type="file" id="upload" accept=".txt,text/plain" hidden></div><div class="actions"><small>Example texts are for trying the workflow.</small><button class="primary" id="next">Training settings →</button></div>`;
+          w.innerHTML = `<div class="row"><div><h2 style="margin-bottom:8px">Mix your datasets</h2><p class="muted" style="font-size:13px">Rozdaj dokładnie 20 punktów. 1 punkt = 5% danych treningowych. Odejmij punkt, aby przenieść go do innego źródła.</p></div></div><div>${datasets.map((d, i) => `<div class="dataset" data-empty="${!(draft.weights[d.id] || 0)}"><div class="row"><div class="dataset-heading"><div class="dataset-cover" style="--book-color:${colors[i % colors.length]}" aria-hidden="true"><b>${esc(d.name.slice(0,2).toUpperCase())}</b><small>DATASET</small></div><div><h3>${esc(d.name)}</h3><small>${d.example ? "Included example text" : "Your uploaded text"} · ${fmt(d.bytes / 1000, 1)} KB</small></div></div><output class="percent" data-value="${d.id}" for="slider-${d.id}">${(draft.weights[d.id] || 0)/5} pkt · ${draft.weights[d.id] || 0}%</output></div><input id="slider-${d.id}" type="range" min="0" max="20" step="1" value="${(draft.weights[d.id] || 0)/5}" aria-label="${esc(d.name)} points" data-slider="${d.id}" style="accent-color:${colors[i % colors.length]}"><div style="display:flex;gap:8px"><button type="button" class="secondary" data-remove-point="${d.id}" aria-label="Odejmij punkt: ${esc(d.name)}">−</button><button type="button" class="secondary" data-add-point="${d.id}" aria-label="Dodaj punkt: ${esc(d.name)}">+</button></div></div>`).join("")}</div><div class="upload"><div><b style="font-size:13px">Bring your own data</b><p class="muted">UTF-8 plain text · 100+ characters · up to 2 MB</p></div><button class="secondary" id="upload-button">+ Add text file</button><input type="file" id="upload" accept=".txt,text/plain" hidden></div><div class="actions"><small>Example texts are for trying the workflow.</small><button class="primary" id="next">Training settings →</button></div>`;
           document
             .querySelectorAll("[data-slider]")
             .forEach(
@@ -881,9 +895,6 @@
             );
           document.querySelectorAll('[data-add-point]').forEach(b=>b.onclick=()=>balance(b.dataset.addPoint,(draft.weights[b.dataset.addPoint] || 0)/5+1));
           document.querySelectorAll('[data-remove-point]').forEach(b=>b.onclick=()=>balance(b.dataset.removePoint,(draft.weights[b.dataset.removePoint] || 0)/5-1));
-          document.querySelectorAll('[data-category]').forEach(el => el.onchange = () => {
-            draft.categories = {...draft.categories, [el.dataset.category]:el.value}; draft.character=null; save(); characterState();
-          });
           $("#upload-button").onclick = () => $("#upload").click();
           $("#upload").onchange = async (e) => {
             if (!e.target.files[0]) return;
@@ -904,7 +915,7 @@
             }
           };
           if (stage === 1) {
-            w.insertAdjacentHTML("afterbegin", `<section class="character" aria-labelledby="character-title"><div class="eyebrow">Charakter datasetu</div><h2 id="character-title">Od czego zaczynamy?</h2><div class="character-buttons" role="group" aria-label="Charakter datasetu">${characters.map(p => `<button type="button" data-character="${p.id}" aria-pressed="false">${p.name}</button>`).join("")}</div><div class="row" style="margin:16px 0"><b id="point-budget" role="status" aria-live="polite"></b><button class="secondary" type="button" id="reset-points">Rozdaj od zera</button></div><p class="muted" id="character-status" role="status" aria-live="polite"></p><small>Profile korzystają z dostępnych źródeł. Teksty przykładowe służą do testów; korpusy HPLT, EUR-Lex i Wikipedia nie są jeszcze podłączone.</small></section><label class="field"><span>Target training tokens</span><input id="target-tokens" type="number" min="100000" max="10000000000" step="1000000" value="${draft.target_tokens}"><small>Planning only. At 20:1, 1 billion training tokens suggests about 50 million parameters. The GPU runner is not connected; CPU runs use the budget selected in the next step.</small></label>`);
+            w.insertAdjacentHTML("afterbegin", `<section class="character" aria-labelledby="character-title"><div class="eyebrow">Charakter datasetu</div><h2 id="character-title">Od czego zaczynamy?</h2><div class="character-buttons" role="group" aria-label="Charakter datasetu">${characters.map(p => `<button type="button" data-character="${p.id}" aria-pressed="false">${p.name}</button>`).join("")}</div><div class="row" style="margin:16px 0"><b id="point-budget" role="status" aria-live="polite"></b><button class="secondary" type="button" id="reset-points">Rozdaj od zera</button></div><div class="point-shelf" id="point-shelf" role="group" aria-label="20 książek: 1 książka to 1 punkt mieszanki"></div><p class="muted" id="character-status" role="status" aria-live="polite"></p><small>Profile korzystają z dostępnych źródeł. Teksty przykładowe służą do testów; korpusy HPLT, EUR-Lex i Wikipedia nie są jeszcze podłączone.</small></section><label class="field"><span>Target training tokens</span><input id="target-tokens" type="number" min="100000" max="10000000000" step="1000000" value="${draft.target_tokens}"><small>Planning only. At 20:1, 1 billion training tokens suggests about 50 million parameters. The GPU runner is not connected; CPU runs use the budget selected in the next step.</small></label>`);
             document.querySelectorAll('[data-character]').forEach(button => button.onclick = () => applyCharacter(button.dataset.character));
             $('#reset-points').onclick=()=>{draft.weights=Object.fromEntries(datasets.map(d=>[d.id,0]));draft.character=null;save();updateMix();};
             updateMix();
@@ -1211,6 +1222,7 @@
             else if (!readOnly && local && data.state === "finished" && !$('#hf-export')) {
               $('#run-actions').closest('.actions').insertAdjacentHTML('afterend', '<section class="panel" id="hf-export" style="margin:20px 0"></section>');
               await exportPanel();
+              await benchmarkPanel();
             }
           } catch (e) {
             if (token === generation) {
@@ -1218,6 +1230,22 @@
               timer = setTimeout(refresh, 5000);
             }
           }
+        }
+        async function benchmarkPanel() {
+          try {
+            const [history, catalog] = await Promise.all([api('/runs/'+id+'/benchmarks'),api('/benchmarks/catalog')]);
+            if(token!==generation) return;
+            if(!$('#benchmarks')) $('#live').insertAdjacentHTML('afterend','<section class="panel" id="benchmarks" style="margin:24px 0"></section>');
+            const active=history.find(e=>['queued','running'].includes(e.status));
+            const pct=n=>Number.isFinite(n)?(100*n).toFixed(1)+'%':'—';
+            $('#benchmarks').innerHTML=`<h2>TinyLM benchmarks</h2><p class="muted">English · zero-shot · saved model checkpoint. Short-context byte models may score near chance.</p><p>TinyScore = mean (accuracy − random) / (1 − random) across SciQ, ARC-Easy, PIQA, HellaSwag and BLiMP. Negative values are retained. LAMBADA is reported separately: it has no fixed multiple-choice random baseline.</p>${!readOnly && local && r.state==='finished' ? `<form id="benchmark-form"><div class="fields"><label class="field"><span>Suite</span><select name="suite"><option value="tinylm">TinyLM · 6 tasks</option><option value="core">Core · 5 tasks</option><option value="extended">Extended · all 8 tasks</option></select></label><label class="field"><span>Evaluation size</span><select name="mode"><option value="smoke">Smoke test · 10 examples per subtask</option><option value="full">Full evaluation splits</option></select></label></div><button class="primary" ${active || !catalog.available ? 'disabled' : ''}>Run benchmarks</button>${!catalog.available?'<p>Benchmark worker unavailable.</p>':''}</form>`:''}${history.length ? history.map(e=>`<div style="margin-top:24px;border-top:1px solid var(--line);padding-top:20px"><div class="row"><h3>${e.mode==='smoke'?'Smoke test — not a full benchmark':'Full benchmark'} · ${esc(e.status)}</h3>${!readOnly && ['queued','running'].includes(e.status)?`<button class="secondary" data-cancel-eval="${e.id}">Cancel</button>`:''}</div><p class="muted">${new Date(e.created_at).toLocaleString()}${e.current_task?' · Evaluating '+esc(e.current_task):''} · checkpoint step ${e.provenance.checkpoint_step??'—'} · ${fmt(e.provenance.training_tokens,0)} training byte tokens</p>${e.error?`<p class="error">${esc(e.error)}</p>`:''}<p><b>${e.mode==='smoke'?'Smoke TinyScore':'TinyScore'}: ${pct(e.tiny_score)}</b>${e.tiny_score===null?' · Waiting for all five core tasks.':''}</p><div style="overflow-x:auto"><table><thead><tr><th>Benchmark</th><th>Accuracy</th><th>Random</th><th>Normalized</th><th>Examples</th></tr></thead><tbody>${e.tasks.map(key=>{const v=e.results[key]||{};return `<tr><td>${esc(catalog.tasks.find(t=>t.id===key)?.name||key)}</td><td>${v.error?esc(v.error):pct(v.accuracy)}</td><td>${pct(v.random_baseline)}</td><td>${pct(v.normalized)}</td><td>${v.samples??'—'}</td></tr>`;}).join('')}</tbody></table></div><details><summary>Protocol, dataset revisions & all metrics</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(JSON.stringify({protocol:e.protocol,provenance:e.provenance,results:e.results},null,2))}</pre></details></div>`).join(''):'<p class="muted" style="margin-top:18px">No benchmark measurements yet.</p>'}<p class="muted">Scaling checkpoints: 10M → 30M → 100M → 300M → 1B training tokens. Historical points require saved weights at those budgets; they cannot be reconstructed from a final checkpoint. FLOPs in protocol metadata are estimates (6 × parameters × training tokens).</p>`;
+            if($('#benchmark-form')) $('#benchmark-form').onsubmit=async event=>{
+              event.preventDefault();const f=event.currentTarget,b=f.querySelector('button');b.disabled=true;
+              try{await post('/runs/'+id+'/benchmarks',{suite:f.elements.suite.value,mode:f.elements.mode.value});await benchmarkPanel();}catch(e){error(e);b.disabled=false;}
+            };
+            document.querySelectorAll('[data-cancel-eval]').forEach(b=>b.onclick=async()=>{try{await post('/runs/'+id+'/benchmarks/'+b.dataset.cancelEval+'/cancel',{});await benchmarkPanel();}catch(e){error(e);}});
+            if(active) benchmarkTimer=setTimeout(benchmarkPanel,3000);
+          }catch(e){if(token===generation) error(e);}
         }
         async function exportPanel() {
           try {
@@ -1241,6 +1269,7 @@
         }
         if (paint(r)) timer = setTimeout(refresh, 2000);
         if (!readOnly && local && r.state === "finished") await exportPanel();
+        if(r.state === "finished") await benchmarkPanel();
       }
       async function compare(ids) {
         const rs = await api(
@@ -1261,6 +1290,7 @@
       }
       async function route() {
         clearTimeout(timer);
+        clearTimeout(benchmarkTimer);
         const token = ++generation,
           hash = location.hash.slice(1) || "new";
         $("#nav-new").classList.toggle("active", hash === "new");

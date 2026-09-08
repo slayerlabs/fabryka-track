@@ -25,6 +25,9 @@ dependencies = [
 postgres = ["psycopg[binary]>=3.2"]
 r2 = ["boto3>=1.35"]
 test = ["pytest>=8", "pytest-asyncio>=0.24"]
+eval = [
+    "lm-eval==0.4.13",
+]
 
 [project.scripts]
 fabryka-track = "fabryka_track.cli:main"
