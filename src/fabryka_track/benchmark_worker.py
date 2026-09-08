@@ -126,6 +126,7 @@ def run(eid, job=None, reporter=None):
             results[name]['splits']={k:v.get('test_split') or v.get('validation_split') for k,v in output['configs'].items()}
         except Exception as exc:
             failures.append(name)
+            import traceback; traceback.print_exc(file=sys.stderr)
             results[name]={'error':'Dataset loading or evaluation failed ('+type(exc).__name__+'). Retry after checking dataset availability.'}
             print(name,type(exc).__name__,str(exc),file=sys.stderr)
         provenance.update(context_limited_requests=job['provenance'].get('context_limited_requests',0)+model.truncated_requests,total_requests=job['provenance'].get('total_requests',0)+model.total_requests)
