@@ -87,6 +87,24 @@ def run(eid, job=None, reporter=None):
         if name in results and not results[name].get('error'):continue
         save(current_task=name)
         try:
+            if name == 'multiblimp_polish':
+                from datasets import load_dataset
+                revision = provenance['dataset_revisions'].get('jumelet/multiblimp') or api.dataset_info('jumelet/multiblimp').sha
+                rows = load_dataset('jumelet/multiblimp', 'pol', split='train', revision=revision,
+                                    streaming=True)
+                correct = total = 0
+                for item in rows:
+                    good = model.score('', item['sen'])[0]
+                    bad = model.score('', item['wrong_sen'])[0]
+                    correct += int(good > bad); total += 1
+                    if mode == 'smoke' and total >= 100: break
+                results[name] = {'accuracy': correct / total if total else None,
+                                 'random_baseline': .5, 'normalized': (correct / total - .5) / .5 if total else None,
+                                 'samples': total, 'language': 'pol', 'dataset_revisions': {'jumelet/multiblimp': revision},
+                                 'phenomena': 'agreement minimal pairs', 'split': 'train'}
+                provenance['dataset_revisions'] = {**provenance['dataset_revisions'], 'jumelet/multiblimp': revision}
+                save(results=results, provenance=provenance)
+                continue
             entry=manager.task_index[name]
             names=entry.cfg['task'] if name=='blimp' else [name]
             configs=[];revisions={}

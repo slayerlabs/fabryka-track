@@ -24,13 +24,27 @@ router = APIRouter(prefix='/api')
 PROTOCOL = 'tinylm-en-v1-byte-sliding'
 CORE = ['sciq','arc_easy','piqa','hellaswag','blimp']
 SUITES = {'core':CORE, 'tinylm':CORE+['lambada_openai'],
-          'extended':CORE+['lambada_openai','winogrande','boolq']}
+          'extended':CORE+['lambada_openai','winogrande','boolq'],
+          'polish': ['multiblimp_polish']}
 TASKS = {
     'sciq': ('SciQ','allenai/sciq'), 'arc_easy': ('ARC-Easy','allenai/ai2_arc'),
     'piqa': ('PIQA','baber/piqa'), 'hellaswag': ('HellaSwag','Rowan/hellaswag'),
     'blimp': ('BLiMP','nyu-mll/blimp'), 'lambada_openai': ('LAMBADA','EleutherAI/lambada_openai'),
     'winogrande': ('WinoGrande','allenai/winogrande'), 'boolq': ('BoolQ','aps/super_glue'),
+    'multiblimp_polish': ('MultiBLiMP · Polish','jumelet/multiblimp'),
 }
+TIERS = [
+    {'id':'tokenizer','gate':'Tokenizer gate','metric':'Polish fertility, UTF-8 roundtrip, bits-per-byte','useful_from':'before 1M'},
+    {'id':'loss','gate':'Held-out loss','metric':'bits-per-byte','useful_from':'1M+'},
+    {'id':'multiblimp','gate':'MultiBLiMP Polish','metric':'minimal-pair accuracy','useful_from':'5M+'},
+    {'id':'induction','gate':'Induction / copy','metric':'loss gap (token 500 vs 50), copy accuracy','useful_from':'2 layers'},
+    {'id':'generation','gate':'Generation','metric':'distinct-n and rubric samples','useful_from':'5–30M'},
+    {'id':'sciq_piqa','gate':'SciQ + PIQA','metric':'chance-normalized accuracy and correct probability','useful_from':'30–70M'},
+    {'id':'lambada','gate':'LAMBADA Polish','metric':'target log-probability and accuracy','useful_from':'70M+'},
+    {'id':'arc_easy','gate':'ARC-Easy','metric':'chance-normalized accuracy and correct probability','useful_from':'70–150M'},
+    {'id':'hellaswag','gate':'HellaSwag','metric':'correct probability; accuracy only at larger scale','useful_from':'30M+'},
+    {'id':'synthetic_facts','gate':'Injected synthetic facts','metric':'recall by exposure count','useful_from':'capacity dependent'},
+]
 lock = threading.Lock()
 processes = {}
 QUEUE_STOP = threading.Event()
@@ -56,7 +70,7 @@ def serialize(row, session=None):
 def catalog():
     return {'protocol':PROTOCOL, 'available':importlib.util.find_spec('lm_eval') is not None,
             'tasks':[{'id':k,'name':v[0],'url':'https://huggingface.co/datasets/'+v[1]} for k,v in TASKS.items()],
-            'core':CORE,'suites':SUITES}
+            'core':CORE,'suites':SUITES,'tiers':TIERS}
 
 
 def visible_run(session,run_id,user):

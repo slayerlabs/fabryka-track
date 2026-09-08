@@ -18,6 +18,11 @@ def test_tiny_score_requires_all_core_and_keeps_negative():
     assert benchmarks.tiny_score(results)==pytest.approx(.2)
 
 
+def test_catalog_exposes_polish_ladder_without_english_score_leakage():
+    assert benchmarks.SUITES['polish']==['multiblimp_polish']
+    assert any(t['id']=='multiblimp' and 'Polish' in t['gate'] for t in benchmarks.TIERS)
+
+
 def test_evaluation_owner_visibility_and_cancellation(client,monkeypatch):
     monkeypatch.setattr(benchmarks,'supervise',lambda eid:None)
     original_find_spec=benchmarks.importlib.util.find_spec
