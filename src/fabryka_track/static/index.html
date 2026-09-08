@@ -1663,6 +1663,11 @@
       }
       let authReady = false;
       window.addEventListener("hashchange", () => { if (authReady) route(); });
+      // Clicking an already-selected hash normally emits no hashchange event.
+      // Re-render the leaderboard so the link is reliable after stale/error states.
+      document.querySelectorAll('a[href="#leaderboard"]').forEach(link => link.addEventListener("click", event => {
+        if (location.hash === "#leaderboard") { event.preventDefault(); route(); }
+      }));
       (async () => {
         try { account = (await api("/auth/me")).user; restoreDraft(); accountNav(); authReady=true; await route(); }
         catch(e) { error(e); }

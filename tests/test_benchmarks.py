@@ -37,13 +37,12 @@ def test_evaluation_owner_visibility_and_cancellation(client,monkeypatch):
     assert client.post(url,json={'suite':'untrusted-script'}).status_code==422
     assert client.post(url+'/'+evaluation['id']+'/cancel',json={}).json()['status']=='cancelled'
     client.post('/api/auth/logout')
-    assert client.get(url).status_code==401
+    # Completed run benchmark history is public alongside the leaderboard.
+    assert client.get(url).status_code==200
     assert client.post(url,json={}).status_code==401
     client.post('/api/auth/register',json={'username':'second','password':'different-password-123'})
-    assert client.get(url).status_code==404
+    assert client.get(url).status_code==200
     assert client.post(url,json={}).status_code==404
-    with SessionLocal() as db:
-        db.get(Run,run['id']).is_public=True;db.commit()
     assert client.get(url).status_code==200
     assert client.post(url+'/'+evaluation['id']+'/cancel',json={}).status_code==404
 

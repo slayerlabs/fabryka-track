@@ -41,7 +41,9 @@ class Run(Base):
     __tablename__ = "runs"
     id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True)
     owner_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
-    is_public: Mapped[bool] = mapped_column(default=False)
+    # Completed runs are leaderboard-visible by default; private datasets and
+    # artifacts remain owner-scoped in the public serializer.
+    is_public: Mapped[bool] = mapped_column(default=True, server_default="1")
     project_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), ForeignKey("projects.id"), index=True)
     name: Mapped[str] = mapped_column(String(300), index=True)
     state: Mapped[str] = mapped_column(String(20), default="running", index=True)

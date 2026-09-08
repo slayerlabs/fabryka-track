@@ -191,7 +191,7 @@ def ingest(batch: EventBatch, session: Session = Depends(db), user=Depends(requi
                 session.add(project)
                 session.flush()
             if not session.get(Run, payload["run_id"]):
-                session.add(Run(id=payload["run_id"], owner_id=user.id, project_id=project.id, name=payload["name"],
+                session.add(Run(id=payload["run_id"], owner_id=user.id, project_id=project.id, name=payload["name"], is_public=True,
                                 config=payload.get("config", {}), metadata_={**payload.get("metadata", {}), "engine": "sdk"},
                                 note=payload.get("note", ""), started_at=event.timestamp))
         elif event.type == "run.metrics":

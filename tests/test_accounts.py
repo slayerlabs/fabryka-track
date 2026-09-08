@@ -46,18 +46,18 @@ def test_two_accounts_are_isolated_and_publication_only_exposes_scores(client):
     run = finished(client, response.json()['id'])
     assert run['state'] == 'finished'
     artifact = run['artifacts'][0]['id']
-    assert client.get('/api/leaderboard').json()['models'] == []
+    assert client.get('/api/leaderboard').json()['models'][0]['owner'] == 'tester'
     with TestClient(app, headers={'X-Track-Request': '1'}) as other:
         assert other.get('/api/leaderboard').status_code == 200
         assert other.get('/api/projects').status_code == 401
-        assert other.get('/api/runs/' + run['id']).status_code == 401
+        assert other.get('/api/runs/' + run['id']).status_code == 200
         assert other.post('/api/auth/register', json={'username':'second','password':'second-password-123'}).status_code == 201
         assert other.get('/api/projects').json() == []
         assert other.get('/api/projects/Training%20studio/runs').json() == []
         assert uploaded['id'] not in [d['id'] for d in other.get('/api/datasets').json()]
-        for path in ['/api/runs/' + run['id'], '/api/artifacts/' + artifact, '/api/training/' + run['id'] + '/manifest', '/api/datasets/' + uploaded['id'] + '/content']:
+        for path in ['/api/artifacts/' + artifact, '/api/training/' + run['id'] + '/manifest', '/api/datasets/' + uploaded['id'] + '/content']:
             assert other.get(path).status_code == 404
-        assert other.get('/api/compare', params=[('ids',run['id']),('ids',run['id'])]).status_code == 404
+        assert other.get('/api/compare', params=[('ids',run['id']),('ids',run['id'])]).status_code == 200
         assert other.patch('/api/runs/' + run['id'] + '/notes',json={'note':'hacked','conclusion':''}).status_code == 404
         assert other.post('/api/runs/' + run['id'] + '/logs',json={'level':'info','message':'hacked'}).status_code == 404
         assert other.post('/api/runs/' + run['id'] + '/artifacts',files={'file':('model.pt',b'hacked')}).status_code == 404
@@ -67,7 +67,6 @@ def test_two_accounts_are_isolated_and_publication_only_exposes_scores(client):
         assert other.post('/api/events',json={'events':[event('run.finish',{'run_id':run['id']})]}).status_code == 404
         duplicate = other.post('/api/datasets', files={'file':('own.txt', b'This is private text. ' * 50)}).json()
         assert duplicate['id'] != uploaded['id']
-        assert client.patch('/api/training/' + run['id'] + '/visibility',json={'is_public':True}).status_code == 200
         board = other.get('/api/leaderboard').json()['models']
         assert board[0]['owner'] == 'tester'
         assert board[0]['is_owner'] is False

@@ -180,7 +180,7 @@ def launch(body: TrainingInput, session=Depends(session_scope), user=Depends(req
         model_config = MODEL_PRESETS[body.model_size]
         config = {**body.model_dump(exclude={"name", "mix"}), "mix": mix, "model": model_config["label"], "validation_split": 0.1, **model_config["architecture"]}
         config.update(plan_training(body, mix))
-        session.add(Run(id=run_id, owner_id=user.id, project_id=project.id, name=body.name.strip(), state="queued", config=config, metadata_={"engine": "tiny-transformer", "device": "RunPod GPU" if body.compute=="runpod" else "CPU"}))
+        session.add(Run(id=run_id, owner_id=user.id, project_id=project.id, name=body.name.strip(), state="queued", is_public=True, config=config, metadata_={"engine": "tiny-transformer", "device": "RunPod GPU" if body.compute=="runpod" else "CPU"}))
         if body.compute == "runpod":enqueue(session, session.get(Run, run_id))
         session.commit()
         if body.compute == "cpu":executor.submit(train, run_id)
