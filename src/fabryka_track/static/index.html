@@ -724,6 +724,11 @@
       .run-view .metrics {margin:18px 0;}
       .run-view .metric {padding:18px;}
       @media(max-width:600px){.plot-controls{gap:6px}.plot-expanded{inset:2vh 2vw;padding:8px}.chart{padding:12px 4px}.gpu-status .row{align-items:start;flex-direction:column}}
+      #run-samples .fields { grid-template-columns:repeat(4,minmax(0,1fr));gap:14px; }
+      #run-samples .field { margin:12px 0; }
+      #run-samples .field input { padding:9px 12px;font-size:14px; }
+      #run-samples textarea { min-height:80px; }
+      @media(max-width:650px) { #run-samples .fields { grid-template-columns:repeat(2,minmax(0,1fr)); } }
     </style>
   </head>
   <body>
