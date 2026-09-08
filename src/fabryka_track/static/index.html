@@ -583,6 +583,29 @@
       .book-reader::backdrop { background:#201b16aa; }
       .book-reader pre { white-space:pre-wrap; overflow-wrap:anywhere; padding:20px; background:#f6f2e9; max-height:45vh; overflow:auto; font:16px/1.7 Georgia,serif; }
       .book-reader .reader-controls { display:flex; flex-wrap:wrap; gap:10px; margin:16px 0; }
+      .compact-dataset { display:grid; grid-template-columns:minmax(210px,1fr) minmax(220px,1fr); align-items:center; gap:16px; padding:13px 0; }
+      .compact-dataset .dataset-heading {gap:12px;min-width:0;}
+      .compact-dataset .dataset-cover {width:42px;flex-basis:42px;height:57px;padding:8px 6px 6px 10px;}
+      .compact-dataset .dataset-cover b {font-size:20px;}
+      .compact-dataset .dataset-cover small {font-size:6px;}
+      .dataset-title {min-width:0;}
+      .dataset-title h3 {font-size:15px;margin:0 0 3px;overflow-wrap:anywhere;}
+      .dataset-title small {font-size:11px;line-height:1.4;display:block;}
+      .preview-link {border:0;background:none;padding:3px 0;color:var(--accent);font:inherit;font-size:12px;cursor:pointer;text-align:left;}
+      .preview-link:hover {text-decoration:underline;}
+      .dataset-controls {display:grid;grid-template-columns:28px minmax(50px,1fr) 28px 100px;gap:8px;align-items:center;}
+      .dataset-controls input[type=range] {margin:0;width:100%;}
+      .point-control {height:28px;width:28px;padding:0;border:1px solid var(--line);border-radius:5px;background:var(--paper);color:var(--ink);font-size:18px;cursor:pointer;}
+      .point-control:disabled {opacity:.35;cursor:default;}
+      .compact-dataset .percent {font-size:15px;white-space:nowrap;text-align:right;}
+      .character {padding:18px;margin-bottom:16px;}
+      .character h2 {font-size:27px;margin:8px 0 12px;}
+      .character-buttons {gap:8px;margin-bottom:10px;}
+      .character-buttons button {padding:8px 12px;font-size:14px;}
+      .point-shelf {padding-top:8px;margin-bottom:12px;}
+      .point-book {height:48px;}
+      .upload {padding:16px;margin-top:16px;}
+      @media(max-width:700px) { .compact-dataset {grid-template-columns:1fr;gap:8px;} .dataset-controls {grid-template-columns:28px minmax(60px,1fr) 28px 100px;} }
     </style>
   </head>
   <body>
@@ -915,11 +938,15 @@
         save();
         return true;
       }
+      function datasetRow(d) {
+        const value=draft.weights[d.id]||0;
+        return `<div class="dataset compact-dataset" data-empty="${!value}"><div class="dataset-heading"><div class="dataset-cover" style="--book-color:${datasetColor(d)}" aria-hidden="true"><b>${esc(d.name.slice(0,2).toUpperCase())}</b><small>DATASET</small></div><div class="dataset-title"><h3>${esc(d.name)}</h3><small>${esc(datasetSummary(d))}</small><button type="button" class="preview-link" data-preview-dataset="${d.id}">Zajrzyj do książki →</button></div></div><div class="dataset-controls"><button type="button" class="point-control" data-remove-point="${d.id}" aria-label="Odejmij punkt: ${esc(d.name)}">−</button><input id="slider-${d.id}" type="range" min="0" max="20" step="1" value="${value/5}" aria-label="${esc(d.name)} points" data-slider="${d.id}" style="accent-color:${datasetColor(d)}"><button type="button" class="point-control" data-add-point="${d.id}" aria-label="Dodaj punkt: ${esc(d.name)}">+</button><output class="percent" data-value="${d.id}" for="slider-${d.id}">${value/5} pkt · ${value}%</output></div></div>`;
+      }
       function renderStudio() {
         app.innerHTML = `<div class="intro"><div class="eyebrow">Training studio</div><h1>A model starts with a mix.</h1><p class="muted">Choose your data, set up a small training run, and see what changes.</p></div>${steps()}<div id="error-slot"></div><div class="layout"><section class="panel" id="workspace"></section><aside class="panel aside" id="recipe">${recipe()}</aside></div>`;
         const w = $("#workspace");
         if (stage === 1) {
-          w.innerHTML = `<div class="row"><div><h2 style="margin-bottom:8px">Mix your datasets</h2><p class="muted" style="font-size:13px">Rozdaj dokładnie 20 punktów. 1 punkt = 5% danych treningowych. Odejmij punkt, aby przenieść go do innego źródła.</p></div></div><div>${datasets.map((d, i) => `<div class="dataset" data-empty="${!(draft.weights[d.id] || 0)}"><div class="row"><div class="dataset-heading"><div class="dataset-cover" style="--book-color:${datasetColor(d)}" aria-hidden="true"><b>${esc(d.name.slice(0,2).toUpperCase())}</b><small>DATASET</small></div><div><h3>${esc(d.name)}</h3><small>${esc(datasetSummary(d))}</small></div></div><output class="percent" data-value="${d.id}" for="slider-${d.id}">${(draft.weights[d.id] || 0)/5} pkt · ${draft.weights[d.id] || 0}%</output></div><button type="button" class="secondary" data-preview-dataset="${d.id}" style="margin:14px 0">Zajrzyj do książki →</button><input id="slider-${d.id}" type="range" min="0" max="20" step="1" value="${(draft.weights[d.id] || 0)/5}" aria-label="${esc(d.name)} points" data-slider="${d.id}" style="accent-color:${datasetColor(d)}"><div style="display:flex;gap:8px"><button type="button" class="secondary" data-remove-point="${d.id}" aria-label="Odejmij punkt: ${esc(d.name)}">−</button><button type="button" class="secondary" data-add-point="${d.id}" aria-label="Dodaj punkt: ${esc(d.name)}">+</button></div></div>`).join("")}</div><div class="upload"><div><b style="font-size:13px">Bring your own data</b><p class="muted">UTF-8 plain text · 100+ characters · up to 2 MB</p></div><button class="secondary" id="upload-button">+ Add text file</button><input type="file" id="upload" accept=".txt,text/plain" hidden></div><div class="actions"><small>Próbki rzeczywistych korpusów do treningu CPU.</small><button class="primary" id="next">Training settings →</button></div>`;
+          w.innerHTML = `<div class="row"><div><h2 style="margin-bottom:8px">Mix your datasets</h2><p class="muted" style="font-size:13px">Rozdaj dokładnie 20 punktów. 1 punkt = 5% danych treningowych. Odejmij punkt, aby przenieść go do innego źródła.</p></div></div><div>${datasets.map(datasetRow).join("")}</div><div class="upload"><div><b style="font-size:13px">Bring your own data</b><p class="muted">UTF-8 plain text · 100+ characters · up to 2 MB</p></div><button class="secondary" id="upload-button">+ Add text file</button><input type="file" id="upload" accept=".txt,text/plain" hidden></div><div class="actions"><small>Próbki rzeczywistych korpusów do treningu CPU.</small><button class="primary" id="next">Training settings →</button></div>`;
           document
             .querySelectorAll("[data-slider]")
             .forEach(
