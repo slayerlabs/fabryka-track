@@ -120,3 +120,25 @@ def test_variable_choice_baseline_and_lambada():
     assert result['random_baseline']==pytest.approx(expected)
     assert result['normalized']==pytest.approx((.5-expected)/(1-expected))
     assert summarize('lambada_openai',output)['normalized'] is None
+
+
+def test_fused_prefix_scoring_matches_bytewise_reference(tmp_path):
+    pytest.importorskip('lm_eval')
+    from fabryka_track.benchmark_model import ByteCheckpointLM
+    from fabryka_track.native_model import TinyTransformer
+    torch.manual_seed(42)
+    cfg=dict(width=8,layers=1,heads=2,context_length=16)
+    path=tmp_path/'checkpoint.pt'
+    torch.save({'config':cfg,'state_dict':TinyTransformer(**cfg).state_dict()},path)
+    model=ByteCheckpointLM(path)
+    for context,target in [('', 'abc'),('prefix','ąbc'),('prefix'*5,'long continuation'),('x','a'*40),('hello','')]:
+        prefix=list(context.encode()) or [32];tokens=prefix+list(target.encode())
+        expected=0.;greedy=True
+        with torch.inference_mode():
+            for i in range(len(prefix),len(tokens)):
+                logits=model.model(torch.tensor([tokens[max(0,i-16):i]]))[0,-1]
+                expected+=logits.log_softmax(-1)[tokens[i]].item()
+                greedy=greedy and logits.argmax().item()==tokens[i]
+        score,actual_greedy=model.score(context,target)
+        assert score==pytest.approx(expected,abs=3e-5)
+        assert actual_greedy==greedy

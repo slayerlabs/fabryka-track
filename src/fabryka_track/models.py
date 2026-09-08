@@ -75,6 +75,21 @@ class RunLog(Base):
     message: Mapped[str] = mapped_column(Text)
 
 
+class RunAttribute(Base):
+    __tablename__ = "run_attributes"
+    run_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), ForeignKey("runs.id"), primary_key=True)
+    path: Mapped[str] = mapped_column(String(300), primary_key=True)
+    value: Mapped[object] = mapped_column(JSON)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class RunArtifactLink(Base):
+    __tablename__ = "run_artifact_links"
+    run_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), ForeignKey("runs.id"), primary_key=True)
+    path: Mapped[str] = mapped_column(String(300), primary_key=True)
+    artifact_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), ForeignKey("artifacts.id"))
+
+
 class Artifact(Base):
     __tablename__ = "artifacts"
     id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()))

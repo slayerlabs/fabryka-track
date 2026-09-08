@@ -633,16 +633,89 @@
       @media(max-width:900px) { .studio-sidebar {position:static;} }
       @media(max-width:760px) { #studio-next:not(:empty) {position:fixed;bottom:0;left:0;right:0;z-index:20;background:var(--paper,#fff);padding:10px 16px;box-shadow:0 -2px 12px #0001;} main:has(.studio-intro) {padding-bottom:85px;} }
 
-      .chart {min-width:0;padding:18px 14px;}
-      .chart h3 {font-size:17px;margin:0 0 12px 8px;}
-      .plot-controls {display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12px;margin:0 8px 4px;}
-      .plot-controls label {display:flex;align-items:center;gap:5px;margin:0;}
-      .plot-controls select,.plot-controls button {font-size:12px;width:auto;padding:4px 7px;border:1px solid #ddded4;border-radius:5px;background:#fffefa;min-height:28px;}
-      .plot-controls input[type=range] {width:72px;padding:0;}
-      .plot-controls output {min-width:24px;font-variant-numeric:tabular-nums;}
-      .plot-canvas {width:100%;height:320px;}
-      .plot-expanded {position:fixed;inset:5vh 4vw;z-index:1000;background:#fffefa;padding:20px;box-shadow:0 0 0 100vmax #0008;border-radius:10px;overflow:auto;}
-      .plot-expanded .plot-canvas {height:calc(90vh - 100px);}
+      .chart {position:relative;min-width:0;padding:16px 14px 10px;background:#fff;border:1px solid #e0e4e7;border-radius:8px;box-shadow:0 1px 2px #19212a04;}
+      .chart h3 {font-family:inherit;font-size:13px;font-weight:600;color:#29313b;margin:0 2px 4px;letter-spacing:0;}
+      .interactive-chart {position:relative;min-width:0;background:white;}
+      .plot-toolbar {display:flex;align-items:center;justify-content:space-between;gap:8px;height:27px;margin:0 2px;}
+      .plot-count {color:#939aa2;font-size:10px;letter-spacing:.015em;}
+      .plot-actions {display:flex;align-items:center;gap:2px;}
+      .plot-actions button,.plot-settings-title button {display:grid;place-items:center;width:27px;height:27px;padding:5px;border:0;background:transparent;color:#929aa3;border-radius:5px;cursor:pointer;}
+      .plot-actions button:hover,.plot-actions button[aria-expanded=true] {background:#f0f2f4;color:#303b46;}
+      .plot-actions svg,.plot-settings-title svg {width:16px;height:16px;}
+      .plot-canvas {width:100%;height:285px;}
+      .plot-legend {display:flex;gap:6px;flex-wrap:wrap;margin:0 3px;min-height:34px;align-items:center;}
+      .plot-series {display:flex;align-items:center;gap:7px;border:0;background:#f7f8f9;border-radius:5px;font-size:10px;padding:6px 8px;color:#69717c;max-width:100%;cursor:pointer;}
+      .plot-series span:nth-child(2) {max-width:210px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
+      .plot-series b {font-variant-numeric:tabular-nums;color:#29343e;font-size:11px;}
+      .plot-swatch {width:6px;height:6px;border-radius:50%;flex:none;}
+      .plot-series.is-muted {opacity:.3;}
+      .plot-settings {position:absolute;right:0;top:32px;z-index:30;width:250px;padding:14px;background:white;border:1px solid #e0e4e7;border-radius:8px;box-shadow:0 8px 30px #18233120;font-size:12px;}
+      .plot-settings[hidden],.plot-tooltip[hidden] {display:none;}
+      .plot-settings-title {display:flex;align-items:center;justify-content:space-between;font-weight:600;margin-bottom:8px;color:#303b46;}
+      .plot-settings label {display:flex;align-items:center;justify-content:space-between;gap:10px;margin:9px 0;color:#626d77;}
+      .plot-settings select {font-size:12px;padding:5px 8px;width:130px;border:1px solid #e0e4e7;border-radius:5px;color:#374151;}
+      .plot-settings .plot-smoothing {flex-wrap:wrap;}
+      .plot-settings input[type=range] {width:100%;padding:0;accent-color:#ab4e34;}
+      .plot-settings small {color:#929aa3;font-size:10px;line-height:1.5;display:block;}
+      .plot-tooltip {position:absolute;top:70px;right:30px;z-index:20;min-width:210px;max-width:85%;background:#fff;border:1px solid #dfe4e9;border-radius:7px;box-shadow:0 8px 25px #24324825;pointer-events:none;font-size:11px;overflow:hidden;}
+      .plot-tooltip-head {display:flex;align-items:center;gap:10px;padding:10px 12px;background:#f6f8fa;border-bottom:1px solid #e9edf0;font-size:9px;color:#7b8794;letter-spacing:.07em;}
+      .plot-tooltip-head b {color:#303b46;font-variant-numeric:tabular-nums;letter-spacing:0;font-size:11px;}
+      .plot-tooltip-head span {margin-left:auto;}
+      .plot-tooltip-row {display:flex;gap:9px;align-items:center;padding:8px 12px;}
+      .plot-tooltip-row i {width:3px;height:14px;flex:none;}
+      .plot-tooltip-row span {max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+      .plot-tooltip-row b {margin-left:auto;font-variant-numeric:tabular-nums;color:#303b46;}
+      .plot-tooltip-row small {color:#8c959e;font-size:10px;}
+      .plot-expanded {position:fixed;inset:5vh 4vw;z-index:1000;background:#fff;padding:20px;box-shadow:0 0 0 100vmax #19232c70;border:1px solid #dfe4e9;border-radius:12px;overflow:auto;}
+      .plot-expanded .plot-canvas {height:calc(90vh - 170px);}
+      .metric-explorer {display:flex;justify-content:space-between;align-items:center;gap:16px;margin:24px 0 10px;}
+      .metric-explorer h2 {font-family:inherit;font-size:15px;font-weight:600;margin:0;}
+      .metric-explorer small {font-size:11px;color:#939aa2;}
+      .explorer-controls {display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+      .explorer-controls input,.explorer-controls select {width:auto;font-size:11px;padding:7px 10px;border:1px solid #dce1e6;background:white;border-radius:5px;min-width:0;}
+      .explorer-controls input {width:190px;}
+      .run-view {max-width:1480px;padding-top:24px;}
+      .run-view .charts,.comparison-board {background:#f3f5f7;padding:12px;border:1px solid #e1e5e8;border-radius:9px;gap:12px;}
+      .run-view .metric {background:white;border-color:#e1e5e8;}
+      .run-view .metric strong {font-size:28px;font-weight:600;color:#28323b;font-variant-numeric:tabular-nums;letter-spacing:-.025em;}
+      .run-view .metric small {color:#828b95;font-size:11px;}
+      .compare-view {max-width:1760px;padding:24px;}
+      .compare-heading {display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;}
+      .compare-heading h1 {font-family:inherit;font-size:27px;font-weight:650;letter-spacing:-.04em;margin:5px 0;}
+      .compare-tabs {display:flex;gap:22px;margin:16px 0 0;border-bottom:1px solid #dde3e8;}
+      .compare-tabs button {background:none;border:0;border-bottom:2px solid transparent;padding:10px 2px;color:#78818d;font-size:12px;cursor:pointer;}
+      .compare-tabs button[aria-selected=true] {color:#a74c34;border-bottom-color:#a74c34;}
+      .compare-workspace {display:grid;grid-template-columns:245px minmax(0,1fr);border:1px solid #dfe4e8;border-radius:8px;overflow:clip;background:#fff;}
+      .compare-sidebar {padding:16px 0;border-right:1px solid #dfe4e8;min-width:0;}
+      .compare-sidebar header {position:static;display:block;padding:0 14px;border:0;box-shadow:none;margin-bottom:10px;}
+      .compare-sidebar header b {font-size:12px;color:#3e4752;}
+      .compare-sidebar input[type=search] {font-size:11px;padding:8px;margin-top:12px;width:100%;border-color:#e0e4e8;}
+      .compare-run {display:grid;grid-template-columns:15px 7px minmax(0,1fr);gap:8px;align-items:center;padding:12px 14px;border-top:1px solid #eff1f4;font-size:11px;}
+      .compare-run input {width:13px;height:13px;accent-color:#ad5136;}
+      .compare-run a {display:block;font-size:11px;font-weight:600;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;text-decoration:none;color:#303b46;}
+      .compare-run small {font-size:10px;color:#99a1aa;display:block;margin-top:4px;}
+      .compare-main {min-width:0;background:#f3f5f7;padding:12px;}
+      .compare-main .metric-explorer {margin:0 0 12px;}
+      .comparison-board {border:0;padding:0;}
+      .compare-main .chart {border-radius:5px;}
+      .compare-main .plot-legend {display:none;}
+      [hidden] {display:none!important;}
+      .comparison-table {background:#fff;border:1px solid #dfe4e8;border-radius:6px;overflow:auto;}
+      .comparison-table th,.comparison-table td {font-size:11px;padding:10px 12px;white-space:nowrap;border-right:1px solid #eef1f4;}
+      .comparison-table th {background:#f4f6f8;color:#65707e;}
+      .comparison-table th.metric-column {background:#eaf3ee;}
+      .comparison-table th.config-column {background:#f6f2e9;}
+      .comparison-table tr:hover td {background:#fafbfc;}
+      @media(max-width:900px){.compare-workspace{grid-template-columns:190px minmax(0,1fr)}.compare-main .charts{grid-template-columns:1fr}.explorer-controls input{width:140px}}
+      @media(max-width:650px){.compare-workspace{grid-template-columns:1fr}.compare-sidebar{border-right:0;border-bottom:1px solid #dfe4e8}.compare-run{display:inline-grid;width:49%}.compare-sidebar header input{display:none}.compare-view{padding:16px}.metric-explorer{align-items:start;flex-direction:column;gap:8px}.plot-expanded{inset:2vh 2vw;padding:10px}.plot-series span:nth-child(2){max-width:145px}.run-view .charts{padding:6px}.run-view .metric strong{font-size:24px}}
+      .namespace-folder {margin:6px 0;border:0;padding:0;font-size:12px;}
+      .namespace-folder summary {font-family:monospace;color:#4b6171;padding:7px 0;}
+      .namespace-folder > div {padding-left:20px;border-left:1px solid #e4e8ed;margin-left:4px;}
+      .namespace-leaf {display:flex;align-items:center;gap:12px;padding:8px 0;font-size:11px;border-bottom:1px solid #f0f2f4;flex-wrap:wrap;}
+      .namespace-leaf > code {color:#344452;}
+      .namespace-leaf button {border:0;background:#edf2f5;color:#496478;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;}
+      .namespace-value {max-width:100%;overflow-wrap:anywhere;white-space:pre-wrap;}
+      #namespace-tree pre {white-space:pre-wrap;overflow-wrap:anywhere;max-height:400px;overflow:auto;font-size:11px;}
       .gpu-status {margin:14px 0;}
       .gpu-status p {margin:8px 0;}
       .run-live {min-width:0;width:100%;}
@@ -659,7 +732,8 @@
       <nav aria-label="Main">
         <a href="#new" id="nav-new">Training studio</a
         ><a href="#runs" id="nav-runs">My runs</a
-        ><a href="#leaderboard" id="nav-leaderboard">Leaderboard</a><a href="#login" id="nav-account">Sign in</a>
+        ><a href="#benchmarks" id="nav-benchmarks">Benchmarks</a>
+        <a href="#leaderboard" id="nav-leaderboard">Leaderboard</a><a href="#login" id="nav-account">Sign in</a>
       </nav>
     </header>
     <main id="app"></main>
@@ -669,7 +743,7 @@
     </footer>
     <div id="toast" role="status" aria-live="polite"></div>
     <script src="/assets/plotly-basic-3.1.0.min.js"></script>
-    <script src="/assets/run-charts.js?v=1"></script>
+    <script src="/assets/run-charts.js?v=2"></script>
     <script>
       const $ = (s) => document.querySelector(s),
         app = $("#app");
@@ -1168,7 +1242,7 @@
             refreshTrainingPlan();
           };
       }
-      function chart(series) { return TrackCharts.placeholder(series); }
+      function chart(series,key) { return TrackCharts.placeholder(series,key); }
       const duration = seconds => !Number.isFinite(seconds) ? 'Measuring…' : seconds<60 ? `${Math.ceil(seconds)}s` : seconds<3600 ? `${Math.ceil(seconds/60)} min` : `${(seconds/3600).toFixed(1)} h`;
       function operationalStatus(r) {
         const g=r.gpu_status;
@@ -1254,8 +1328,9 @@
         const readOnly = !!r.read_only;
         const local = r.metadata.engine === "tiny-transformer";
         const modelLabel = r.config.model || "Tiny transformer · 134,912 parameters";
-        app.innerHTML = `<a href="${readOnly ? "#leaderboard" : "#runs"}" class="muted" style="display:inline-block;margin-bottom:25px;text-decoration:none">← ${readOnly ? "Leaderboard" : "My runs"}</a><div class="intro row"><div><div class="eyebrow">${local ? "Training results" : "Tracked experiment"}</div><h1>${esc(r.name)}</h1><p class="muted">${local ? esc(modelLabel) + (r.config.compute==='runpod'?" · RunPod GPU · ":" · Local CPU · ") : ""}${new Date(r.started_at).toLocaleString()}</p></div><span class="badge ${esc(r.state)}" id="run-state">${esc(r.state)}</span></div><div id="live"></div><div class="actions"><div id="run-actions"></div><a class="secondary" href="#new">New training run →</a></div><details><summary>Dataset mix & settings</summary><div class="panel"><pre>${esc(JSON.stringify(r.config, null, 2))}</pre></div></details><details id="private-notes"><summary>Run notes</summary><label class="field"><span>What are you testing?</span><textarea id="note">${esc(r.note)}</textarea></label><label class="field"><span>Conclusion</span><textarea id="conclusion">${esc(r.conclusion)}</textarea></label><button class="secondary" id="save-note">Save notes</button></details><details id="private-logs"><summary>Training log</summary><div class="panel"><pre id="logs"></pre></div></details>`;
+        app.innerHTML = `<a href="${readOnly ? "#leaderboard" : "#runs"}" class="muted" style="display:inline-block;margin-bottom:25px;text-decoration:none">← ${readOnly ? "Leaderboard" : "My runs"}</a><div class="intro row"><div><div class="eyebrow">${local ? "Training results" : "Tracked experiment"}</div><h1>${esc(r.name)}</h1><p class="muted">${local ? esc(modelLabel) + (r.config.compute==='runpod'?" · RunPod GPU · ":" · Local CPU · ") : ""}${new Date(r.started_at).toLocaleString()}</p></div><span class="badge ${esc(r.state)}" id="run-state">${esc(r.state)}</span></div><div class="compare-tabs" id="run-tabs"><button data-run-tab="charts" aria-selected="true">Charts</button><button data-run-tab="namespace" aria-selected="false">Namespace</button>${!readOnly && local && r.state==='finished'?'<button data-run-tab="samples" aria-selected="false">Sample generations</button>':''}</div><section id="run-samples" class="panel" hidden style="padding:22px;margin-top:16px"></section><section id="run-namespace" class="panel" hidden style="padding:22px;margin-top:16px"></section><div id="run-explorer"></div><div id="live"></div><div class="actions"><div id="run-actions"></div><a class="secondary" href="#new">New training run →</a></div><details><summary>Dataset mix & settings</summary><div class="panel"><pre>${esc(JSON.stringify(r.config, null, 2))}</pre></div></details><details id="private-notes"><summary>Run notes</summary><label class="field"><span>What are you testing?</span><textarea id="note">${esc(r.note)}</textarea></label><label class="field"><span>Conclusion</span><textarea id="conclusion">${esc(r.conclusion)}</textarea></label><button class="secondary" id="save-note">Save notes</button></details><details id="private-logs"><summary>Training log</summary><div class="panel"><pre id="logs"></pre></div></details>`;
         if (readOnly) {
+          $("#run-tabs").remove();$("#run-namespace").remove();
           $("#private-notes").remove(); $("#private-logs").remove();
           $("#run-actions").insertAdjacentHTML('afterend', '<p class="muted">Public run details · read only. Uploaded files and notes remain private.</p>');
         } else if (local && r.state === "finished") {
@@ -1276,6 +1351,48 @@
             error(e);
           }
         };
+        let namespaceLoaded=false;
+        document.querySelectorAll('[data-run-tab]').forEach(b=>b.onclick=async()=>{
+          const show=b.dataset.runTab!=='charts', ns=b.dataset.runTab==='namespace';document.querySelectorAll('[data-run-tab]').forEach(x=>x.setAttribute('aria-selected',String(x===b)));
+          $('#run-namespace').hidden=!ns;$('#run-samples').hidden=b.dataset.runTab!=='samples';$('#live').hidden=show;$('#run-explorer').hidden=show;
+          if(ns&&!namespaceLoaded){await namespacePanel();namespaceLoaded=true;}
+          window.dispatchEvent(new Event('resize'));
+        });
+        if(!readOnly && local && r.state==='finished') {
+          $('#run-samples').innerHTML=`<h3>Try the saved model</h3><p class="muted">Continue a passage of text. This model was trained from scratch on next-byte prediction; it is not an instruction-tuned chat model.</p><div class="explorer-controls" style="margin:12px 0"><button class="secondary" data-prompt="Dawno temu, w małym miasteczku,">Polish story</button><button class="secondary" data-prompt="The purpose of science is to">English prose</button><button class="secondary" data-prompt="Warszawa jest">Polish continuation</button></div><form id="sample-form"><label class="field"><span>Prompt</span><textarea name="prompt" required maxlength="2048" rows="3">Dawno temu, w małym miasteczku,</textarea></label><div class="fields"><label class="field"><span>New bytes</span><input name="max_new_bytes" type="number" min="1" max="512" value="256" required></label><label class="field"><span>Temperature · 0 = greedy</span><input name="temperature" type="number" min="0" max="2" step="0.1" value="0.8" required></label><label class="field"><span>Top K</span><input name="top_k" type="number" min="1" max="256" value="40" required></label><label class="field"><span>Seed</span><input name="seed" type="number" min="0" max="2147483647" value="42" required></label></div><button class="primary">Generate continuation →</button></form><div id="sample-output" aria-live="polite" style="margin-top:18px"></div>`;
+          document.querySelectorAll('[data-prompt]').forEach(b=>b.onclick=()=>$('#sample-form').elements.prompt.value=b.dataset.prompt);
+          $('#sample-form').onsubmit=async event=>{
+            event.preventDefault();const f=event.currentTarget,b=f.querySelector('button'),output=$('#sample-output');b.disabled=true;output.textContent='Generating from your saved checkpoint…';
+            const body={prompt:f.elements.prompt.value};for(const k of ['max_new_bytes','temperature','top_k','seed'])body[k]=Number(f.elements[k].value);
+            try{const result=await post('/runs/'+id+'/generate',body);if(token!==generation)return;output.innerHTML=`<pre style="white-space:pre-wrap;overflow-wrap:anywhere;padding:18px;background:var(--bg);line-height:1.7"><span class="muted">${esc(result.prompt)}</span><strong>${esc(result.continuation)}</strong></pre><small class="muted">Checkpoint step ${result.checkpoint_step??'—'} · ${result.generated_bytes} generated bytes · ${result.elapsed_seconds}s · context ${result.context_bytes} bytes${result.prompt_truncated?' · prompt uses its last context window':''}${result.invalid_utf8?' · invalid UTF-8 bytes shown as replacement characters':''}</small><details><summary>Reproduce this sample</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(JSON.stringify(result,null,2))}</pre></details>`;}catch(e){output.textContent=e.message;}finally{b.disabled=false;}
+          };
+        }
+        async function namespacePanel(){
+          const host=$('#run-namespace');
+          host.innerHTML=`<div class="row"><h3>Run namespace</h3><div class="explorer-controls"><input id="namespace-prefix" placeholder="Path prefix, e.g. train/" aria-label="Namespace path prefix"><button class="secondary" id="namespace-browse" style="padding:7px 12px;font-size:12px">Browse</button></div></div><div id="namespace-tree" style="margin-top:16px"></div><button id="namespace-next" class="secondary" hidden>Next paths →</button><div id="namespace-series" style="margin-top:18px"></div>`;
+          let cursor='';
+          async function load(){
+            const query=new URLSearchParams({prefix:$('#namespace-prefix').value,after:cursor,limit:'100'}),data=await api('/runs/'+id+'/namespace?'+query);if(token!==generation)return;
+            const tree={children:new Map()};for(const item of data.items){let node=tree;for(const segment of item.path.split('/')){if(!node.children.has(segment))node.children.set(segment,{children:new Map()});node=node.children.get(segment);}node.item=item;}
+            const renderTree=(node)=>[...node.children].map(([key,value])=>{const leaf=value.item;return leaf?`<div class="namespace-leaf"><code>${esc(key)}</code><span class="muted">${esc(leaf.kind)}</span>${leaf.kind==='series'?`<button data-namespace-series="${esc(leaf.path)}">Open curve →</button>`:leaf.kind==='artifact'?`<a href="/api/artifacts/${leaf.artifact_id}">${esc(leaf.name)} ↓</a>`:`<code class="namespace-value">${esc(JSON.stringify(leaf.value))}</code>`}</div>`:`<details class="namespace-folder" open><summary>${esc(key)}/</summary><div>${renderTree(value)}</div></details>`;}).join('');
+            $('#namespace-tree').innerHTML=`${data.config?`<details><summary>config · initial snapshot</summary><pre>${esc(JSON.stringify(data.config,null,2))}</pre></details>`:''}${data.hardware?`<details><summary>hardware / runtime metadata</summary><pre>${esc(JSON.stringify(data.hardware,null,2))}</pre></details>`:''}${renderTree(tree)||'<p class="muted">No fields under this prefix.</p>'}`;
+            cursor=data.next_cursor||'';$('#namespace-next').hidden=!cursor;
+            document.querySelectorAll('[data-namespace-series]').forEach(b=>b.onclick=()=>openSeries(b.dataset.namespaceSeries));
+          }
+          async function openSeries(path,after=0){
+            const data=await api('/runs/'+id+'/series?'+new URLSearchParams({path,after,limit:'1000'}));if(token!==generation)return;
+            const box=$('#namespace-series');TrackCharts.dispose(box);box.innerHTML=`<div class="chart"><h3>${esc(path)}</h3>${chart([{name:path,points:data.points}],path)}</div><div class="row"><small>${data.points.length} recorded points on this page</small>${data.next_cursor?'<button id="series-next" class="secondary">Next points →</button>':''}</div>`;await TrackCharts.render(box);
+            if($('#series-next'))$('#series-next').onclick=()=>openSeries(path,data.next_cursor);
+          }
+          $('#namespace-browse').onclick=()=>{cursor='';load().catch(error);};$('#namespace-next').onclick=()=>load().catch(error);
+          await load();
+        }
+        $('#run-explorer').innerHTML=`<div class="metric-explorer"><div><h2>Metric explorer</h2><small>Hover to inspect · drag to zoom</small></div><div class="explorer-controls"><input id="metric-filter" type="search" aria-label="Filter metrics" placeholder="Find a metric…"><select id="metric-range" aria-label="Visible training range"><option value="0">All steps</option><option value="0.1">Skip first 10%</option><option value="0.5">Latest half</option></select><select id="metric-layout" aria-label="Chart layout"><option value="grid">Mosaic</option><option value="column">One column</option></select></div></div>`;
+        // Move the persistent toolbar into place above the charts after each paint.
+        function filterMetrics(){document.querySelectorAll('#live .chart').forEach(el=>el.hidden=!el.querySelector('h3').textContent.toLowerCase().includes($('#metric-filter').value.toLowerCase()));}
+        $('#metric-filter').oninput=filterMetrics;
+        $('#metric-range').onchange=e=>TrackCharts.focus($('#live'),+e.target.value);
+        $('#metric-layout').onchange=e=>{$('#live .charts').style.gridTemplateColumns=e.target.value==='column'?'1fr':'';window.dispatchEvent(new Event('resize'));};
         function paint(r) {
           const active = ["queued", "running", "stopping"].includes(r.state);
           $("#run-state").textContent = r.state;
@@ -1283,6 +1400,7 @@
           const result = r.metadata?.training_result;
           const percent = latest(r, "progress") || 0;
           const previousCharts = [...$("#live").querySelectorAll(".interactive-chart")];
+          const savedExplorer=$("#run-explorer");if(savedExplorer)$("#live").before(savedExplorer);
           $("#live").innerHTML =
             `${operationalStatus(r)}${local ? `<div class="row"><small>${r.metadata.gpu_cleanup === "pending" ? "Artifacts verified — terminating RunPod…" : r.state === "queued" ? (r.config.compute==='runpod'?"Provisioning RunPod GPU…":"Queued — waiting for the current run") : r.state === "finished" ? (result?.stop_reason === "early_stopping" ? "Stopped early — validation stopped improving" : "Training complete") : r.state === "cancelled" ? "Training cancelled" : r.state === "interrupted" ? "Training interrupted — start a new run to retry" : r.state === "failed" ? "Training failed — see the log below" : r.state === "stopping" ? "Stopping training…" : "Training in progress"}</small><small>${fmt(percent, 0)}% · step ${r.metrics.progress?.at(-1)?.step || 0} / ${r.config.steps}</small></div><progress max="100" value="${percent}" aria-label="Training progress"></progress>` : ""}<div class="metrics">${[
               ["Training loss", latest(r, "train/loss") ?? latest(r, "loss")],
@@ -1327,7 +1445,10 @@
               .join(
                 "",
               )}</div><p class="muted" style="font-size:12px;margin-top:15px">Lower loss and perplexity mean better next-byte predictions. Compare runs with the same validation data. ${active ? "Refreshes every 2 seconds." : ""}</p>`;
-          TrackCharts.render($("#live"), previousCharts).catch(error);
+          const toolbar=$('#run-explorer');$('#live .charts').before(toolbar);
+          $('#live .charts').style.gridTemplateColumns=$('#metric-layout').value==='column'?'1fr':'';
+          filterMetrics();
+          TrackCharts.render($('#live'), previousCharts).catch(error);
           if ($("#logs")) $("#logs").textContent =
             r.logs.map((l) => `[${l.level}] ${l.message}`).join("\n") ||
             "No logs yet.";
@@ -1409,7 +1530,7 @@
             if(!$('#benchmarks')) $('#live').insertAdjacentHTML('afterend','<section class="panel" id="benchmarks" style="margin:24px 0"></section>');
             const active=history.find(e=>['queued','running'].includes(e.status));
             const pct=n=>Number.isFinite(n)?(100*n).toFixed(1)+'%':'—';
-            $('#benchmarks').innerHTML=`<h2>TinyLM benchmarks</h2><p class="muted">English · zero-shot · saved model checkpoint. Short-context byte models may score near chance.</p><p>TinyScore = mean (accuracy − random) / (1 − random) across SciQ, ARC-Easy, PIQA, HellaSwag and BLiMP. Negative values are retained. LAMBADA is reported separately: it has no fixed multiple-choice random baseline.</p>${!readOnly && local && r.state==='finished' ? `<form id="benchmark-form"><div class="fields"><label class="field"><span>Suite</span><select name="suite"><option value="tinylm">TinyLM · 6 tasks</option><option value="core">Core · 5 tasks</option><option value="extended">Extended · all 8 tasks</option></select></label><label class="field"><span>Evaluation size</span><select name="mode"><option value="smoke">Smoke test · 10 examples per subtask</option><option value="full">Full evaluation splits</option></select></label></div><button class="primary" ${active || !catalog.available ? 'disabled' : ''}>Add to benchmark queue</button>${!catalog.available?'<p>Benchmark worker unavailable.</p>':''}</form>`:''}${history.length ? history.map(e=>`<div style="margin-top:24px;border-top:1px solid var(--line);padding-top:20px"><div class="row"><h3>${e.mode==='smoke'?'Smoke test — not a full benchmark':'Full benchmark'} · ${esc(e.status)}${e.queue_position?' · queue #'+e.queue_position:''}</h3>${!readOnly && ['queued','running'].includes(e.status)?`<button class="secondary" data-cancel-eval="${e.id}">Cancel</button>`:''}</div><p class="muted">${new Date(e.created_at).toLocaleString()}${e.current_task?' · Evaluating '+esc(e.current_task):''} · checkpoint step ${e.provenance.checkpoint_step??'—'} · ${fmt(e.provenance.training_tokens,0)} training byte tokens</p>${e.error?`<p class="error">${esc(e.error)}</p>`:''}<p><b>${e.mode==='smoke'?'Smoke TinyScore':'TinyScore'}: ${pct(e.tiny_score)}</b>${e.tiny_score===null?' · Waiting for all five core tasks.':''}</p><div style="overflow-x:auto"><table><thead><tr><th>Benchmark</th><th>Accuracy</th><th>Random</th><th>Normalized</th><th>Examples</th></tr></thead><tbody>${e.tasks.map(key=>{const v=e.results[key]||{};return `<tr><td>${esc(catalog.tasks.find(t=>t.id===key)?.name||key)}</td><td>${v.error?esc(v.error):pct(v.accuracy)}</td><td>${pct(v.random_baseline)}</td><td>${pct(v.normalized)}</td><td>${v.samples??'—'}</td></tr>`;}).join('')}</tbody></table></div><details><summary>Protocol, dataset revisions & all metrics</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(JSON.stringify({protocol:e.protocol,provenance:e.provenance,results:e.results},null,2))}</pre></details></div>`).join(''):'<p class="muted" style="margin-top:18px">No benchmark measurements yet.</p>'}<p class="muted">Scaling checkpoints: 10M → 30M → 100M → 300M → 1B training tokens. Historical points require saved weights at those budgets; they cannot be reconstructed from a final checkpoint. FLOPs in protocol metadata are estimates (6 × parameters × training tokens).</p>`;
+            $('#benchmarks').innerHTML=`<h2>TinyLM benchmarks</h2><p class="muted">English · zero-shot · saved model checkpoint. Short-context byte models may score near chance. Smoke tests check the evaluation pipeline: with 10 examples, one answer moves accuracy by 10 percentage points. Use full evaluations to compare quality.</p><p>TinyScore = mean (accuracy − random) / (1 − random) across SciQ, ARC-Easy, PIQA, HellaSwag and BLiMP. Negative values are retained. LAMBADA is reported separately: it has no fixed multiple-choice random baseline.</p>${!readOnly && local && r.state==='finished' ? `<form id="benchmark-form"><div class="fields"><label class="field"><span>Suite</span><select name="suite"><option value="tinylm">TinyLM · 6 tasks</option><option value="core">Core · 5 tasks</option><option value="extended">Extended · all 8 tasks</option></select></label><label class="field"><span>Evaluation size</span><select name="mode"><option value="smoke">Smoke test · 10 examples per subtask</option><option value="full">Full evaluation splits</option></select></label></div><button class="primary" ${active || !catalog.available ? 'disabled' : ''}>Add to benchmark queue</button>${!catalog.available?'<p>Benchmark worker unavailable.</p>':''}</form>`:''}${history.length ? history.map(e=>`<div style="margin-top:24px;border-top:1px solid var(--line);padding-top:20px"><div class="row"><h3>${e.mode==='smoke'?'Smoke test — not a full benchmark':'Full benchmark'} · ${esc(e.status)}${e.queue_position?' · queue #'+e.queue_position:''}</h3>${!readOnly && ['queued','running'].includes(e.status)?`<button class="secondary" data-cancel-eval="${e.id}">Cancel</button>`:''}</div><p class="muted">${new Date(e.created_at).toLocaleString()}${e.current_task?' · Evaluating '+esc(e.current_task):''} · checkpoint step ${e.provenance.checkpoint_step??'—'} · ${fmt(e.provenance.training_tokens,0)} training byte tokens</p>${e.error?`<p class="error">${esc(e.error)}</p>`:''}<p><b>${e.mode==='smoke'?'Smoke TinyScore':'TinyScore'}: ${pct(e.tiny_score)}</b>${e.tiny_score===null?' · Waiting for all five core tasks.':''}</p><div style="overflow-x:auto"><table><thead><tr><th>Benchmark</th><th>Accuracy</th><th>Random</th><th>Normalized</th><th>Examples</th></tr></thead><tbody>${e.tasks.map(key=>{const v=e.results[key]||{};return `<tr><td>${esc(catalog.tasks.find(t=>t.id===key)?.name||key)}</td><td>${v.error?esc(v.error):pct(v.accuracy)}</td><td>${pct(v.random_baseline)}</td><td>${pct(v.normalized)}</td><td>${v.samples??'—'}</td></tr>`;}).join('')}</tbody></table></div><details><summary>Protocol, dataset revisions & all metrics</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(JSON.stringify({protocol:e.protocol,provenance:e.provenance,results:e.results},null,2))}</pre></details></div>`).join(''):'<p class="muted" style="margin-top:18px">No benchmark measurements yet.</p>'}<p class="muted">Scaling checkpoints: 10M → 30M → 100M → 300M → 1B training tokens. Historical points require saved weights at those budgets; they cannot be reconstructed from a final checkpoint. FLOPs in protocol metadata are estimates (6 × parameters × training tokens).</p>`;
             if($('#benchmark-form')) $('#benchmark-form').onsubmit=async event=>{
               event.preventDefault();const f=event.currentTarget,b=f.querySelector('button');b.disabled=true;
               try{await post('/runs/'+id+'/benchmarks',{suite:f.elements.suite.value,mode:f.elements.mode.value});await benchmarkPanel();}catch(e){error(e);b.disabled=false;}
@@ -1443,15 +1564,52 @@
         if(r.state === "finished") await benchmarkPanel();
       }
       async function compare(ids) {
-        const rs = await api(
-          "/compare?" +
-            ids.map((id) => "ids=" + encodeURIComponent(id)).join("&"),
-        );
-        const keys = [
-          ...new Set(rs.flatMap((r) => Object.keys(r.metrics))),
-        ].filter((k) => k !== "progress");
-        app.innerHTML = `<a href="#runs" class="muted">← My runs</a><div class="intro" style="margin-top:25px"><div class="eyebrow">Side by side</div><h1>See what your mix changed.</h1><p class="muted">Compare measured results. Different validation mixtures are not a like-for-like quality ranking.</p></div><div class="panel table-scroll"><table><thead><tr><th>Run</th>${rs.map((r) => `<th>${esc(r.name)}</th>`).join("")}</tr></thead><tbody>${["state", ...keys].map((k) => `<tr><td>${esc(k)}</td>${rs.map((r) => `<td>${k === "state" ? esc(r.state) : fmt(latest(r, k))}</td>`).join("")}</tr>`).join("")}<tr><td>Dataset mix</td>${rs.map((r) => `<td>${(r.config.mix || []).map((d) => `${esc(d.name)} ${d.weight}%`).join("<br>") || "—"}</td>`).join("")}</tr>${["model", "steps", "batch_size", "learning_rate", "seed"].map((k) => `<tr><td>${k}</td>${rs.map((r) => `<td>${esc(r.config[k] ?? "—")}</td>`).join("")}</tr>`).join("")}</tbody></table></div><div class="charts" style="margin-top:20px">${keys.map((k) => `<div class="chart"><h3>${esc(k)}</h3>${chart(rs.map((r) => ({ name: r.name, points: r.metrics[k] || [] })))}</div>`).join("")}</div>`;
+        const token=generation;app.classList.add('compare-view');
+        const endpoint='/compare?'+ids.map(id=>'ids='+encodeURIComponent(id)).join('&');
+        let rs=await api(endpoint);if(token!==generation)return;
+        const keys=[...new Set(rs.flatMap(r=>Object.keys(r.metrics)))].filter(k=>k!=='progress');
+        const colors=TrackCharts.palette;
+        const table=()=>`<table><thead><tr><th>Run</th><th>Status</th>${keys.map(k=>`<th class="metric-column">${esc(k)}</th>`).join('')}${['model','batch_size','learning_rate','seed'].map(k=>`<th class="config-column">${k}</th>`).join('')}</tr></thead><tbody>${rs.map((r,i)=>`<tr><td><a href="#run/${r.id}"><span class="dot" style="background:${colors[i%colors.length]}"></span>${esc(r.name)}</a></td><td>${esc(r.state)}</td>${keys.map(k=>`<td>${fmt(latest(r,k),4)}</td>`).join('')}${['model','batch_size','learning_rate','seed'].map(k=>`<td>${esc(r.config[k]??'—')}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+        const series=k=>rs.map((r,i)=>({id:r.id,name:r.name,color:colors[i%colors.length],points:r.metrics[k]||[]}));
+        app.innerHTML=`<div class="compare-heading"><div><a href="#runs" class="muted" style="font-size:11px;text-decoration:none">← All runs</a><h1>Compare experiments</h1><small class="muted">${rs.length} runs · ${keys.length} metrics · hover across charts to inspect the same step</small></div><a href="#runs" class="secondary" style="font-size:12px;padding:9px 14px">Change selection</a></div><div class="compare-tabs" role="tablist"><button role="tab" data-compare-tab="charts" aria-selected="true">Charts</button><button role="tab" data-compare-tab="table" aria-selected="false">Side by side</button></div><div class="compare-workspace"><aside class="compare-sidebar"><header><b>Visible runs <span id="visible-run-count">${rs.length} / ${rs.length}</span></b><input id="run-filter" type="search" placeholder="Find a run…" aria-label="Find a compared run"></header>${rs.map((r,i)=>`<label class="compare-run" data-run-search="${esc(r.name.toLowerCase())}"><input type="checkbox" checked data-run-visibility="${r.id}" aria-label="Show ${esc(r.name)}"><span class="plot-swatch" style="background:${colors[i%colors.length]}"></span><span><a href="#run/${r.id}" title="${esc(r.name)}">${esc(r.name)}</a><small>${esc(r.config.model_size||r.project)} · ${esc(r.state)}</small></span></label>`).join('')}</aside><section class="compare-main"><div class="metric-explorer"><small id="metric-count">${keys.length} metrics</small><div class="explorer-controls"><input id="compare-metric-filter" type="search" placeholder="Find a metric…" aria-label="Filter comparison metrics"><select id="compare-range" aria-label="Visible comparison range"><option value="0">All steps</option><option value="0.1">Skip first 10%</option><option value="0.5">Latest half</option></select><select id="compare-layout" aria-label="Comparison layout"><option value="grid">Mosaic</option><option value="column">One column</option></select></div></div><div class="charts comparison-board" id="compare-charts">${keys.map(k=>`<article class="chart" data-metric="${esc(k)}"><h3>${esc(k)}</h3>${chart(series(k),k)}</article>`).join('')}</div><div class="comparison-table" id="compare-table" hidden>${table()}</div></section></div><p class="muted" style="font-size:11px;margin-top:12px">Validation scores depend on the dataset split. Compare quality only across matching evaluation protocols.</p>`;
         await TrackCharts.render(app);
+        document.querySelectorAll('[data-run-visibility]').forEach(b=>b.onchange=()=>{TrackCharts.setVisible($('#compare-charts'),b.dataset.runVisibility,b.checked);$('#visible-run-count').textContent=`${document.querySelectorAll('[data-run-visibility]:checked').length} / ${rs.length}`;});
+        $('#run-filter').oninput=e=>document.querySelectorAll('[data-run-search]').forEach(row=>row.hidden=!row.dataset.runSearch.includes(e.target.value.toLowerCase()));
+        $('#compare-metric-filter').oninput=e=>{let count=0;document.querySelectorAll('[data-metric]').forEach(el=>{el.hidden=!el.dataset.metric.toLowerCase().includes(e.target.value.toLowerCase());if(!el.hidden)count++;});$('#metric-count').textContent=`${count} metrics`;};
+        $('#compare-range').onchange=e=>TrackCharts.focus($('#compare-charts'),+e.target.value);
+        $('#compare-layout').onchange=e=>{$('#compare-charts').style.gridTemplateColumns=e.target.value==='column'?'1fr':'';window.dispatchEvent(new Event('resize'));};
+        document.querySelectorAll('[data-compare-tab]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-compare-tab]').forEach(x=>x.setAttribute('aria-selected',String(x===b)));$('#compare-charts').hidden=b.dataset.compareTab!=='charts';$('#compare-table').hidden=b.dataset.compareTab!=='table';window.dispatchEvent(new Event('resize'));});
+        async function refresh(){
+          try{
+            rs=await api(endpoint);if(token!==generation)return;
+            const old=[...$('#compare-charts').querySelectorAll('.interactive-chart')];
+            document.querySelectorAll('[data-metric]').forEach(card=>{const temp=document.createElement('div');temp.innerHTML=chart(series(card.dataset.metric),card.dataset.metric);card.querySelector('.interactive-chart').replaceWith(temp.firstElementChild);});
+            await TrackCharts.render($('#compare-charts'),old);$('#compare-table').innerHTML=table();
+            if(rs.some(r=>['queued','running','stopping'].includes(r.state)))timer=setTimeout(refresh,5000);
+          }catch(e){if(token===generation){error(e);timer=setTimeout(refresh,10000);}}
+        }
+        if(rs.some(r=>['queued','running','stopping'].includes(r.state)))timer=setTimeout(refresh,5000);
+      }
+      async function benchmarkDashboard(){
+        const token=generation;
+        const [catalog,projects]=await Promise.all([api('/benchmarks/catalog'),api('/projects')]);
+        const runs=(await Promise.all(projects.map(p=>api('/projects/'+encodeURIComponent(p.name)+'/runs')))).flat().filter(r=>r.state==='finished'&&r.metadata.engine==='tiny-transformer');
+        if(token!==generation)return;
+        app.innerHTML=`<div class="compare-heading"><div><div class="eyebrow">Evaluation studio</div><h1>Benchmarks</h1><p class="muted">Queue evaluations. Follow each task. Compare measured results.</p></div><a class="secondary" href="#runs">My runs →</a></div><section class="panel" style="padding:22px"><form id="global-benchmark-form"><div class="fields"><label class="field"><span>Saved model</span><select name="run_id" required>${runs.length?runs.map(r=>`<option value="${r.id}">${esc(r.name)} · ${esc(r.config.model_size||'model')}</option>`).join(''):'<option value="">No finished models yet</option>'}</select></label><label class="field"><span>Suite</span><select name="suite"><option value="tinylm">TinyLM · 6 tasks</option><option value="core">Core · 5 tasks</option><option value="extended">Extended · 8 tasks</option></select></label><label class="field"><span>Evaluation size</span><select name="mode"><option value="smoke">Smoke · 10 examples per subtask</option><option value="full">Full evaluation splits</option></select></label></div><button class="primary" ${!runs.length||!catalog.available?'disabled':''}>Add to queue</button><small class="muted" style="margin-left:12px">FIFO · up to 20 waiting · one worker slot for new evaluations</small></form></section><section id="benchmark-dashboard-queue" style="margin:22px 0"></section><section id="benchmark-history"></section><div class="actions"><button class="secondary" id="eval-prev">← Newer</button><small id="eval-page"></small><button class="secondary" id="eval-next">Older →</button></div>`;
+        let offset=0;
+        async function refresh(){
+          clearTimeout(benchmarkTimer);
+          const [q,h]=await Promise.all([api('/benchmarks/queue'),api('/benchmarks/evaluations?limit=20&offset='+offset)]);if(token!==generation)return;
+          $('#benchmark-dashboard-queue').innerHTML=`<div class="row"><h2 style="font-size:23px">Queue</h2><small>${q.running} running · ${q.waiting} waiting</small></div>${q.items.length?`<div class="panel" style="padding:10px 20px">${q.items.map(e=>`<div class="legend"><div><a href="#run/${e.run_id}">${esc(e.run_name)}</a><small style="display:block">${e.mode} · ${e.tasks.length} tasks</small></div><span>${e.status==='queued'?'Queue #'+e.queue_position:esc(e.current_task||'Starting worker')} · ${Object.keys(e.results).length}/${e.tasks.length} <button class="secondary" style="padding:6px 10px;margin-left:10px" data-eval-cancel="${e.id}" data-eval-run="${e.run_id}">Cancel</button></span></div>`).join('')}</div>`:'<div class="panel" style="padding:20px"><small>No pending evaluations for your models.</small></div>'}`;
+          const pct=v=>Number.isFinite(v)?(v*100).toFixed(1)+'%':'—';
+          $('#benchmark-history').innerHTML=`<h2 style="font-size:23px">Evaluation history</h2><div class="comparison-table"><table><thead><tr><th>Model</th><th>Status</th><th>Mode</th><th>TinyScore</th>${catalog.core.map(k=>`<th class="metric-column">${esc(catalog.tasks.find(t=>t.id===k)?.name||k)}</th>`).join('')}<th>Started</th></tr></thead><tbody>${h.items.map(e=>`<tr><td><a href="#run/${e.run_id}">${esc(e.run_name)}</a></td><td>${esc(e.status)}${e.queue_position?' #'+e.queue_position:''}</td><td>${e.mode}</td><td><b>${pct(e.tiny_score)}</b></td>${catalog.core.map(k=>`<td>${pct(e.results[k]?.accuracy)}</td>`).join('')}<td>${new Date(e.created_at).toLocaleString()}</td></tr>`).join('')||'<tr><td colspan="10">No measurements yet. Add a saved model to the queue above.</td></tr>'}</tbody></table></div><p class="muted" style="font-size:11px">Task columns show accuracy. TinyScore averages chance-normalized scores across the five core tasks. Smoke results use small samples and are separate from full evaluations.</p>`;
+          $('#eval-prev').disabled=offset===0;$('#eval-next').disabled=offset+20>=h.total;$('#eval-page').textContent=h.total?`${offset+1}–${Math.min(offset+20,h.total)} of ${h.total}`:'0 evaluations';
+          document.querySelectorAll('[data-eval-cancel]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await post('/runs/'+b.dataset.evalRun+'/benchmarks/'+b.dataset.evalCancel+'/cancel',{});await refresh();}catch(e){error(e);b.disabled=false;}});
+          benchmarkTimer=setTimeout(()=>refresh().catch(error),5000);
+        }
+        $('#global-benchmark-form').onsubmit=async e=>{e.preventDefault();const f=e.currentTarget,b=f.querySelector('button');b.disabled=true;try{await post('/runs/'+f.elements.run_id.value+'/benchmarks',{suite:f.elements.suite.value,mode:f.elements.mode.value});toast('Evaluation added to the queue.');offset=0;await refresh();}catch(e){error(e);}finally{b.disabled=false;}};
+        $('#eval-prev').onclick=()=>{offset=Math.max(0,offset-20);refresh().catch(error);};$('#eval-next').onclick=()=>{offset+=20;refresh().catch(error);};
+        await refresh();
       }
       async function leaderboard() {
         const sort = document.querySelector("#leader-sort")?.value || "val_loss";
@@ -1463,13 +1621,14 @@
       async function route() {
         $('#dataset-preview')?.close();
         TrackCharts.dispose(app);
-        app.classList.remove("run-view");
+        app.classList.remove("run-view", "compare-view");
         clearTimeout(timer);
         clearTimeout(benchmarkTimer);
         const token = ++generation,
           hash = location.hash.slice(1) || "new";
         $("#nav-new").classList.toggle("active", hash === "new");
         $("#nav-runs").classList.toggle("active", hash === "runs" || hash.startsWith("run/") || hash.startsWith("compare/"));
+        $("#nav-benchmarks").classList.toggle("active", hash === "benchmarks");
         $("#nav-leaderboard").classList.toggle("active", hash === "leaderboard");
         app.innerHTML = '<p class="muted" role="status">Loading workspace…</p>';
         try {
@@ -1480,6 +1639,7 @@
           else if (hash.startsWith("compare/"))
             await compare(hash.slice(8).split(","));
           else if (hash === "runs") await runs();
+          else if (hash === "benchmarks") await benchmarkDashboard();
           else if (hash === "leaderboard") await leaderboard();
           else {
             stage = 1;

@@ -2,8 +2,9 @@ import mimetypes
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
+from uuid import uuid4
 
-from fastapi import Depends, FastAPI, File, HTTPException, Query, UploadFile, Request
+from fastapi import Depends, FastAPI, File, HTTPException, Query, UploadFile, Request, Form
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -14,7 +15,8 @@ from .hf_publish import router as hf_publish_router, recover_uploads
 from .huggingface_auth import router as huggingface_router
 from .gpu_training import router as gpu_router, start_supervisor, stop_supervisor, status as gpu_status
 from .database import create_tables, session_scope
-from .models import Artifact, IngestedEvent, Metric, Project, Run, RunLog
+from .models import Artifact, IngestedEvent, Metric, Project, Run, RunLog, RunArtifactLink, RunAttribute
+from .namespaces import router as namespace_router, set_attribute, append_series, checked_path
 from .schemas import EventBatch, LogInput, Notes
 from .settings import settings
 from .training import router as training_router, start_worker, stop_worker
@@ -45,6 +47,9 @@ app.include_router(huggingface_router)
 app.include_router(accounts_router)
 app.include_router(training_router)
 app.include_router(gpu_router)
+app.include_router(namespace_router)
+from .generation import router as generation_router
+app.include_router(generation_router)
 
 
 @app.middleware("http")
@@ -190,9 +195,12 @@ def ingest(batch: EventBatch, session: Session = Depends(db), user=Depends(requi
         elif event.type == "run.metrics":
             if not session.get(Run, payload["run_id"]):
                 raise HTTPException(409, f"Unknown run {payload['run_id']}")
-            for key, value in payload["metrics"].items():
-                if isinstance(value, (int, float)) and not isinstance(value, bool):
-                    session.add(Metric(run_id=payload["run_id"], key=key, step=payload["step"], timestamp=event.timestamp, value=float(value)))
+            values={key:[[payload["step"],value]] for key,value in payload["metrics"].items() if isinstance(value,(int,float)) and not isinstance(value,bool)}
+            if values:append_series(session,session.get(Run,payload["run_id"]),values,event.timestamp)
+        elif event.type == "run.attribute":
+            item=session.get(Run,payload["run_id"])
+            if not item:raise HTTPException(409,"Unknown run")
+            set_attribute(session,item,payload["path"],payload["value"])
         elif event.type == "run.finish":
             item = session.get(Run, payload["run_id"])
             if item:
@@ -210,15 +218,19 @@ def ingest(batch: EventBatch, session: Session = Depends(db), user=Depends(requi
 
 
 @app.post("/api/runs/{run_id}/artifacts")
-async def upload_artifact(run_id: str, file: UploadFile = File(...), session: Session = Depends(db), user=Depends(require_user)):
+async def upload_artifact(run_id: str, file: UploadFile = File(...), namespace: str | None = Form(None), session: Session = Depends(db), user=Depends(require_user)):
     owned_run(session, run_id, user)
     if owned_run(session, run_id, user).metadata_.get("engine") == "tiny-transformer":
         raise HTTPException(409, "Studio artifacts are managed by the training worker.")
+    if namespace:
+        checked_path(namespace)
+        if session.get(RunAttribute,(run_id,namespace)) or session.scalar(select(Metric.id).where(Metric.run_id==run_id,Metric.key==namespace).limit(1)):
+            raise HTTPException(409,"This path already contains an attribute or series.")
     content = await file.read(20_000_001)
     if len(content) > 20_000_000:
         raise HTTPException(413, "Artifact exceeds 20 MB.")
     safe_name = Path(file.filename or "artifact").name
-    storage_key = f"{run_id}/{safe_name}"
+    storage_key = f"{run_id}/{uuid4()}/{safe_name}"
     if settings.r2_endpoint and settings.r2_bucket:
         import boto3
         client = boto3.client("s3", endpoint_url=settings.r2_endpoint,
@@ -226,11 +238,16 @@ async def upload_artifact(run_id: str, file: UploadFile = File(...), session: Se
         client.put_object(Bucket=settings.r2_bucket, Key=storage_key, Body=content,
                           ContentType=file.content_type or "application/octet-stream")
     else:
-        target = settings.artifact_dir / run_id / safe_name
+        target = settings.artifact_dir / storage_key
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(content)
     artifact = Artifact(run_id=run_id, name=safe_name, storage_key=storage_key, size=len(content))
-    session.add(artifact); session.commit()
+    session.add(artifact); session.flush()
+    if namespace:
+        link=session.get(RunArtifactLink,(run_id,namespace))
+        if link:link.artifact_id=artifact.id
+        else:session.add(RunArtifactLink(run_id=run_id,path=namespace,artifact_id=artifact.id))
+    session.commit()
     return {"id": artifact.id, "name": safe_name, "size": len(content)}
 
 

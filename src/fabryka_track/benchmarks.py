@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import select, func
 
@@ -205,3 +205,12 @@ def queue(user=Depends(require_user),session=Depends(session_scope)):
     return {'items':[serialize(row,session)|{'run_name':session.get(Run,row.run_id).name} for row in rows],
             'running':session.scalar(select(func.count()).select_from(BenchmarkEvaluation).where(BenchmarkEvaluation.status=='running')),
             'waiting':session.scalar(select(func.count()).select_from(BenchmarkEvaluation).where(BenchmarkEvaluation.status=='queued'))}
+
+
+@router.get('/benchmarks/evaluations')
+def evaluations(limit:int=Query(50,ge=1,le=100),offset:int=Query(0,ge=0),user=Depends(require_user),session=Depends(session_scope)):
+    query=select(BenchmarkEvaluation).join(Run).where(Run.owner_id==user.id)
+    rows=session.scalars(query.order_by(BenchmarkEvaluation.created_at.desc(),BenchmarkEvaluation.id).offset(offset).limit(limit))
+    total=session.scalar(select(func.count()).select_from(BenchmarkEvaluation).join(Run).where(Run.owner_id==user.id))
+    return {'items':[serialize(row,session)|{'run_name':session.get(Run,row.run_id).name} for row in rows],
+            'total':total,'offset':offset,'limit':limit}

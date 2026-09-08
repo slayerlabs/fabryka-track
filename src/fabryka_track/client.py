@@ -1,5 +1,6 @@
 import atexit
 import json
+import math
 import os
 import platform
 import queue
@@ -17,6 +18,7 @@ from typing import Any
 import httpx
 
 from .settings import settings
+from .paths import validate_path
 
 
 def _command(*args: str) -> str | None:
@@ -42,6 +44,16 @@ def _metadata() -> dict:
         "cuda": torch_cuda, "pytorch": torch_version, "python": platform.python_version(),
         "command": " ".join(sys.argv), "pid": os.getpid(),
     }
+
+
+class RunField:
+    def __init__(self,run,path):self.run,self.path=run,validate_path(path)
+    def append(self,value:float,step:int|None=None):
+        if isinstance(value,bool) or not isinstance(value,(int,float)) or not math.isfinite(value):
+            raise ValueError('Numeric series require a finite number; use assignment for structured metadata.')
+        self.run.log({self.path:value},step=step)
+    def upload(self,path:str|Path):self.run.artifact(path,namespace=self.path)
+
 
 
 class RunClient:
@@ -78,6 +90,14 @@ class RunClient:
         atexit.register(self._atexit)
         return self
 
+    def __getitem__(self,path):
+        return RunField(self,path)
+
+    def __setitem__(self,path,value):
+        if not self.run_id:raise RuntimeError('No active run')
+        validate_path(path);json.dumps(value,allow_nan=False)
+        self._emit('run.attribute',{'run_id':self.run_id,'path':path,'value':value})
+
     def log(self, metrics: dict[str, float], step: int | None = None):
         if not self.run_id:
             raise RuntimeError("Call run.init() before run.log()")
@@ -105,14 +125,15 @@ class RunClient:
             raise RuntimeError("No active run")
         self._emit("run.log", {"run_id": self.run_id, "message": message, "level": level})
 
-    def artifact(self, path: str | Path):
+    def artifact(self, path: str | Path, namespace: str | None = None):
         if not self.run_id:
             raise RuntimeError("No active run")
+        if namespace:validate_path(namespace)
         source = Path(path)
         target = self.spool_dir / "artifacts" / self.run_id / f"{uuid.uuid4()}-{source.name}"
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, target)
-        self._emit("run.artifact", {"run_id": self.run_id, "name": source.name, "local_path": str(target)})
+        self._emit("run.artifact", {"run_id": self.run_id, "name": source.name, "local_path": str(target), "namespace": namespace})
 
     def _emit(self, event_type: str, payload: dict):
         event_id = str(uuid.uuid4())
@@ -146,7 +167,7 @@ class RunClient:
                     artifact_path = Path(event["payload"]["local_path"])
                     with artifact_path.open("rb") as handle:
                         response = httpx.post(f"{self.api_url}/api/runs/{event['payload']['run_id']}/artifacts",
-                            files={"file": (event["payload"]["name"], handle)}, headers=headers, timeout=30)
+                            files={"file": (event["payload"]["name"], handle)}, data={"namespace":event["payload"]["namespace"]} if event["payload"].get("namespace") else {}, headers=headers, timeout=30)
                 else:
                     response = httpx.post(f"{self.api_url}/api/events", json={"events": [event]}, headers=headers, timeout=3)
                 response.raise_for_status()
