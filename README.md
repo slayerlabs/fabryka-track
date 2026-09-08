@@ -89,8 +89,7 @@ model.eval()
 
 Run this local MVP with **one server process / one Uvicorn worker**. It trains one
 job at a time and allows up to five active or queued jobs. Stop controls cancel a
-job; a server restart marks unfinished local jobs interrupted. There is no resume
-or external GPU scheduler. Existing SDK tracking endpoints remain available.
+job; a server restart marks unfinished local jobs interrupted. CPU runs do not resume; optional GPU dispatch is described under RunPod training. Existing SDK tracking endpoints remain available.
 The app requires an account for private workspace access. Public leaderboard scores are opt-in.
 
 New endpoints: `GET/POST /api/datasets`, `POST /api/training`, and
@@ -119,8 +118,10 @@ longer run. Config and recipe include the planned token count and ratio;
 `training/tokens_seen` records actual processed byte tokens, excluding validation.
 
 This is an extrapolated heuristic, not a measured optimum for tiny byte models.
-Repeated sampling is not fresh data. The separate future GPU corpus budget stays
-planning metadata and does not launch a GPU job or resize the CPU model.
+Repeated sampling is not fresh data. With RunPod selected, model buttons configure the actual GPU architecture. The
+20x mode derives the budget from its exact parameter count; custom token budgets
+are accepted in millions. In CPU mode, the separate GPU calculator remains
+planning metadata and does not resize the CPU model.
 
 ## Preventing overfitting on small sources
 
@@ -274,7 +275,8 @@ and LAMBADA perplexity remain available in the detailed results.
 
 One UI-started evaluation runs at a time in an isolated CPU subprocess. It can be
 cancelled and has a two-hour limit. Restarting the app marks interrupted jobs as
-failed; do not restart with active evaluations. Partial results are retained but
+failed unless a matching external Linux worker is still running; its PID and
+evaluation ID are verified before preserving it. Partial results are retained but
 missing Core tasks do not produce TinyScore. Public run details expose aggregate
 benchmark results, never benchmark documents or private training data.
 
@@ -317,7 +319,8 @@ The import validates every text hash before its transaction and backs up SQLite.
 Production imports must retain the complete pack for provenance and recovery.
 
 The Chinchilla panel calculates D≈20N and C≈6ND in both directions, with 8/16/32/64/
-128M parameter examples. It plans scale; it does not silently change the CPU model
+128M parameter presets. On RunPod it selects the actual GPU model; in CPU mode
+it plans scale without changing the CPU model
 or turn corpus estimates into downloaded training data.
 
 The literary sources were expanded to approximately 12 MB each. Rebuild selected

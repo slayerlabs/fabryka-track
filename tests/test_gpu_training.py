@@ -104,3 +104,20 @@ def test_restart_reconciles_uncertain_create_without_second_pod(client,monkeypat
     monkeypatch.setattr(gpu,'provider',provider);gpu.advance(rid)
     assert all(method=='GET' for method,path in calls)
     with SessionLocal() as s:assert s.get(GPUJob,rid).pod_id=='recovered'
+
+
+def test_dispatch_uses_scoped_bundle_and_selected_image(client,monkeypatch):
+    enable(monkeypatch);rid=launch(client).json()['id'];calls=[]
+    def provider(method,path,**kw):
+        calls.append((method,path,kw))
+        return {'id':'created-pod'}
+    monkeypatch.setattr(gpu,'provider',provider);gpu.advance(rid)
+    payload=calls[0][2]['json'];assert payload['imageName']=='dawidmkrk/dmpod-gpt:1.0'
+    assert payload['gpuCount']==1 and payload['env']['TRACK_RUN_ID']==rid
+    assert 'test-provider-secret' not in str(payload)
+    token=payload['env']['TRACK_RUN_TOKEN'];h={'Authorization':'Bearer '+token}
+    bundle=client.get('/api/runner/'+rid+'/bundle',headers=h)
+    assert hashlib.sha256(bundle.content).hexdigest()==payload['env']['TRACK_BUNDLE_SHA256']
+    with SessionLocal() as s:
+        j=s.get(GPUJob,rid);assert j.pod_id=='created-pod'
+        assert j.token_hash==hashlib.sha256(token.encode()).hexdigest()

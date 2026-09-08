@@ -13,7 +13,7 @@ import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import FileResponse, PlainTextResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from .accounts import require_user
 from .database import SessionLocal, session_scope
@@ -119,7 +119,7 @@ def progress(run_id,body:Progress,job=Depends(job_auth),session=Depends(session_
     if job.state in ('finished','failed','cancelled'):return {'stop':True}
     if body.step>run.config['steps'] or any(k not in METRICS or not math.isfinite(v) for k,v in body.values.items()):
         raise HTTPException(422,'Invalid metric')
-    job.heartbeat_at=now()
+    job.heartbeat_at=now();job.error=None
     if run.state=='queued':run.state='running'
     if job.state in ('provisioning','starting'):job.state='running'
     if body.gpu:run.metadata_={**run.metadata_,'gpu':body.gpu}
@@ -210,7 +210,7 @@ def tick():
         except Exception as exc:
             with SessionLocal() as session:
                 j=session.get(GPUJob,snapshot.run_id)
-                if j:j.error=f'Control plane retry: {type(exc).__name__}';session.commit()
+                if j:j.error=j.error or f'Control plane retry: {type(exc).__name__}';session.commit()
 
 
 def advance(run_id):
@@ -218,8 +218,12 @@ def advance(run_id):
         j=session.get(GPUJob,run_id);r=session.get(Run,run_id)
         if j.cleanup_done:return
         if j.state=='queued' and r.state!='stopping':
-            token=secrets.token_urlsafe(32);j.token_hash=hashlib.sha256(token.encode()).hexdigest()
-            j.state='provisioning';j.heartbeat_at=now();session.commit()
+            token=secrets.token_urlsafe(32)
+            claimed=session.execute(update(GPUJob).where(GPUJob.run_id==run_id,GPUJob.state=='queued').values(
+                token_hash=hashlib.sha256(token.encode()).hexdigest(),state='provisioning',heartbeat_at=now()))
+            session.commit()
+            if claimed.rowcount!=1:return
+            session.refresh(j)
             payload={'name':'fabryka-track-'+run_id,'imageName':settings.runner_image,
                      'computeType':'GPU','cloudType':settings.runpod_cloud_type,'gpuCount':1,
                      'gpuTypeIds':[settings.runpod_gpu_type],'containerDiskInGb':30,'volumeInGb':0,
@@ -234,7 +238,9 @@ def advance(run_id):
                 raise
             # Callback may already have updated the row while provider answered.
             session.expire_all();j=session.get(GPUJob,run_id)
-            j.pod_id=pod['id'];session.commit()
+            j.pod_id=pod['id'];j.error=None
+            r=session.get(Run,run_id);r.metadata_={**r.metadata_,'pod_id':j.pod_id}
+            session.commit()
             return
         if not j.pod_id:
             pods=provider('GET','/pods')

@@ -20,7 +20,8 @@ def test_tiny_score_requires_all_core_and_keeps_negative():
 
 def test_evaluation_owner_visibility_and_cancellation(client,monkeypatch):
     monkeypatch.setattr(benchmarks,'supervise',lambda eid:None)
-    monkeypatch.setattr(benchmarks.importlib.util,'find_spec',lambda n:True)
+    original_find_spec=benchmarks.importlib.util.find_spec
+    monkeypatch.setattr(benchmarks.importlib.util,'find_spec',lambda n:True if n=='lm_eval' else original_find_spec(n))
     run=finished(client,launch(client).json()['id'])
     url='/api/runs/'+run['id']+'/benchmarks'
     r=client.post(url,json={'suite':'extended','mode':'smoke'})
