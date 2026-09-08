@@ -40,7 +40,7 @@ def start_worker():
     stopping.clear()
     with SessionLocal() as session:
         for run in session.scalars(select(Run).where(Run.state.in_(["queued", "running", "stopping"]))):
-            if run.metadata_.get("engine") == "tiny-transformer":
+            if run.metadata_.get("engine") == "tiny-transformer" and run.config.get("compute", "cpu") == "cpu":
                 run.state = "interrupted"
                 run.ended_at = datetime.now(timezone.utc)
                 session.add(RunLog(run_id=run.id, message="Server stopped before training completed. Start a new run to retry."))
@@ -129,8 +129,9 @@ class TrainingInput(BaseModel):
     batch_size: int = Field(default=8, ge=1, le=32)
     learning_rate: float = Field(default=0.003, ge=0.0001, le=0.1, allow_inf_nan=False)
     seed: int = Field(default=42, ge=0, le=2**32-1)
-    model_size: Literal["tiny", "small"] = "tiny"
-    budget_mode: Literal["manual", "chinchilla"] = "manual"
+    model_size: Literal["tiny", "small", "8m", "16m", "32m", "64m", "128m"] = "tiny"
+    compute: Literal["cpu", "runpod"] = "cpu"
+    budget_mode: Literal["manual", "chinchilla", "tokens"] = "manual"
     early_stopping: bool = True
     patience: int = Field(default=20, ge=5, le=100)
     min_delta: float = Field(default=0.01, ge=0, le=1, allow_inf_nan=False)
@@ -149,7 +150,16 @@ class TrainingInput(BaseModel):
 
 @router.post("/training", status_code=201)
 def launch(body: TrainingInput, session=Depends(session_scope), user=Depends(require_user)):
+    from .gpu_training import allowed, enqueue
+    from .models import GPUJob
+    if body.compute == 'runpod':
+        if not allowed(user):raise HTTPException(403, 'RunPod access is not enabled for this account.')
+        if body.model_size in ('tiny','small'):raise HTTPException(422, 'Choose a GPU model from 8M to 128M.')
+    elif body.model_size not in ('tiny','small'):
+        raise HTTPException(422, 'Models 8M and larger require RunPod.')
     with launch_lock:
+        if body.compute == 'runpod' and session.scalar(select(GPUJob).where(GPUJob.cleanup_done==False)):
+            raise HTTPException(409, 'A GPU run is active or awaiting pod cleanup. Wait for it to finish.')
         active = list(session.scalars(select(Run).where(Run.state.in_(["running", "queued", "stopping"]))))
         if sum(r.metadata_.get("engine") == "tiny-transformer" for r in active) >= 5:
             raise HTTPException(409, "Five runs are already active. Wait for one to finish.")
@@ -168,9 +178,10 @@ def launch(body: TrainingInput, session=Depends(session_scope), user=Depends(req
         model_config = MODEL_PRESETS[body.model_size]
         config = {**body.model_dump(exclude={"name", "mix"}), "mix": mix, "model": model_config["label"], "validation_split": 0.1, **model_config["architecture"]}
         config.update(plan_training(body, mix))
-        session.add(Run(id=run_id, owner_id=user.id, project_id=project.id, name=body.name.strip(), state="queued", config=config, metadata_={"engine": "tiny-transformer", "device": "CPU"}))
+        session.add(Run(id=run_id, owner_id=user.id, project_id=project.id, name=body.name.strip(), state="queued", config=config, metadata_={"engine": "tiny-transformer", "device": "RunPod GPU" if body.compute=="runpod" else "CPU"}))
+        if body.compute == "runpod":enqueue(session, session.get(Run, run_id))
         session.commit()
-        executor.submit(train, run_id)
+        if body.compute == "cpu":executor.submit(train, run_id)
         return {"id": run_id, "manifest_url": f"/api/training/{run_id}/manifest"}
 
 
@@ -257,14 +268,17 @@ MODEL_PRESETS = {
     "small": {"label": "Small transformer · 391,008 parameters", "architecture": {"context_length": 64, "layers": 3, "width": 96, "heads": 4}},
 }
 
+from .gpu_training import PRESETS as GPU_PRESETS
+MODEL_PRESETS.update(GPU_PRESETS)
+
 
 def plan_training(body, mix):
     preset = MODEL_PRESETS[body.model_size]
-    parameters = 134_912 if body.model_size == "tiny" else 391_008
+    parameters = preset.get("parameters") or (134_912 if body.model_size == "tiny" else 391_008)
     # Match batch() exactly: the shortest training split limits all sequences.
     length = min(preset["architecture"]["context_length"], min(int(d["bytes"] * .9) - 1 for d in mix))
     target = 20 * parameters
-    steps = math.ceil(target / (body.batch_size * length)) if body.budget_mode == "chinchilla" else body.steps
+    steps = math.ceil(target / (body.batch_size * length)) if body.budget_mode == "chinchilla" else math.ceil(body.target_tokens / (body.batch_size * length)) if body.budget_mode == "tokens" else body.steps
     tokens = steps * body.batch_size * length
     return {"steps": steps, "parameters": parameters, "training_context_length": length,
             "planned_training_tokens": tokens, "tokens_per_parameter": tokens / parameters,
@@ -273,22 +287,7 @@ def plan_training(body, mix):
             "expected_max_source_reuse": max(tokens * d["weight"] / 100 / int(d["bytes"] * .9) for d in mix)}
 
 
-class TinyTransformer(nn.Module):
-    """A causal decoder using a fixed UTF-8 byte vocabulary."""
-    def __init__(self, width=64, layers=2, heads=4, context_length=32):
-        super().__init__()
-        self.tokens = nn.Embedding(256, width)
-        self.positions = nn.Embedding(context_length, width)
-        layer = nn.TransformerEncoderLayer(width, heads, width * 4, dropout=0.0, batch_first=True, norm_first=True)
-        self.blocks = nn.TransformerEncoder(layer, layers, enable_nested_tensor=False)
-        self.norm = nn.LayerNorm(width)
-        self.head = nn.Linear(width, 256, bias=False)
-
-    def forward(self, x):
-        length = x.shape[1]
-        h = self.tokens(x) + self.positions(torch.arange(length))
-        mask = torch.ones(length, length, dtype=torch.bool).triu(1)
-        return self.head(self.norm(self.blocks(h, mask=mask)))
+from .native_model import TinyTransformer
 
 
 def _train(run_id):

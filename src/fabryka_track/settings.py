@@ -13,6 +13,12 @@ class Settings(BaseSettings):
     spool_dir: Path = Path("~/.fabryka-track/spool").expanduser()
     artifact_dir: Path = Path("./artifacts")
     runner_image: str = "dawidmkrk/dmpod-gpt:1.0"
+    runpod_api_key: str | None = None
+    runpod_gpu_type: str = "NVIDIA RTX A5000"
+    runpod_cloud_type: str = "SECURE"
+    runpod_max_seconds: int = 3600
+    runpod_max_hourly_usd: float = 0.50
+    runpod_allowed_users: str = ""
     r2_endpoint: str | None = None
     r2_bucket: str | None = None
     r2_access_key: str | None = None

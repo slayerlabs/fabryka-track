@@ -12,6 +12,7 @@ from .accounts import router as accounts_router, require_user, current_user, own
 from .benchmarks import router as benchmarks_router, recover_evaluations
 from .hf_publish import router as hf_publish_router, recover_uploads
 from .huggingface_auth import router as huggingface_router
+from .gpu_training import router as gpu_router, start_supervisor, stop_supervisor
 from .database import create_tables, session_scope
 from .models import Artifact, IngestedEvent, Metric, Project, Run, RunLog
 from .schemas import EventBatch, LogInput, Notes
@@ -25,9 +26,11 @@ async def lifespan(_app: FastAPI):
     start_worker()
     recover_uploads()
     recover_evaluations()
+    start_supervisor()
     try:
         yield
     finally:
+        stop_supervisor()
         stop_worker()
 
 
@@ -39,6 +42,7 @@ app.include_router(hf_publish_router)
 app.include_router(huggingface_router)
 app.include_router(accounts_router)
 app.include_router(training_router)
+app.include_router(gpu_router)
 
 
 @app.middleware("http")
@@ -112,7 +116,7 @@ def run_detail(run_id: str, session: Session = Depends(db), user=Depends(current
         series.setdefault(key, []).append({"step": step, "timestamp": timestamp, "value": value})
     if not owner:
         cfg = {k: item.config.get(k) for k in ('model', 'model_size', 'steps', 'batch_size', 'learning_rate', 'seed',
-               'context_length', 'layers', 'width', 'heads', 'parameters', 'validation_split', 'early_stopping',
+               'compute', 'context_length', 'layers', 'width', 'heads', 'parameters', 'validation_split', 'early_stopping',
                'budget_mode', 'planned_training_tokens', 'tokens_per_parameter')}
         cfg['mix'] = [{'name': d.get('name') if d.get('example') else 'Private dataset', 'weight': d.get('weight')}
                       for d in item.config.get('mix', [])]

@@ -713,6 +713,7 @@
         }
         box.textContent = e.message;
       }
+      let gpuCapabilities = {runpod_available:false,models:{}};
       let datasets = [],
         draft = {
           weights: {},
@@ -887,24 +888,26 @@
         if ($("#recipe")) $("#recipe").innerHTML = recipe();
         if ($("#data-warning")) $("#data-warning").outerHTML = dataWarning();
       }
+      function modelName(){return draft.compute==='runpod' ? draft.model_size.toUpperCase()+' transformer' : (draft.model_size==='small'?'Small':'Tiny')+' transformer';}
+      function computeName(){return draft.compute==='runpod'?'RunPod GPU':'Local CPU';}
       function trainingPlan() {
         const small = draft.model_size === "small";
-        const parameters = small ? 391008 : 134912;
-        const context = small ? 64 : 32;
+        const parameters = gpuCapabilities.models[draft.model_size]?.parameters || (small ? 391008 : 134912);
+        const context = gpuCapabilities.models[draft.model_size]?.architecture.context_length || (small ? 64 : 32);
         const length = Math.min(context, ...mix().map(d => Math.floor(d.bytes * .9) - 1));
         const target = parameters * 20;
-        const count = draft.budget_mode === "chinchilla" ? Math.ceil(target / (draft.batch_size * length)) : draft.steps;
+        const count = draft.budget_mode === "chinchilla" ? Math.ceil(target / (draft.batch_size * length)) : draft.budget_mode === "tokens" ? Math.ceil(draft.target_tokens/(draft.batch_size*length)) : draft.steps;
         return {parameters, context, length, target, steps: count, tokens: count * draft.batch_size * length, available: mix().reduce((n, d) => n + Math.floor(d.bytes * .9), 0), reuse: Math.max(0, ...mix().map(d => count * draft.batch_size * length * d.weight / 100 / Math.floor(d.bytes * .9)))};
       }
       function refreshTrainingPlan() {
         const p = trainingPlan();
         const f = $("#setup");
         if (f) {
-          f.elements.steps.disabled = draft.budget_mode === "chinchilla";
+          f.elements.steps.disabled = draft.budget_mode !== "manual";
           f.elements.steps.value = p.steps;
           $("#budget-summary").textContent = `Up to ${fmt(p.tokens, 0)} byte tokens in ${fmt(p.steps, 0)} updates. Available training text: ${fmt(p.available, 0)} bytes. Most reused source: approximately ${fmt(p.reuse, 1)}× at the step limit. Early stopping can finish sooner.`;
-          $(".choice h3").textContent = `${draft.model_size === "small" ? "Small" : "Tiny"} transformer · CPU`;
-          $(".choice p").textContent = `${fmt(p.parameters, 0)} parameters, ${draft.model_size === "small" ? 3 : 2} layers, ${p.context}-byte context. Initialized from scratch.`;
+          $(".choice h3").textContent = `${modelName()} · ${computeName()}`;
+          $(".choice p").textContent = `${fmt(p.parameters, 0)} parameters, ${gpuCapabilities.models[draft.model_size]?.architecture.layers || (draft.model_size === "small" ? 3 : 2)} layers, ${p.context}-byte context. Initialized from scratch.`;
         }
         $("#recipe").innerHTML = recipe();
         if ($("#data-warning")) $("#data-warning").outerHTML = dataWarning();
@@ -927,13 +930,19 @@
           )
           .join(
             "",
-          )}<div class="divider"></div><div class="legend"><span>Future GPU corpus budget</span><b>${fmt(draft.target_tokens, 0)} tokens</b></div><div class="legend"><span>Model</span><b>${draft.model_size === "small" ? "Small" : "Tiny"} transformer</b></div><div class="legend"><span>Maximum training byte tokens</span><b>${fmt(trainingPlan().tokens, 0)}</b></div><div class="legend"><span>Planned byte tokens / parameter</span><b>${(trainingPlan().tokens / trainingPlan().parameters).toFixed(2)}</b></div><div class="legend"><span>Compute</span><b>Local CPU</b></div><div class="legend"><span>Validation</span><b>10% held out</b></div><p class="muted" style="font-size:12px;margin:15px 0 0">Percentages control how often each source is sampled. Small datasets are sampled repeatedly.</p>`;
+          )}<div class="divider"></div><div class="legend"><span>${draft.compute==='runpod'?'GPU training budget':'GPU scale calculator'}</span><b>${fmt((draft.compute==='runpod'?trainingPlan().tokens:draft.target_tokens)/1e6,2)}M tokens</b></div><div class="legend"><span>Model</span><b>${modelName()}</b></div><div class="legend"><span>Maximum training byte tokens</span><b>${fmt(trainingPlan().tokens, 0)}</b></div><div class="legend"><span>Planned byte tokens / parameter</span><b>${(trainingPlan().tokens / trainingPlan().parameters).toFixed(2)}</b></div><div class="legend"><span>Compute</span><b>${computeName()}</b></div><div class="legend"><span>Validation</span><b>10% held out</b></div><p class="muted" style="font-size:12px;margin:15px 0 0">Percentages control how often each source is sampled. Small datasets are sampled repeatedly.</p>`;
       }
       function steps() {
         return `<div class="steps studio-steps" aria-label="Training setup">${["Mix datasets", "Set up training", "Review & start"].map((s, i) => `<button class="step ${stage === i + 1 ? "active" : ""}" data-stage="${i + 1}" ${i + 1 > stage ? "disabled" : ""}><b>${i + 1}</b>${s}</button>`).join("")}</div>`;
       }
       async function studio() {
-        datasets = await api("/datasets");
+        [datasets,gpuCapabilities] = await Promise.all([api("/datasets"),api("/training/capabilities")]);
+        if (!draft.compute) {
+          draft.compute=gpuCapabilities.runpod_available?'runpod':'cpu';
+          if(draft.compute==='runpod'){draft.model_size='8m';draft.learning_rate=.0003;draft.budget_mode='chinchilla';}
+        }
+        if(draft.compute==='runpod' && !gpuCapabilities.runpod_available){draft.compute='cpu';draft.model_size='tiny';}
+        save();
         if(datasets.some(d=>corpusOf(d))) datasets=datasets.filter(d=>!d.example || corpusOf(d));
         // Keep assigned points when a corpus is expanded to a new immutable ID.
         for (const d of datasets) {
@@ -970,7 +979,7 @@
           "seed",
           "model_size",
         ])
-          if (key !== "steps" || draft.budget_mode !== "chinchilla") draft[key] =
+          if (key !== "steps" || draft.budget_mode === "manual") draft[key] =
             key === "name" || key === "model_size"
               ? f.elements[key].value.trim()
               : Number(f.elements[key].value);
@@ -982,7 +991,8 @@
         return `<div class="dataset compact-dataset" data-empty="${!value}"><div class="dataset-heading"><div class="dataset-cover" style="--book-color:${datasetColor(d)}" aria-hidden="true"><b>${esc(d.name.slice(0,2).toUpperCase())}</b><small>DATASET</small></div><div class="dataset-title"><h3>${esc(d.name)}</h3><small>${esc(datasetSummary(d))}</small><button type="button" class="preview-link" data-preview-dataset="${d.id}">Zajrzyj do książki →</button></div></div><div class="dataset-controls"><button type="button" class="point-control" data-remove-point="${d.id}" aria-label="Odejmij punkt: ${esc(d.name)}">−</button><input id="slider-${d.id}" type="range" min="0" max="20" step="1" value="${value/5}" aria-label="${esc(d.name)} points" data-slider="${d.id}" style="accent-color:${datasetColor(d)}"><button type="button" class="point-control" data-add-point="${d.id}" aria-label="Dodaj punkt: ${esc(d.name)}">+</button><output class="percent" data-value="${d.id}" for="slider-${d.id}">${value/5} pkt · ${value}%</output></div></div>`;
       }
       function renderStudio() {
-        app.innerHTML = `<div class="intro studio-intro"><div class="eyebrow">Training studio</div><h1>A model starts with a mix.</h1><p class="muted">Choose your data, set up a small training run, and see what changes.</p></div>${steps()}<div id="error-slot"></div><div class="layout"><section class="panel" id="workspace"></section><div class="studio-sidebar"><div id="studio-next"></div><aside class="panel aside" id="recipe">${recipe()}</aside><details class="panel" id="chinchilla-fold" hidden><summary id="chinchilla-summary">Chinchilla scaling laws</summary><div id="chinchilla-slot"></div></details></div></div>`;
+        app.innerHTML = `<div class="intro studio-intro"><div class="eyebrow">Training studio</div><h1>A model starts with a mix.</h1><p class="muted">Choose your data, set up a small training run, and see what changes.</p></div>${steps()}<div id="error-slot"></div><div class="layout"><section class="panel" id="workspace"></section><div class="studio-sidebar"><label class="field"><span>Compute</span><select id="compute-select"><option value="runpod" ${draft.compute==='runpod'?'selected':''} ${!gpuCapabilities.runpod_available?'disabled':''}>RunPod GPU · ${esc(gpuCapabilities.gpu||'GPU')}</option><option value="cpu" ${draft.compute!=='runpod'?'selected':''}>Local CPU · tiny workflow test</option></select></label><div id="studio-next"></div><aside class="panel aside" id="recipe">${recipe()}</aside><details class="panel" id="chinchilla-fold" hidden><summary id="chinchilla-summary">Chinchilla scaling laws</summary><div id="chinchilla-slot"></div></details></div></div>`;
+        $('#compute-select').onchange=e=>{draft.compute=e.target.value;draft.model_size=draft.compute==='runpod'?'8m':'tiny';draft.learning_rate=draft.compute==='runpod'?.0003:.003;draft.budget_mode='chinchilla';save();renderStudio();};
         const w = $("#workspace");
         if (stage === 1) {
           w.innerHTML = `<div class="row"><div><h2 style="font-size:20px;margin-bottom:6px">Twoja biblioteka</h2></div></div><div>${datasets.map(datasetRow).join("")}</div><div class="upload"><div><b style="font-size:13px">Bring your own data</b><p class="muted">UTF-8 plain text · 100+ characters · up to 2 MB</p></div><button class="secondary" id="upload-button">+ Add text file</button><input type="file" id="upload" accept=".txt,text/plain" hidden></div><div class="actions"><small>Próbki rzeczywistych korpusów do treningu CPU.</small><button class="primary" id="next">Training settings →</button></div>`;
@@ -1019,17 +1029,21 @@
             document.querySelectorAll('[data-character]').forEach(button => button.onclick = () => applyCharacter(button.dataset.character));
             $('#reset-points').onclick=()=>{draft.weights=Object.fromEntries(datasets.map(d=>[d.id,0]));draft.character=null;save();updateMix();};
             updateMix();
-            const showChinchilla=()=>{const d=draft.target_tokens,n=d/20;$('#chinchilla-summary').textContent=`Chinchilla · ${fmt(n/1e6,1)}M → ${fmt(d/1e6,0)}M tokenów`;$('#chinchilla-parameters').value=n/1e6;$('#target-tokens').value=d/1e6;$('#chinchilla-equation').textContent=`${fmt(n/1e6,3)}M parametrów × 20 ≈ ${fmt(d/1e6,1)}M tokenów`;$('#chinchilla-compute').textContent=`Szacowane obliczenia: C ≈ 6ND ≈ ${(6*n*d).toExponential(2)} FLOPs. Zwiększenie skali 2× → koszt około 4×.`;document.querySelectorAll('[data-chinchilla-size]').forEach(b=>b.setAttribute('aria-pressed',String(+b.dataset.chinchillaSize===n/1e6)));save();updateMix();};
-            $('#target-tokens').onchange=event=>{draft.target_tokens=Math.max(100000,Math.min(1e10,Math.round(Number(event.target.value)*1e6)||100000));showChinchilla();};
+            const showChinchilla=()=>{const activeGPU=draft.compute==='runpod';const d=activeGPU?(draft.budget_mode==='chinchilla'?trainingPlan().parameters*20:draft.target_tokens):draft.target_tokens,n=activeGPU?trainingPlan().parameters:d/20;$('#chinchilla-summary').textContent=`Chinchilla · ${fmt(n/1e6,1)}M → ${fmt(d/1e6,0)}M tokenów`;$('#chinchilla-parameters').value=n/1e6;$('#target-tokens').value=d/1e6;$('#chinchilla-equation').textContent=`${fmt(n/1e6,3)}M parametrów × ${fmt(d/n,2)} ≈ ${fmt(d/1e6,1)}M tokenów`;$('#chinchilla-compute').textContent=`Szacowane obliczenia: C ≈ 6ND ≈ ${(6*n*d).toExponential(2)} FLOPs. Zwiększenie skali 2× → koszt około 4×.`;document.querySelectorAll('[data-chinchilla-size]').forEach(b=>b.setAttribute('aria-pressed',String(activeGPU?draft.model_size===b.dataset.chinchillaSize+'m':+b.dataset.chinchillaSize===n/1e6)));save();updateMix();};
+            $('#target-tokens').onchange=event=>{if(draft.compute==='runpod')draft.budget_mode='tokens';draft.target_tokens=Math.max(100000,Math.min(1e10,Math.round(Number(event.target.value)*1e6)||100000));showChinchilla();};
             $('#chinchilla-parameters').onchange=event=>{draft.target_tokens=Math.max(100000,Math.min(1e10,(Number(event.target.value)||.005)*20000000));showChinchilla();};
-            document.querySelectorAll('[data-chinchilla-size]').forEach(b=>b.onclick=()=>{draft.target_tokens=+b.dataset.chinchillaSize*20000000;showChinchilla();});
+            document.querySelectorAll('[data-chinchilla-size]').forEach(b=>b.onclick=()=>{draft.target_tokens=+b.dataset.chinchillaSize*20000000;if(draft.compute==='runpod'){draft.model_size=b.dataset.chinchillaSize+'m';draft.budget_mode='chinchilla';}showChinchilla();});
             $('#chinchilla-slot').append(document.querySelector('[aria-labelledby="chinchilla-title"]'));
             $('#chinchilla-fold').hidden=false;
             $('#studio-next').append($('#next'));
+            if(draft.compute==='runpod'){
+              $('#chinchilla-parameters').readOnly=true;
+              document.querySelector('[aria-labelledby="chinchilla-title"] small').textContent='Wybór rozmiaru zmienia rzeczywisty model GPU i ustawia budżet 20×. Tokenizer: bajty UTF-8. Ręczna zmiana milionów tokenów ustawia własny budżet. Early stopping i limit czasu mogą zakończyć run wcześniej.';
+            }
             showChinchilla();
           }
         } else if (stage === 2) {
-          w.innerHTML = `<h2>Keep the first run simple.</h2><div class="choice"><h3>Tiny transformer <span class="badge">CPU ready</span></h3><p>A two-layer causal language model with a 32-byte context. 134,912 trainable parameters, initialized from scratch.</p></div><form id="setup"><label class="field"><span>Run name</span><input name="name" required maxlength="120" placeholder="e.g. Polish-heavy baseline" value="${esc(draft.name)}"></label><div class="fields"><label class="field"><span>Maximum training steps</span><input name="steps" type="number" min="10" max="2000" required value="${draft.steps}"><small>Early stopping is on: stop after 20 validation checks without an improvement of at least 0.01. The step count is an upper limit.</small></label><label class="field"><span>Batch size</span><select name="batch_size">${[1, 2, 4, 8, 16, 32].map((n) => `<option ${draft.batch_size === n ? "selected" : ""}>${n}</option>`).join("")}</select><small>Each sequence uses the selected model’s context, shortened for small datasets.</small></label></div><details><summary>Advanced settings</summary><div class="fields"><label class="field"><span>Learning rate</span><input name="learning_rate" type="number" min="0.0001" max="0.1" step="0.0001" required value="${draft.learning_rate}"><small>How much each update changes the model.</small></label><label class="field"><span>Random seed</span><input name="seed" type="number" min="0" max="4294967295" required value="${draft.seed}"><small>Use the same seed to repeat an experiment.</small></label></div></details></form><div class="notice">Runs use this server’s CPU. Training and validation loss are measured during training; a model file is saved when it finishes.</div><div class="actions"><button class="secondary" id="previous">← Dataset mix</button><button class="primary" id="next">Review run →</button></div>`;
+          w.innerHTML = `<h2>Set up your training run.</h2><div class="choice"><h3>Tiny transformer <span class="badge">CPU ready</span></h3><p>A two-layer causal language model with a 32-byte context. 134,912 trainable parameters, initialized from scratch.</p></div><form id="setup"><label class="field"><span>Run name</span><input name="name" required maxlength="120" placeholder="e.g. Polish-heavy baseline" value="${esc(draft.name)}"></label><div class="fields"><label class="field"><span>Maximum training steps</span><input name="steps" type="number" min="10" max="2000" required value="${draft.steps}"><small>Early stopping is on: stop after 20 validation checks without an improvement of at least 0.01. The step count is an upper limit.</small></label><label class="field"><span>Batch size</span><select name="batch_size">${[1, 2, 4, 8, 16, 32].map((n) => `<option ${draft.batch_size === n ? "selected" : ""}>${n}</option>`).join("")}</select><small>Each sequence uses the selected model’s context, shortened for small datasets.</small></label></div><details><summary>Advanced settings</summary><div class="fields"><label class="field"><span>Learning rate</span><input name="learning_rate" type="number" min="0.0001" max="0.1" step="0.0001" required value="${draft.learning_rate}"><small>How much each update changes the model.</small></label><label class="field"><span>Random seed</span><input name="seed" type="number" min="0" max="4294967295" required value="${draft.seed}"><small>Use the same seed to repeat an experiment.</small></label></div></details></form><div class="notice">${draft.compute==='runpod'?`Runs use a RunPod GPU. Maximum runtime: ${Math.round(gpuCapabilities.max_seconds/60)} minutes; hourly price cap: $${gpuCapabilities.max_hourly_usd}. Checkpoints and logs are synchronized before the pod is terminated.`:'Runs use this server’s CPU. A model file is saved when training finishes.'}</div><div class="actions"><button class="secondary" id="previous">← Dataset mix</button><button class="primary" id="next">Review run →</button></div>`;
         } else {
           w.innerHTML = `<div class="eyebrow">Ready when you are</div><h2>${esc(draft.name)}</h2><p class="muted">Your data mix and settings will be saved with this run.</p>${[
             ["Maximum steps", fmt(trainingPlan().steps, 0)],
@@ -1058,7 +1072,7 @@
             try {
               const r = await post("/training", {
                 name: draft.name,
-                steps: draft.budget_mode === "chinchilla" ? 100 : draft.steps,
+                steps: draft.budget_mode !== "manual" ? 100 : draft.steps,
                 budget_mode: draft.budget_mode,
                 early_stopping: true,
                 patience: 20,
@@ -1067,6 +1081,7 @@
                 learning_rate: draft.learning_rate,
                 seed: draft.seed,
                 model_size: draft.model_size,
+                compute: draft.compute || "cpu",
                 target_tokens: draft.target_tokens,
                 mix: mix().map((d) => ({ dataset_id: d.id, weight: d.weight })),
               });
@@ -1079,9 +1094,9 @@
           };
         }
         if (stage === 2 && $("#setup")) {
-          $("#setup").insertAdjacentHTML("afterbegin", `<label class="field"><span>Training budget</span><select id="budget-mode"><option value="chinchilla" ${draft.budget_mode === "chinchilla" ? "selected" : ""}>Chinchilla upper limit · 20 tokens per parameter</option><option value="manual" ${draft.budget_mode === "manual" ? "selected" : ""}>Validation-guided · manual step limit</option></select><small id="budget-summary"></small></label><div class="notice">Early stopping is enabled in both modes. Validation is checked every update for the first 100 updates, then every 10. Downloaded model.pt contains the checkpoint with the lowest validation loss. Chinchilla is an optional upper limit, not a requirement to keep training.</div>`);
+          $("#setup").insertAdjacentHTML("afterbegin", `<label class="field"><span>Training budget</span><select id="budget-mode"><option value="chinchilla" ${draft.budget_mode === "chinchilla" ? "selected" : ""}>Chinchilla upper limit · 20 tokens per parameter</option><option value="tokens" ${draft.budget_mode === "tokens" ? "selected" : ""}>Custom token budget · ${fmt(draft.target_tokens/1e6,2)}M</option><option value="manual" ${draft.budget_mode === "manual" ? "selected" : ""}>Validation-guided · manual step limit</option></select><small id="budget-summary"></small></label><div class="notice">Early stopping is enabled in both modes. Validation is checked periodically during training. Downloaded model.pt contains the checkpoint with the lowest validation loss. Chinchilla is an optional upper limit, not a requirement to keep training.</div>`);
           $("#budget-mode").onchange = event => { draft.budget_mode = event.target.value; save(); refreshTrainingPlan(); };
-          $("#setup").insertAdjacentHTML("afterbegin", `<label class="field"><span>Model size</span><select name="model_size"><option value="tiny" ${draft.model_size === "tiny" ? "selected" : ""}>Tiny · 134,912 parameters</option><option value="small" ${draft.model_size === "small" ? "selected" : ""}>Small · 391,008 parameters</option></select><small>Both train from scratch on this server CPU. Small has more capacity but takes longer.</small></label>`);
+          $("#setup").insertAdjacentHTML("afterbegin", `<label class="field"><span>Model size</span><select name="model_size">${draft.compute==='runpod'?Object.entries(gpuCapabilities.models).map(([id,m])=>`<option value="${id}" ${draft.model_size===id?'selected':''}>${esc(m.label)}</option>`).join(''):`<option value="tiny" ${draft.model_size === "tiny" ? "selected" : ""}>Tiny · 134,912 parameters</option><option value="small" ${draft.model_size === "small" ? "selected" : ""}>Small · 391,008 parameters</option>`}</select><small>All models train from scratch on the selected compute. GPU models use a 512-byte context.</small></label>`);
         }
         if (stage === 2) w.insertAdjacentHTML("afterbegin", dataWarning());
         if (stage === 2) refreshTrainingPlan();
@@ -1117,7 +1132,7 @@
               "seed",
               "model_size",
             ])
-              if (k !== "steps" || draft.budget_mode !== "chinchilla") draft[k] =
+              if (k !== "steps" || draft.budget_mode === "manual") draft[k] =
                 k === "name" || k === "model_size"
                   ? f.elements[k].value
                   : Number(f.elements[k].value);
@@ -1192,7 +1207,7 @@
         const readOnly = !!r.read_only;
         const local = r.metadata.engine === "tiny-transformer";
         const modelLabel = r.config.model || "Tiny transformer · 134,912 parameters";
-        app.innerHTML = `<a href="${readOnly ? "#leaderboard" : "#runs"}" class="muted" style="display:inline-block;margin-bottom:25px;text-decoration:none">← ${readOnly ? "Leaderboard" : "My runs"}</a><div class="intro row"><div><div class="eyebrow">${local ? "Training results" : "Tracked experiment"}</div><h1>${esc(r.name)}</h1><p class="muted">${local ? esc(modelLabel) + " · Local CPU · " : ""}${new Date(r.started_at).toLocaleString()}</p></div><span class="badge ${esc(r.state)}" id="run-state">${esc(r.state)}</span></div><div id="live"></div><div class="actions"><div id="run-actions"></div><a class="secondary" href="#new">New training run →</a></div><details><summary>Dataset mix & settings</summary><div class="panel"><pre>${esc(JSON.stringify(r.config, null, 2))}</pre></div></details><details id="private-notes"><summary>Run notes</summary><label class="field"><span>What are you testing?</span><textarea id="note">${esc(r.note)}</textarea></label><label class="field"><span>Conclusion</span><textarea id="conclusion">${esc(r.conclusion)}</textarea></label><button class="secondary" id="save-note">Save notes</button></details><details id="private-logs"><summary>Training log</summary><div class="panel"><pre id="logs"></pre></div></details>`;
+        app.innerHTML = `<a href="${readOnly ? "#leaderboard" : "#runs"}" class="muted" style="display:inline-block;margin-bottom:25px;text-decoration:none">← ${readOnly ? "Leaderboard" : "My runs"}</a><div class="intro row"><div><div class="eyebrow">${local ? "Training results" : "Tracked experiment"}</div><h1>${esc(r.name)}</h1><p class="muted">${local ? esc(modelLabel) + (r.config.compute==='runpod'?" · RunPod GPU · ":" · Local CPU · ") : ""}${new Date(r.started_at).toLocaleString()}</p></div><span class="badge ${esc(r.state)}" id="run-state">${esc(r.state)}</span></div><div id="live"></div><div class="actions"><div id="run-actions"></div><a class="secondary" href="#new">New training run →</a></div><details><summary>Dataset mix & settings</summary><div class="panel"><pre>${esc(JSON.stringify(r.config, null, 2))}</pre></div></details><details id="private-notes"><summary>Run notes</summary><label class="field"><span>What are you testing?</span><textarea id="note">${esc(r.note)}</textarea></label><label class="field"><span>Conclusion</span><textarea id="conclusion">${esc(r.conclusion)}</textarea></label><button class="secondary" id="save-note">Save notes</button></details><details id="private-logs"><summary>Training log</summary><div class="panel"><pre id="logs"></pre></div></details>`;
         if (readOnly) {
           $("#private-notes").remove(); $("#private-logs").remove();
           $("#run-actions").insertAdjacentHTML('afterend', '<p class="muted">Public run details · read only. Uploaded files and notes remain private.</p>');

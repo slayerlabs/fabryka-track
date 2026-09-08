@@ -102,6 +102,21 @@ class Dataset(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
 
+class GPUJob(Base):
+    __tablename__ = "gpu_jobs"
+    run_id: Mapped[str] = mapped_column(String(36), ForeignKey("runs.id"), primary_key=True)
+    pod_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    token_hash: Mapped[str] = mapped_column(String(64))
+    state: Mapped[str] = mapped_column(String(32), default="queued")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    heartbeat_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    deadline: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    cleanup_done: Mapped[bool] = mapped_column(default=False)
+    files: Mapped[dict] = mapped_column(JSON, default=dict)
+    bundle_sha256: Mapped[str] = mapped_column(String(64))
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
 class HuggingFaceIdentity(Base):
     __tablename__ = "huggingface_identities"
     subject: Mapped[str] = mapped_column(String(255), primary_key=True)

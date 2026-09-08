@@ -7,6 +7,7 @@ import subprocess
 import sys
 import threading
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -109,6 +110,7 @@ def supervise(evaluation_id):
             process=subprocess.Popen([sys.executable,'-m','fabryka_track.benchmark_worker',evaluation_id],env=env,
                                      stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
             processes[evaluation_id]=process
+            row.provenance={**row.provenance,"worker_pid":process.pid};db.commit()
         try:process.wait(timeout=7200)
         except subprocess.TimeoutExpired:
             process.kill();process.wait()
@@ -124,6 +126,12 @@ def supervise(evaluation_id):
 def recover_evaluations():
     with SessionLocal() as db:
         for row in db.scalars(select(BenchmarkEvaluation).where(BenchmarkEvaluation.status.in_(['queued','running']))):
+            # External systemd workers can outlive a web deployment. Verify the
+            # PID's command and evaluation ID, not just PID existence.
+            pid=row.provenance.get('worker_pid')
+            try:cmd=Path(f'/proc/{int(pid)}/cmdline').read_bytes().split(b'\0')
+            except (OSError,TypeError,ValueError):cmd=[]
+            if b'fabryka_track.benchmark_worker' in cmd and row.id.encode() in cmd:continue
             row.status='failed';row.error='Server restarted during evaluation. Start a new evaluation.'
             row.ended_at=datetime.now(timezone.utc)
         db.commit()

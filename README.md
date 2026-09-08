@@ -327,3 +327,36 @@ old runs, and the studio migrates their assigned points to the expanded sources.
 Existing browser drafts migrate once to the 20x training budget. Later explicit
 manual-budget choices persist. The scaling calculator accepts training tokens in
 millions while storing full integer token counts in the run payload.
+
+## RunPod training
+
+The studio can dispatch 8M/16M/32M/64M/128M byte-level causal transformers to
+`dawidmkrk/dmpod-gpt:1.0`. The Track worker uses CUDA/PyTorch in this DMPod
+environment and retains the native checkpoint format; it does not invoke the
+separate DMPod nanoGPT CLI. Exact parameter counts are exposed by
+`GET /api/training/capabilities` and verified by the GPU worker.
+
+Set `FABRYKA_RUNPOD_API_KEY` and a comma-separated `FABRYKA_RUNPOD_ALLOWED_USERS`
+on the server. GPU access defaults to disabled. Allowed accounts default to GPU
+in the studio; existing explicit compute choices persist. CPU remains selectable
+for Tiny/Small workflow tests. Larger presets are rejected on CPU.
+
+The server permits one active GPU job globally. GPU type, cloud, hourly price cap
+and maximum wall time are operator settings; the runtime includes provisioning
+and synchronization. Early stopping or the time cap can end before the requested
+token budget. Byte tokens are not subword tokens. The selected corpus can repeat;
+the reuse estimate remains visible before launch.
+
+Run-scoped credentials authorize only that run's recipe, selected source content,
+metrics, and bounded artifact uploads. The RunPod key is never sent to the pod or
+browser. A pinned worker bundle and every source/checkpoint have SHA-256 hashes.
+`gpu_jobs` persists pod identity, heartbeat, deadline and cleanup state. An
+uncertain create is reconciled by deterministic pod name rather than retried.
+After verified uploads, the controller deletes the pod before marking the run
+finished. Failed deletions retry across application restarts. An API outage can
+delay deletion; pending jobs remain visible and block another deployment.
+
+A failed or cancelled worker uploads available diagnostics and any saved model.
+A startup failure may produce only the controller's failure log. Interrupted GPU
+training cannot resume from optimizer state; checkpoints are selected by best
+validation loss, with actual completed steps and tokens recorded.
