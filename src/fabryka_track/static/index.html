@@ -802,6 +802,34 @@
           t.className = "";
         }, 3500);
       }
+      // The product UI is English-first; keep source and dataset proper names intact.
+      const englishUi = {
+        "Charakter datasetu":"Dataset character", "Od czego zaczynamy?":"Where should we start?",
+        "Poeta / literat":"Poet / writer", "Prawnik / urzędnik":"Lawyer / civil servant",
+        "Człowiek internetu":"Internet person", "Zbalansowany (jak korpus)":"Balanced (corpus-like)",
+        "Rozdaj od zera":"Reset points", "20 książek: 1 książka to 1 punkt mieszanki":"20 books: 1 book = 1 mix point",
+        "Zajrzyj do książki →":"Open dataset →", "Początek":"Beginning", "Środek":"Middle", "Koniec":"End",
+        "Szukaj w tekście":"Search the text", "Wpisz słowo lub fragment":"Enter a word or phrase",
+        "Znajdź następny":"Find next", "← Poprzedni fragment":"← Previous excerpt", "Następny fragment →":"Next excerpt →",
+        "Źródło:":"Source:", "Wersja":"Revision", "dokumentów w próbce":"documents in sample",
+        "Próbka rzeczywistego korpusu":"Real corpus sample", "Archiwalny tekst testowy":"Archived test text",
+        "Twój prywatny plik":"Your private file", "Próbki rzeczywistych korpusów do treningu CPU.":"Real corpus samples for CPU training.",
+        "Profile rozdzielają punkty między dostępne próbki rzeczywistych korpusów.":"Profiles distribute points across available real corpus samples.",
+        "Każdą książkę możesz otworzyć, sprawdzić tekst i źródło.":"Open any dataset to inspect its text and source.",
+        "Rozmiary dotyczą pobranej próbki, nie całego korpusu.":"Sizes refer to the downloaded sample, not the full corpus.",
+        "Ile danych potrzebuje model?":"How much data does the model need?",
+        "Orientacyjny punkt startowy":"A useful starting point", "tokenów":"tokens", "Szacowane obliczenia":"Estimated compute",
+        "Zwiększenie skali 2× → koszt około 4×.":"2× the scale → about 4× the compute.",
+        "To plan skali, nie zmiana uruchamianego modelu.":"This plans scale; it does not change the model being launched.",
+        "Ręczna zmiana milionów tokenów ustawia własny budżet.":"Changing millions of tokens sets a custom budget.",
+      };
+      function translateUi(root=document) {
+        const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);let node;
+        while(node=walker.nextNode()) for(const [from,to] of Object.entries(englishUi)) if(node.nodeValue.includes(from)) node.nodeValue=node.nodeValue.split(from).join(to);
+        root.querySelectorAll?.("[placeholder],[aria-label]").forEach(el=>["placeholder","aria-label"].forEach(attr=>{let v=el.getAttribute(attr),old=v;for(const [from,to] of Object.entries(englishUi))if(v?.includes(from))v=v.split(from).join(to);if(v!==old)el.setAttribute(attr,v);}));
+      }
+      const uiObserver=new MutationObserver(()=>translateUi(app));
+      uiObserver.observe(app,{subtree:true,childList:true,characterData:true});
       function error(e) {
         let box = $("#error");
         if (!box) {
@@ -1536,7 +1564,7 @@
             const active=history.find(e=>['queued','running'].includes(e.status));
             const pct=n=>Number.isFinite(n)?(100*n).toFixed(1)+'%':'—';
             $('#benchmarks').innerHTML=`<h2>TinyLM benchmarks</h2><p class="muted">English · zero-shot · saved model checkpoint. Short-context byte models may score near chance. Smoke tests check the evaluation pipeline: with 10 examples, one answer moves accuracy by 10 percentage points. Use full evaluations to compare quality.</p><p>TinyScore = mean (accuracy − random) / (1 − random) across SciQ, ARC-Easy, PIQA, HellaSwag and BLiMP. Negative values are retained. LAMBADA is reported separately: it has no fixed multiple-choice random baseline.</p>${!readOnly && local && r.state==='finished' ? `<form id="benchmark-form"><div class="fields"><label class="field"><span>Suite</span><select name="suite"><option value="tinylm">TinyLM · 6 tasks</option><option value="core">Core · 5 tasks</option><option value="extended">Extended · all 8 tasks</option></select></label><label class="field"><span>Evaluation size</span><select name="mode"><option value="smoke">Smoke test · 10 examples per subtask</option><option value="full">Full evaluation splits</option></select></label></div><button class="primary" ${active || !catalog.available ? 'disabled' : ''}>Run missing benchmarks</button>${!catalog.available?'<p>Benchmark worker unavailable.</p>':''}</form>`:''}${history.length ? history.map(e=>`<div style="margin-top:24px;border-top:1px solid var(--line);padding-top:20px"><div class="row"><h3>${e.mode==='smoke'?'Smoke test — not a full benchmark':'Full benchmark'} · ${esc(e.status)}${e.queue_position?' · queue #'+e.queue_position:''}</h3>${!readOnly && ['queued','running'].includes(e.status)?`<button class="secondary" data-cancel-eval="${e.id}">Cancel</button>`:''}</div><p class="muted">${new Date(e.created_at).toLocaleString()}${e.current_task?' · Evaluating '+esc(e.current_task):''} · checkpoint step ${e.provenance.checkpoint_step??'—'} · ${fmt(e.provenance.training_tokens,0)} training byte tokens</p>${e.error?`<p class="error">${esc(e.error)}</p>`:''}<p><b>${e.mode==='smoke'?'Smoke TinyScore':'TinyScore'}: ${pct(e.tiny_score)}</b>${e.tiny_score===null?' · Waiting for all five core tasks.':''}</p><div style="overflow-x:auto"><table><thead><tr><th>Benchmark</th><th>Accuracy</th><th>Random</th><th>Normalized</th><th>Examples</th></tr></thead><tbody>${e.tasks.map(key=>{const v=e.results[key]||{};return `<tr><td>${esc(catalog.tasks.find(t=>t.id===key)?.name||key)}</td><td>${v.error?esc(v.error):pct(v.accuracy)}</td><td>${pct(v.random_baseline)}</td><td>${pct(v.normalized)}</td><td>${v.samples??'—'}</td></tr>`;}).join('')}</tbody></table></div><details><summary>Protocol, dataset revisions & all metrics</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(JSON.stringify({protocol:e.protocol,provenance:e.provenance,results:e.results},null,2))}</pre></details></div>`).join(''):'<p class="muted" style="margin-top:18px">No benchmark measurements yet.</p>'}<p class="muted">Scaling checkpoints: 10M → 30M → 100M → 300M → 1B training tokens. Historical points require saved weights at those budgets; they cannot be reconstructed from a final checkpoint. FLOPs in protocol metadata are estimates (6 × parameters × training tokens).</p>`;
-            if ($('#benchmarks')) $('#benchmarks').insertAdjacentHTML('afterbegin','<div class="panel" style="margin-bottom:16px"><b>Polish evaluation ladder</b><p class="muted" style="margin:6px 0 0">Tokenizer gate → held-out bits-per-byte → MultiBLiMP Polish agreement → induction/copy → generation → chance-normalized QA. English-only scores are kept separate from Polish model quality.</p><button class="secondary" id="run-polish-multiblimp" style="margin-top:10px">Run Polish MultiBLiMP</button></div>');
+            if ($('#benchmarks')) $('#benchmarks').insertAdjacentHTML('afterbegin','<div class="panel" style="margin-bottom:16px"><b>Polish evaluation ladder</b><p class="muted" style="margin:6px 0 0">Tokenizer gate → held-out bits-per-byte → MultiBLiMP Polish agreement → induction/copy → generation → chance-normalized QA. English-only scores are kept separate from Polish model quality.</p><button class="secondary" id="run-polish-multiblimp" style="margin-top:10px">Run Polish MultiBLiMP</button><p class="muted" style="margin:12px 0 0">Learn while you evaluate: <a href="https://huggingface.co/learn/nlp-course/chapter1/1" target="_blank" rel="noopener">Hugging Face NLP Course ↗</a> · <a href="https://arxiv.org/abs/2203.15556" target="_blank" rel="noopener">Chinchilla scaling paper ↗</a> · <a href="https://github.com/EleutherAI/lm-evaluation-harness" target="_blank" rel="noopener">Evaluation harness docs ↗</a></p></div>');
             if ($('#run-polish-multiblimp')) $('#run-polish-multiblimp').onclick=async()=>{try{await post('/runs/'+id+'/benchmarks',{suite:'polish',mode:'smoke'});await benchmarkPanel();}catch(e){error(e);}};
             if($('#benchmark-form')) $('#benchmark-form').onsubmit=async event=>{
               event.preventDefault();const f=event.currentTarget,b=f.querySelector('button');b.disabled=true;
