@@ -226,7 +226,8 @@ identity. Grant access to SlayerLab; the HF account must have permission to
 create models in that organization. The destination namespace is fixed. Models can only be exported under `SlayerLab/`.
 
 To join, sign in at [SlayerLab on Hugging Face](https://huggingface.co/SlayerLab)
-and request membership if that option is available. Otherwise, ask a SlayerLab
+and click **Follow**, then **Join / Request to join**. If the join option is not
+visible, ask a SlayerLab
 administrator for an invitation and provide your HF username. After approval,
 you need permission to create model repositories. Connect that same HF account
 in Track and select SlayerLab when authorizing publication.
