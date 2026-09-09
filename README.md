@@ -233,6 +233,9 @@ you need permission to create model repositories. Connect that same HF account
 in Track and select SlayerLab when authorizing publication.
 See [HF membership instructions](https://huggingface.co/docs/hub/organizations-managing).
 
+Kacper Wikieł also organizes Fabryka AI in-person workshops in Warsaw, covering
+training a language model from scratch and publishing it on Hugging Face.
+
 Export authorization requests `openid profile contribute-repos read-memberships`
 with the same PKCE and browser/session binding as sign-in. The upload token is
 held only in the background task's memory. An interrupted upload requires fresh
