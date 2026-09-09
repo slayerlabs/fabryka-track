@@ -15,9 +15,10 @@ if __name__=='__main__':
     catalog=json.loads((args.folder/'catalog.json').read_text())
     verified=[]
     for meta in catalog:
-        content=(args.folder/(meta['key']+'.txt')).read_text()
-        assert hashlib.sha256(content.encode()).hexdigest()==meta['sha256']
-        assert 300 <= len(content.encode()) <= 512_000_000
+        raw = (args.folder / (meta['key'] + '.txt')).read_bytes()
+        assert hashlib.sha256(raw).hexdigest() == meta['sha256']
+        assert 300 <= len(raw) <= 512_000_000
+        content = raw.decode('utf-8')
         verified.append((meta,content))
     if engine.url.drivername=='sqlite':
         backup=Path('backups')/('corpus-import-'+datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S'));backup.mkdir(parents=True,exist_ok=True)
