@@ -1704,6 +1704,7 @@
       }
       function fastLadderResults(e) {
         if(e.protocol!=='fast-en-v1')return '';
+        const pct=value=>Number.isFinite(value)?(100*value).toFixed(1)+'%':'—';
         const names={fast_lm:'Held-out LM · 40%',fast_blimp:'BLiMP-fast · 35%',fast_supplement:'BLiMP Supplement · 10%',fast_ewok:'EWoK-fast · 5%',fast_arc:'ARC-Easy · 10%'};
         return `<section class="panel" style="padding:16px;margin:12px 0"><b>${e.mode==='smoke'?'Smoke ':''}FastScore EN: ${pct(e.fast_score)}</b><small> · Experimental internal score · ${esc(e.protocol)}</small><table><thead><tr><th>Component</th><th>Measurements</th><th>Items / bytes</th></tr></thead><tbody>${Object.entries(names).map(([key,name])=>{const v=e.results[key]||{};return `<tr><td>${name}</td><td>${key==='fast_ewok'&&!v.samples?'HF access required':v.error?esc(v.error):key==='fast_lm'?`BPB ${fmt(v.bpb,4)} · NLL ${fmt(v.nll,4)}`:`Accuracy ${pct(v.accuracy)} · margin ${fmt(v.mean_margin_nats,4)} nats${v.mean_correct_probability!=null?` · P(correct) ${pct(v.mean_correct_probability)}`:''}`}</td><td>${v.samples??'—'}</td></tr>`;}).join('')}</tbody></table><small>Fixed English diagnostics. Not comparable with TinyScore. Smoke checks execution only. External held-out split; training overlap has not been audited.</small></section>`;
       }
