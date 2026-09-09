@@ -52,11 +52,19 @@ zweryfikowane z bajtów; wszystkie commity pod kontem właściciela repo. Do prz
 - **Zmiana:** `seen_tokens / max(elapsed, 1e-3)` — spójne z `runpod_worker.py`. Low-pri hardening, nie blocker.
 - **Pliki:** `src/fabryka_track/training.py`.
 
+### 6. Pre-baked network volume z datasetami (opcjonalny, fix cold-startu)
+- **Problem:** pody miały `volumeInGb:0` (brak volume) → worker ściągał każdy dataset po HTTPS z Track per-pod (wolny start, zależność od sieci).
+- **Zmiana:** gdy ustawione `FABRYKA_RUNPOD_NETWORK_VOLUME_ID`, payload dołącza RunPod Network Volume (`networkVolumeId` + `volumeMountPath`, Secure Cloud); worker czyta datasety z `<mount>/datasets/<id>` z fallbackiem na HTTPS gdy brak. Weryfikacja SHA-256 zachowana niezależnie od źródła. W pełni wstecznie kompatybilne (bez ID = dotychczasowe zachowanie).
+- **Efekt:** szybszy start podów i mniej ruchu sieciowego — datasety pre-baked na volume zamiast pobierania za każdym razem.
+- **Wymaga (infra RunPod):** utworzony Network Volume (Secure Cloud) z datasetami pod `<mount>/datasets/<id>` (konto RunPod). Volume dołączany tylko przy deployu poda — ograniczenie RunPod.
+- **Pliki:** `src/fabryka_track/gpu_training.py`, `src/fabryka_track/runpod_worker.py`, `src/fabryka_track/settings.py`.
+
 ## Status testów
 - **Cała suita `pytest tests/`: 57 przechodzi** (poza 2 pre-existing niżej), odpalone niezależnie na izolowanym klonie (system-torch, CPU).
 - `tests/test_gpu_training.py`: **13/13** — w tym nowe testy capa `test_parallel_dispatch_up_to_cap` i `test_capacity_blocks_beyond_cap`; DELETE-guard nie zregresował sprzątania.
 - Holdout/dedup: **2/2** (whole-doc disjoint train/val, cross-source dedup, determinizm).
 - Guard throughput potwierdzony **N=15 powtórzeń bez flaka** (wcześniejszy „regres" okazał się flaky one-off, nie regresją — potwierdzone N=15 powtórzeniami; bisekcja na n=1 mylnie wskazała regresję — lekcja: n=1 nie wystarcza).
+- **Nowe testy volume (jeszcze nie odpalone):** `test_network_volume_attached_when_configured` + assert off-by-default w `test_dispatch...` — compile-green, czekają na uruchomienie (re-gate Harta). Reszta liczb (57 / 13/13) z runu na stanie sprzed sekcji 6.
 - **NIE zmierzone na żywym RunPod** (wall-time N-parallel vs serial, start-success %, brak pod-leak przy realnym
   crashu) — wymaga klucza RunPod + publicznego `public_url`.
 - **Znane, nie nasze:** `test_api` (1.9 vs 1.8 — różnica numeryczna platformy) i `test_benchmark_remote`
@@ -67,6 +75,8 @@ zweryfikowane z bajtów; wszystkie commity pod kontem właściciela repo. Do prz
 - `FABRYKA_RUNPOD_ALLOWED_USERS` — `*` lub lista uczestników (inaczej tylko konta HF).
 - `FABRYKA_PUBLIC_URL` — publicznie osiągalny adres control-plane (pody raportują tu przez HTTPS).
 - `FABRYKA_RUNPOD_MAX_CONCURRENT` — liczba równoległych podów (dobierz pod liczbę kursantów i limit konta RunPod).
+- `FABRYKA_RUNPOD_NETWORK_VOLUME_ID` — (opcjonalny) ID RunPod Network Volume z pre-baked datasetami; pusty = ściąganie po HTTPS jak dotąd.
+- `FABRYKA_RUNPOD_VOLUME_MOUNT` — ścieżka montowania volume (domyślnie `/workspace`; datasety oczekiwane pod `<mount>/datasets/<id>`).
 - Uruchom `scripts/preflight.py` — powinno dać RESULT: OK.
 
 ## Bezpieczeństwo i prowieniencja
