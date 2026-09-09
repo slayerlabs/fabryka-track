@@ -134,6 +134,7 @@ def test_dispatch_uses_scoped_bundle_and_selected_image(client,monkeypatch):
 
 def test_queue_waits_without_allocating_or_consuming_runtime(client,monkeypatch):
     first,_=create(client,monkeypatch)
+    monkeypatch.setattr(settings,'runpod_max_concurrent',1)
     second=launch(client).json()['id']
     def unexpected(*a,**kw):raise AssertionError('Queued run must not contact provider')
     monkeypatch.setattr(gpu,'provider',unexpected)
@@ -145,6 +146,18 @@ def test_queue_waits_without_allocating_or_consuming_runtime(client,monkeypatch)
     client.post('/api/training/'+second+'/stop')
     gpu.advance(second)
     assert client.get('/api/runs/'+second).json()['state']=='cancelled'
+
+
+def test_parallel_dispatch_up_to_cap(client,monkeypatch):
+    first,_=create(client,monkeypatch)
+    monkeypatch.setattr(settings,'runpod_max_concurrent',2)
+    second=launch(client).json()['id']
+    calls=[]
+    def provider(method,path,**kw):
+        calls.append((method,path));return {'id':'second-pod'}
+    monkeypatch.setattr(gpu,'provider',provider);gpu.advance(second)
+    assert ('POST','/pods') in calls
+    with SessionLocal() as s:assert s.get(GPUJob,second).pod_id=='second-pod'
 
 
 def test_capacity_retry_requires_two_empty_reconciliations(client,monkeypatch):

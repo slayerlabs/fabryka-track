@@ -242,7 +242,8 @@ def advance(run_id):
         if j.state=='queued' and r.state=='stopping':
             j.state='cancelled';j.cleanup_done=True;r.state='cancelled';r.ended_at=now();session.commit();return
         if j.state=='queued' and r.state!='stopping':
-            if session.scalar(select(GPUJob).where(GPUJob.cleanup_done==False,GPUJob.state!='queued',GPUJob.run_id!=run_id)):return
+            active=session.scalar(select(func.count()).select_from(GPUJob).where(GPUJob.cleanup_done==False,GPUJob.state!='queued',GPUJob.run_id!=run_id))
+            if active>=settings.runpod_max_concurrent:return
             token=secrets.token_urlsafe(32)
             claimed=session.execute(update(GPUJob).where(GPUJob.run_id==run_id,GPUJob.state=='queued').values(
                 token_hash=hashlib.sha256(token.encode()).hexdigest(),state='provisioning',heartbeat_at=now(),

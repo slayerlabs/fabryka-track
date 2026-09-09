@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     runpod_max_seconds: int = 86400
     runpod_max_hourly_usd: float = 0.50
     runpod_allowed_users: str = ""
+    runpod_max_concurrent: int = 4
     benchmark_runner_tokens: str = "{}"
     r2_endpoint: str | None = None
     r2_bucket: str | None = None
