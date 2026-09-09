@@ -1,3 +1,4 @@
+from conftest import sign_in
 import hashlib
 import importlib.util
 import json
@@ -20,6 +21,8 @@ from test_training import finished, launch
 def linked_run(client):
     user=client.get('/api/auth/me').json()['user']
     with SessionLocal() as db:
+        identity=db.scalar(select(HuggingFaceIdentity).where(HuggingFaceIdentity.account_id==user['id']))
+        db.delete(identity);db.flush()
         db.add(HuggingFaceIdentity(subject='hf-owner',account_id=user['id'],username='hf-owner'))
         db.commit()
     dataset=client.post('/api/datasets',files={'file':('confidential-corpus.txt',b'A private training passage. '*50)}).json()
@@ -111,6 +114,9 @@ def test_wrong_hf_identity_and_cancelled_export(client,monkeypatch):
 
 
 def test_publish_access_and_preview(client):
+    with SessionLocal() as db:
+        identity=db.scalar(select(HuggingFaceIdentity))
+        db.delete(identity);db.commit()
     run=finished(client,launch(client).json()['id'])
     path='/api/training/'+run['id']+'/huggingface'
     assert client.get(path).json()['organization']=='SlayerLab'
@@ -120,7 +126,7 @@ def test_publish_access_and_preview(client):
     assert client.post(path,json={'repo_name':'name'}).status_code==422
     assert client.post(path,json={'repo_name':'name','confirm':False}).status_code==422
     client.post('/api/auth/logout')
-    client.post('/api/auth/register',json={'username':'another-user','password':'another-password-123'})
+    sign_in(client, 'another-user')
     assert client.get(path).status_code==404
     assert client.post(path,json={'repo_name':'export-test','confirm':True}).status_code==404
 

@@ -114,6 +114,8 @@ class Dataset(Base):
     id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()))
     name: Mapped[str] = mapped_column(String(200))
     content: Mapped[str] = mapped_column(Text)
+    byte_count: Mapped[int | None] = mapped_column(Integer, nullable=True,
+        default=lambda context: len(context.get_current_parameters()["content"].encode("utf-8")))
     sha256: Mapped[str] = mapped_column(String(64), index=True)
     example: Mapped[bool] = mapped_column(default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
@@ -131,6 +133,7 @@ class GPUJob(Base):
     cleanup_done: Mapped[bool] = mapped_column(default=False)
     files: Mapped[dict] = mapped_column(JSON, default=dict)
     bundle_sha256: Mapped[str] = mapped_column(String(64))
+    allocation_deadline: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     dispatch_attempts: Mapped[int] = mapped_column(Integer, default=0)
     missing_checks: Mapped[int] = mapped_column(Integer, default=0)
     next_retry_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

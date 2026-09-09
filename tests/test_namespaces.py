@@ -1,3 +1,4 @@
+from conftest import sign_in
 import json
 from uuid import uuid4
 
@@ -39,7 +40,7 @@ def test_series_cursor_and_namespace_prefix_are_bounded_and_private(client):
     assert client.get(base+'/series',params={'path':'train/loss','limit':10001}).status_code==422
     client.post('/api/auth/logout')
     assert client.get(base+'/namespace').status_code==401
-    client.post('/api/auth/register',json={'username':'other','password':'testing-other-password'})
+    sign_in(client, 'other')
     assert client.get(base+'/namespace').status_code==404
     assert client.post(base+'/series',json={'train/loss':[[4,1]]}).status_code==404
     assert client.get('/api/benchmarks/evaluations').json()['items']==[]

@@ -87,6 +87,11 @@ def run(eid, job=None, reporter=None):
         if name in results and not results[name].get('error'):continue
         save(current_task=name)
         try:
+            if name.startswith('fast_'):
+                from .fast_ladder import evaluate
+                results[name]=evaluate(name,model,mode)
+                save(results=results,provenance=provenance)
+                continue
             if name == 'multiblimp_polish':
                 from datasets import load_dataset
                 revision = provenance['dataset_revisions'].get('jumelet/multiblimp') or api.dataset_info('jumelet/multiblimp').sha
@@ -127,7 +132,7 @@ def run(eid, job=None, reporter=None):
         except Exception as exc:
             failures.append(name)
             import traceback; traceback.print_exc(file=sys.stderr)
-            results[name]={'error':'Dataset loading or evaluation failed ('+type(exc).__name__+'). Retry after checking dataset availability.'}
+            results[name]={'error':('GPU memory exhausted even at the minimum evaluation batch size. Retry on a worker with more free GPU memory.' if isinstance(exc,torch.OutOfMemoryError) else 'Dataset loading or evaluation failed ('+type(exc).__name__+'). Retry after checking dataset availability.')}
             print(name,type(exc).__name__,str(exc),file=sys.stderr)
         provenance.update(context_limited_requests=job['provenance'].get('context_limited_requests',0)+model.truncated_requests,total_requests=job['provenance'].get('total_requests',0)+model.total_requests)
         save(results=results,provenance=provenance)

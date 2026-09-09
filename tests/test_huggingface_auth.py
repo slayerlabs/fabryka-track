@@ -1,3 +1,4 @@
+from conftest import sign_in
 from datetime import datetime, timedelta, timezone
 from urllib.parse import parse_qs, urlparse
 
@@ -38,11 +39,11 @@ def test_hf_new_account_repeat_login_and_credentials(client, monkeypatch):
     assert complete(client,begin(client)).status_code == 303
     assert client.get('/api/auth/me').json()['user']['id'] == user['id']
     assert client.post('/api/auth/api-key',json={}).status_code == 200
-    assert client.post('/api/auth/password',json={'current_password':'','new_password':'my-new-password-123'}).status_code == 200
+    assert client.post('/api/auth/password',json={'current_password':'','new_password':'my-new-password-123'}).status_code == 405
     client.post('/api/auth/logout')
-    assert client.post('/api/auth/login',json={'username':'hf_tester','password':'my-new-password-123'}).status_code == 200
+    assert client.post('/api/auth/login',json={'username':'hf_tester','password':'my-new-password-123'}).status_code == 405
     with SessionLocal() as db:
-        assert len(list(db.scalars(select(HuggingFaceIdentity)))) == 1
+        assert len(list(db.scalars(select(HuggingFaceIdentity)))) == 2
 
 
 def test_hf_state_cookie_expiry_and_denial(client, monkeypatch):
@@ -66,7 +67,7 @@ def test_hf_state_cookie_expiry_and_denial(client, monkeypatch):
 
 
 def test_explicit_link_and_cross_account_conflict(client, monkeypatch):
-    monkeypatch.setattr(hf,'fetch_profile',lambda *args:{'sub':'linked-hf-id','preferred_username':'another-name'})
+    monkeypatch.setattr(hf,'fetch_profile',lambda *args:{'sub':'fixture-tester','preferred_username':'another-name'})
     original=client.get('/api/auth/me').json()['user']['id']
     assert complete(client,begin(client,link=True)).status_code == 303
     assert client.get('/api/auth/me').json()['user']['id'] == original
@@ -74,7 +75,7 @@ def test_explicit_link_and_cross_account_conflict(client, monkeypatch):
     assert complete(client,begin(client)).status_code == 303
     assert client.get('/api/auth/me').json()['user']['id'] == original
     client.post('/api/auth/logout')
-    client.post('/api/auth/register',json={'username':'other','password':'other-password-123'})
+    sign_in(client, 'other')
     assert complete(client,begin(client,link=True)).status_code == 409
     assert client.get('/api/auth/me').json()['user']['username']=='other'
     state=begin(client,link=True)
@@ -84,7 +85,7 @@ def test_explicit_link_and_cross_account_conflict(client, monkeypatch):
 
 def test_profile_failure_and_no_username_takeover(client, monkeypatch):
     client.post('/api/auth/logout')
-    client.post('/api/auth/register',json={'username':'hf_tester','password':'other-password-123'})
+    sign_in(client, 'hf_tester')
     existing=client.get('/api/auth/me').json()['user']['id']
     client.post('/api/auth/logout')
     monkeypatch.setattr(hf,'fetch_profile',lambda *args:{'sub':'new-sub','preferred_username':'tester'})

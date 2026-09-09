@@ -13,6 +13,27 @@ from fabryka_track.database import engine
 from fabryka_track.models import Base
 
 
+def sign_in(client, username='tester'):
+    """Seed an authenticated HF session; OAuth itself is tested separately."""
+    import secrets
+    from datetime import datetime, timedelta, timezone
+    from sqlalchemy import select
+    from fabryka_track.accounts import COOKIE, digest
+    from fabryka_track.database import SessionLocal
+    from fabryka_track.models import Account, AccountSession, HuggingFaceIdentity
+    token = secrets.token_urlsafe(32)
+    with SessionLocal() as session:
+        user = session.scalar(select(Account).where(Account.username == username))
+        if not user:
+            user = Account(username=username, password_hash='')
+            session.add(user);session.flush()
+            session.add(HuggingFaceIdentity(subject='fixture-'+username, account_id=user.id, username=username))
+        session.add(AccountSession(id=digest(token), account_id=user.id,
+                                   expires_at=datetime.now(timezone.utc)+timedelta(days=14)))
+        session.commit()
+    client.cookies.set(COOKIE, token, domain="testserver.local", path="/")
+
+
 @pytest.fixture()
 def client(monkeypatch):
     monkeypatch.setattr("fabryka_track.api.start_benchmark_queue",lambda:None)
@@ -21,8 +42,7 @@ def client(monkeypatch):
     from fabryka_track.accounts import _attempts
     _attempts.clear()
     with TestClient(app, headers={"X-Track-Request": "1"}) as test_client:
-        response = test_client.post('/api/auth/register', json={'username': 'tester', 'password': 'testing-password-123'})
-        assert response.status_code == 201
+        sign_in(test_client)
         yield test_client
     Base.metadata.drop_all(engine)
     shutil.rmtree("test-artifacts", ignore_errors=True)

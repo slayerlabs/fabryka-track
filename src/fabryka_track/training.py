@@ -3,6 +3,7 @@ import copy
 import hashlib
 import json
 import math
+import re
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -17,6 +18,7 @@ from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field, model_validator
 from typing import Literal
 from sqlalchemy import select, or_
+from sqlalchemy.orm import load_only
 
 from .accounts import require_user, current_user, owned_run
 from .database import SessionLocal, session_scope
@@ -58,7 +60,7 @@ def stop_worker():
 
 
 def describe(d):
-    byte_count = len(d.content.encode("utf-8"))
+    byte_count = d.byte_count if d.byte_count is not None else len(d.content.encode("utf-8"))
     return {"id": d.id, "name": d.name, "bytes": byte_count,
             "size_mb": byte_count / 1_000_000, "token_count": byte_count,
             "tokenizer": "utf8-bytes", "example": d.example, "sha256": d.sha256}
@@ -96,7 +98,7 @@ def training_manifest(run):
 
 @router.get("/datasets")
 def datasets(session=Depends(session_scope), user=Depends(require_user)):
-    return [describe(d) for d in session.scalars(select(Dataset).where(or_(Dataset.example == True, Dataset.owner_id == user.id)).order_by(Dataset.created_at))]
+    return [describe(d) for d in session.scalars(select(Dataset).options(load_only(Dataset.id, Dataset.name, Dataset.byte_count, Dataset.example, Dataset.sha256, raiseload=True)).where(or_(Dataset.example == True, Dataset.owner_id == user.id)).order_by(Dataset.created_at))]
 
 
 @router.post("/datasets", status_code=201)
@@ -126,7 +128,7 @@ class MixItem(BaseModel):
 
 
 class TrainingInput(BaseModel):
-    name: str = Field(min_length=1, max_length=120)
+    name: str = Field(min_length=8, max_length=120)
     mix: list[MixItem] = Field(min_length=1, max_length=20)
     steps: int = Field(default=100, ge=10, le=2000)
     batch_size: int = Field(default=8, ge=1, le=32)
@@ -143,8 +145,12 @@ class TrainingInput(BaseModel):
 
     @model_validator(mode="after")
     def validate_mix(self):
-        if not self.name.strip():
-            raise ValueError("Give your run a name.")
+        self.name = self.name.strip()
+        letters = [c.lower() for c in self.name if c.isalpha()]
+        words = re.sub(r"[\W_\d]+", " ", self.name.lower()).split()
+        generic = {"test", "run", "training", "new", "untitled", "trening", "nowy", "nazwa", "asdf", "qwerty"}
+        if len(self.name) < 8 or len(letters) < 4 or len(set(letters)) < 2 or all(w in generic for w in words):
+            raise ValueError("Use a descriptive run name (8–120 characters), including the model, dataset or experiment; for example: Polish GPT - Wikipedia baseline.")
         if sum(d.weight for d in self.mix) != 100:
             raise ValueError("Dataset percentages must add up to 100.")
         if len({d.dataset_id for d in self.mix}) != len(self.mix):
@@ -163,11 +169,18 @@ def launch(body: TrainingInput, session=Depends(session_scope), user=Depends(req
     elif body.model_size not in ('tiny','small'):
         raise HTTPException(422, 'Models 8M and larger require RunPod.')
     with launch_lock:
-        if body.compute == 'runpod' and len(list(session.scalars(select(GPUJob).where(GPUJob.cleanup_done==False))))>=5:
-            raise HTTPException(409, 'The GPU queue is full (five jobs). Wait for a run to finish.')
-        active = list(session.scalars(select(Run).where(Run.state.in_(["running", "queued", "stopping"]))))
-        if sum(r.metadata_.get("engine") == "tiny-transformer" for r in active) >= 5:
-            raise HTTPException(409, "Five runs are already active. Wait for one to finish.")
+        if body.compute == 'runpod':
+            pending = list(session.scalars(select(GPUJob).where(GPUJob.cleanup_done==False)))
+            if len(pending) >= settings.runpod_max_pending:
+                raise HTTPException(409, 'The GPU queue is full. Wait for a run to finish.')
+            owned = session.scalars(select(Run.id).where(
+                Run.id.in_([j.run_id for j in pending]), Run.owner_id==user.id)).all()
+            if len(owned) >= settings.runpod_max_pending_per_user:
+                raise HTTPException(409, f'You already have {settings.runpod_max_pending_per_user} active GPU runs. Wait for one to finish.')
+        else:
+            active = session.scalars(select(Run).where(Run.state.in_(["running", "queued", "stopping"])))
+            if sum(r.metadata_.get("engine") == "tiny-transformer" and r.config.get("compute", "cpu") == "cpu" for r in active) >= 5:
+                raise HTTPException(409, "Five CPU runs are already active. Wait for one to finish.")
         mix = []
         for item in body.mix:
             d = session.get(Dataset, item.dataset_id)

@@ -137,7 +137,7 @@ def test_chinchilla_plan_matches_model_and_short_training_context(client, monkey
         assert manifest['training']['planned_training_tokens'] == cfg['planned_training_tokens']
     uploaded = client.post('/api/datasets', files={'file': ('short-context.txt', b'a' * 100)}).json()
     # Model contexts fit this source; exercise the shortened-context calculation directly too.
-    body = training.TrainingInput(name='Short', mix=[{'dataset_id': uploaded['id'], 'weight': 100}], budget_mode='chinchilla', model_size='small')
+    body = training.TrainingInput(name='Short context', mix=[{'dataset_id': uploaded['id'], 'weight': 100}], budget_mode='chinchilla', model_size='small')
     plan = training.plan_training(body, [{'bytes': 50, 'weight': 100}])
     assert plan['training_context_length'] == 44
     assert plan['planned_training_tokens'] == plan['steps'] * body.batch_size * 44
@@ -232,3 +232,35 @@ def test_holdout_split_is_deterministic():
     docs = [f"D{i:02d}-".encode() + bytes((65 + i,)) * 80 for i in range(20)]
     source = b"\n\n".join(docs)
     assert _holdout_split(source, 7, set()) == _holdout_split(source, 7, set())
+
+
+def test_dataset_listing_reads_metadata_only_and_counts_utf8(client):
+    from sqlalchemy import event
+    from fabryka_track.database import engine
+    content = ('Zażółć gęślą jaźń 🦊\n' * 100).encode('utf-8')
+    uploaded = client.post('/api/datasets', files={'file': ('polish.txt', content, 'text/plain')})
+    assert uploaded.status_code == 201
+    statements = []
+    def record(conn, cursor, statement, parameters, context, executemany):
+        if statement.lstrip().upper().startswith('SELECT') and 'datasets' in statement:
+            statements.append(statement)
+    event.listen(engine, 'before_cursor_execute', record)
+    try:
+        response = client.get('/api/datasets')
+    finally:
+        event.remove(engine, 'before_cursor_execute', record)
+    assert response.status_code == 200
+    row = next(d for d in response.json() if d['name'] == 'polish.txt')
+    assert row['bytes'] == len(content)
+    assert statements and all('datasets.content' not in sql for sql in statements)
+
+
+def test_existing_dataset_sizes_are_backfilled(client):
+    from sqlalchemy import text
+    from fabryka_track.database import engine, create_tables
+    with engine.begin() as connection:
+        connection.execute(text('UPDATE datasets SET byte_count = NULL'))
+    create_tables()
+    with engine.connect() as connection:
+        assert connection.execute(text('SELECT count(*) FROM datasets WHERE byte_count IS NULL OR byte_count != length(CAST(content AS BLOB))')).scalar() == 0
+    assert client.get('/api/datasets').status_code == 200
