@@ -104,3 +104,9 @@ A background refresh every five minutes reads `/billing/pods` grouped by pod ID,
 
 Provider contract: https://docs.runpod.io/api-reference/billing/GET/billing/pods
 Validation: 16 GPU controller tests, two cost calculation/aggregation tests, eight JavaScript tests against published HTML, and published script syntax check. At deployment, the provider had not yet reported billing rows for the new server's pods; estimates were available for prior completed runs.
+
+## Larger source samples and smoke evaluation recovery
+
+Web imports now stream pinned Parquet files instead of fetching one 100-row viewer page. Exact duplicate documents are excluded and whole UTF-8 documents are retained within the size budget. Default preparation cap is 103 MB; the 98% stopping threshold yields at least 100.94 MB where eligible source text is available. All ten sources were rebuilt. Wolne Lektury (76.57 MB), Wikibooks (39.46 MB) and Wikivoyage (47.46 MB) exhaust eligible text in the selected source files below 100 MB; no repeated padding is added. New immutable IDs retain previous IDs for draft-weight migration; old dataset rows and run snapshots remain intact.
+
+Basic Test smoke evaluation `8e6da7cf-c969-403c-8d37-fb5ff498de04` had SciQ and BLiMP OutOfMemoryError results. The model adapter now limits batch tokens and halves batches after OOM without counting a failed batch twice. Existing successful task results were retained on requeue. The evaluation subsequently reached `finished`, with no error and a computed TinyScore. Adapter and clearer memory-error handling were deployed to the backend and both configured runner checkouts.

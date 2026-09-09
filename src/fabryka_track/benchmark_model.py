@@ -38,16 +38,28 @@ class ByteCheckpointLM(LM):
                 buckets.setdefault(len(window),[]).append((request,window,byte))
         with torch.inference_mode():
             for rows in buckets.values():
-                for start in range(0,len(rows),batch_size):
-                    chunk=rows[start:start+batch_size]
-                    x=torch.tensor([item[1] for item in chunk],dtype=torch.long,device=self._device)
-                    y=torch.tensor([item[2] for item in chunk],dtype=torch.long,device=self._device)
-                    logits=self.model(x)[:,-1,:].log_softmax(-1)
-                    values=logits.gather(1,y[:,None]).flatten().tolist()
-                    guesses=logits.argmax(-1).eq(y).tolist()
+                start=0
+                size=min(batch_size, max(1, 8192 // len(rows[0][1])))
+                while start<len(rows):
+                    chunk=rows[start:start+size]
+                    try:
+                        values,guesses=self._score_chunk(chunk)
+                    except torch.OutOfMemoryError:
+                        if size==1:raise
+                        size=max(1,size//2)
+                        if self._device.type=='cuda':torch.cuda.empty_cache()
+                        continue
                     for (request,_,_),value,guess in zip(chunk,values,guesses):
                         totals[request]+=value;greedy[request]=greedy[request] and guess
+                    start+=len(chunk)
         return list(zip(totals,greedy))
+
+    def _score_chunk(self, chunk):
+        # Scope tensors to one attempt so an OOM retry can release all allocations.
+        x=torch.tensor([item[1] for item in chunk],dtype=torch.long,device=self._device)
+        y=torch.tensor([item[2] for item in chunk],dtype=torch.long,device=self._device)
+        logits=self.model(x)[:,-1,:].log_softmax(-1)
+        return logits.gather(1,y[:,None]).flatten().tolist(), logits.argmax(-1).eq(y).tolist()
 
     def loglikelihood(self, requests):
         return self.score_many([tuple(r.args) for r in requests])

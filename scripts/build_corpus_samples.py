@@ -4,11 +4,10 @@ import hashlib
 import json
 import uuid
 from pathlib import Path
-from concurrent.futures import ThreadPoolExecutor
 
 import httpx
 import pyarrow.parquet as pq
-from huggingface_hub import HfFileSystem
+from huggingface_hub import HfFileSystem, HfApi
 
 REV='02bcb0b5f991a30f8454c6444f701633b71f69d4'
 REPO='SlayerLab/polish-dynaword'
@@ -56,58 +55,63 @@ def save(content,meta,folder):
     return {k:v for k,v in meta.items() if k!='records'}
 
 
-def web(folder):
-    repo='SlayerLab/hplt-v3-pl-cleaned';records=[];texts=[];revision=None
-    with httpx.Client(timeout=30) as client:
-        for offset in [0]:
-            response=client.get('https://datasets-server.huggingface.co/rows',params={'dataset':repo,'config':'default','split':'train','offset':offset,'length':100});response.raise_for_status()
-            if revision is not None and revision!=response.headers.get('x-revision'):raise RuntimeError('Source revision changed')
-            revision=response.headers['x-revision']
-            for record in response.json()['rows']:
-                if record['truncated_cells']:continue
-                row=record['row'];text=row['text'].strip()
-                if len(text.encode())<300:continue
-                texts.append(text);records.append({k:v for k,v in row.items() if k!='text'}|{'text_sha256':hashlib.sha256(text.encode()).hexdigest()})
-    return save('\n\n'.join(texts),{'key':'hplt','name':'Web PL · HPLT','category':'web','repo':repo,'revision':revision,
-        'url':'https://huggingface.co/datasets/'+repo+'/blob/'+revision+'/README.md',
-        'documents':len(records),'records':records,'source_documents':response.json()['num_rows_total'],
-        'source_token_estimate':None,'source_tokenizer':'upstream reference tokenizer',
-        'sampling':'first 100 viewer rows, untruncated whole documents; workflow sample, not representative'},folder)
+WEB_SOURCES = {
+    'hplt': ('SlayerLab/hplt-v3-pl-cleaned', 'data', 'Web PL · HPLT'),
+    'fineweb2_pl': ('HuggingFaceFW/fineweb-2', 'data/pol_Latn/train', 'FineWeb2 · polski web'),
+}
 
 
-def fineweb(folder):
-    repo='HuggingFaceFW/fineweb-2'
-    response=httpx.get('https://datasets-server.huggingface.co/rows',params={'dataset':repo,'config':'pol_Latn','split':'train','offset':0,'length':100},timeout=30)
-    response.raise_for_status();records=[];texts=[]
-    for item in response.json()['rows']:
-        if item['truncated_cells']:continue
-        row=item['row'];text=row['text'].strip()
-        if len(text.encode())<300:continue
-        texts.append(text);records.append({k:v for k,v in row.items() if k!='text'}|{'text_sha256':hashlib.sha256(text.encode()).hexdigest()})
-    revision=response.headers['x-revision']
-    return save('\n\n'.join(texts),{'key':'fineweb2_pl','name':'FineWeb2 · polski web','category':'web',
-        'repo':repo,'revision':revision,'config':'pol_Latn','url':'https://huggingface.co/datasets/'+repo+'/blob/'+revision+'/README.md',
-        'documents':len(records),'records':records,'source_documents':response.json()['num_rows_total'],
-        'source_token_estimate':None,'source_tokenizer':'upstream reference tokenizer',
-        'sampling':'first 100 pol_Latn viewer rows, untruncated whole documents; workflow sample, not representative'},folder)
+def bounded_texts(rows, max_bytes):
+    texts=[];records=[];seen=set();used=0
+    for row in rows:
+        text=(row.get('text') or '').strip()
+        raw=text.encode('utf-8');digest=hashlib.sha256(raw).hexdigest()
+        size=len(raw)+(2 if texts else 0)
+        if len(raw)<300 or len(raw)>250_000 or digest in seen or used+size>max_bytes:
+            continue
+        texts.append(text);seen.add(digest);used+=size
+        records.append({'text_sha256':digest})
+        if used>=max_bytes*0.98:break
+    if not texts:raise RuntimeError('No eligible corpus documents')
+    return '\n\n'.join(texts),records
+
+
+def web_sample(key,folder,max_bytes):
+    repo,directory,name=WEB_SOURCES[key]
+    api=HfApi();revision=api.dataset_info(repo).sha
+    fs=HfFileSystem();files=[]
+    def rows():
+        for entry in api.list_repo_tree(repo,repo_type='dataset',revision=revision,path_in_repo=directory,recursive=True):
+            if not entry.path.endswith('.parquet'):continue
+            files.append(entry.path)
+            with fs.open(f'datasets/{repo}@{revision}/{entry.path}','rb',block_size=1024*1024) as stream:
+                parquet=pq.ParquetFile(stream)
+                for batch in parquet.iter_batches(batch_size=128,columns=['text']):
+                    yield from batch.to_pylist()
+    content,records=bounded_texts(rows(),max_bytes)
+    if len(content.encode())<max_bytes*0.98:
+        raise RuntimeError(f'{key}: source exhausted before requested sample size')
+    return save(content,{'key':key,'name':name,'category':'web','repo':repo,'revision':revision,
+        'url':f'https://huggingface.co/datasets/{repo}/blob/{revision}/README.md',
+        'documents':len(records),'records':records,'source_files':files,'target_bytes':max_bytes,
+        'sampling':'first eligible unique whole documents from pinned source parquet files; bounded sample, not representative'},folder)
 
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser()
     parser.add_argument('folder',type=Path)
-    parser.add_argument('--max-mb',type=int,default=1,choices=range(1,33))
-    parser.add_argument('--sources',nargs='+',choices=[s[0] for s in SOURCES])
+    parser.add_argument('--max-mb',type=int,default=103,choices=range(1,129))
+    parser.add_argument('--sources',nargs='+',choices=[s[0] for s in SOURCES]+list(WEB_SOURCES))
     args=parser.parse_args();args.folder.mkdir(parents=True,exist_ok=True)
     catalog_path=args.folder/'catalog.json'
     old=json.loads(catalog_path.read_text()) if catalog_path.exists() else []
-    if args.sources:
-        chosen=[s for s in SOURCES if s[0] in args.sources]
-        entries=[d for d in old if d['key'] not in args.sources]
-    else:
-        chosen=SOURCES
-        entries=[web(args.folder),fineweb(args.folder)]
-    with ThreadPoolExecutor(max_workers=2) as pool:
-        entries+=list(pool.map(lambda source:build(source,args.folder,args.max_mb*1_000_000),chosen))
+    keys=args.sources or [s[0] for s in SOURCES]+list(WEB_SOURCES)
+    entries=[d for d in old if d['key'] not in keys]
+    for key in keys:
+        if key in WEB_SOURCES:
+            entries.append(web_sample(key,args.folder,args.max_mb*1_000_000))
+        else:
+            entries.append(build(next(s for s in SOURCES if s[0]==key),args.folder,args.max_mb*1_000_000))
     for d in entries:
         previous=next((x for x in old if x['key']==d['key'] and x['id']!=d['id']),None)
         if previous:d['previous_ids']=list(dict.fromkeys(previous.get('previous_ids',[])+[previous['id']]))
