@@ -53,9 +53,10 @@ zweryfikowane z bajtów; wszystkie commity pod kontem właściciela repo. Do prz
 - **Pliki:** `src/fabryka_track/training.py`.
 
 ## Status testów
-- `pytest tests/test_gpu_training.py`: **13/13 przechodzi** (w tym nowe testy cap: `test_parallel_dispatch_up_to_cap`,
-  `test_capacity_blocks_beyond_cap`; DELETE-guard nie zregresował sprzątania). Odpalone niezależnie.
-- Testy holdout/dedup: **2/2 przechodzą** (whole-doc disjoint train/val, cross-source dedup, determinizm).
+- **Cała suita `pytest tests/`: 57 przechodzi** (poza 2 pre-existing niżej), odpalone niezależnie na izolowanym klonie (system-torch, CPU).
+- `tests/test_gpu_training.py`: **13/13** — w tym nowe testy capa `test_parallel_dispatch_up_to_cap` i `test_capacity_blocks_beyond_cap`; DELETE-guard nie zregresował sprzątania.
+- Holdout/dedup: **2/2** (whole-doc disjoint train/val, cross-source dedup, determinizm).
+- Guard throughput potwierdzony **N=15 powtórzeń bez flaka** (wcześniejszy „regres" okazał się flaky one-off, nie regresją — potwierdzone bisekcją).
 - **NIE zmierzone na żywym RunPod** (wall-time N-parallel vs serial, start-success %, brak pod-leak przy realnym
   crashu) — wymaga klucza RunPod + publicznego `public_url`.
 - **Znane, nie nasze:** `test_api` (1.9 vs 1.8 — różnica numeryczna platformy) i `test_benchmark_remote`
