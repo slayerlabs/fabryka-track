@@ -68,3 +68,10 @@ zweryfikowane z bajtów; wszystkie commity pod kontem właściciela repo. Do prz
 - `FABRYKA_PUBLIC_URL` — publicznie osiągalny adres control-plane (pody raportują tu przez HTTPS).
 - `FABRYKA_RUNPOD_MAX_CONCURRENT` — liczba równoległych podów (dobierz pod liczbę kursantów i limit konta RunPod).
 - Uruchom `scripts/preflight.py` — powinno dać RESULT: OK.
+
+## Bezpieczeństwo i prowieniencja
+- **Skan sekretów całej delty brancha (`e279b06..`): GREEN** — zero kluczy/credów/PII w tym, co trafia do Kacpra (gate bezpieczeństwa).
+- **Autorstwo czyste:** wszystkie commity pod kontem właściciela repo; codename agenta usunięty; treść bit-identyczna (tree `df72a811` zgodny hub↔GitHub), potwierdzone niezależnie.
+- **Baza nietknięta:** branch zbudowany od `e279b06`; `main` Kacpra bez zmian.
+- **Zero-external:** nic z naszej infrastruktury nie zostało wystawione (decyzja właściciela).
+- **Pomiar na żywo:** możliwy po wdrożeniu brancha na serwer docelowy (`public_url`, np. `track.fabryka.ai`); pody RunPod raportują do tego serwera, nie wymaga wystawiania niczego naszego.
