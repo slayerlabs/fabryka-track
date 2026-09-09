@@ -1,3 +1,4 @@
+from conftest import sign_in
 import io
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
@@ -13,31 +14,23 @@ from test_api import event
 from test_training import launch, finished
 
 
-def test_sessions_password_change_and_csrf(client):
+def test_hf_only_sessions_and_csrf(client):
     assert client.get('/api/auth/me').json()['user']['username'] == 'tester'
     cookie = client.cookies.get(COOKIE)
-    # No raw passwords or session tokens in storage.
     with SessionLocal() as db:
         user = db.scalar(select(Account))
-        assert user.password_hash.startswith('$argon2id$')
+        assert user.password_hash == ''
         assert db.get(AccountSession, cookie) is None
         assert db.get(AccountSession, digest(cookie)) is not None
-    with TestClient(app, headers={'X-Track-Request': '1'}) as other:
-        assert other.post('/api/auth/login', json={'username':'TESTER','password':'testing-password-123'}).status_code == 200
-        old_cookie = other.cookies.get(COOKIE)
-        response = client.post('/api/auth/password', json={'current_password':'testing-password-123','new_password':'new-testing-password-456'})
-        assert response.status_code == 200
-        assert client.cookies.get(COOKIE) != cookie
-        assert other.get('/api/auth/me').json()['user'] is None
-        other.cookies.set(COOKIE, old_cookie)
-        assert other.get('/api/datasets').status_code == 401
+    for path,body in [('/login',{'username':'tester','password':'testing-password-123'}),
+                      ('/register',{'username':'new-user','password':'testing-password-123'}),
+                      ('/password',{'current_password':'','new_password':'testing-password-123'})]:
+        assert client.post('/api/auth'+path,json=body).status_code == 405
     assert client.post('/api/auth/logout', headers={'X-Track-Request':''}).status_code == 403
     assert client.post('/api/auth/logout', headers={'Origin':'https://evil.example'}).status_code == 403
     assert client.get('/api/auth/me').headers['cache-control'] == 'no-store'
     assert client.post('/api/auth/logout').status_code == 200
     assert client.get('/api/auth/me').json()['user'] is None
-    assert client.post('/api/auth/login', json={'username':'tester','password':'testing-password-123'}).status_code == 401
-    assert client.post('/api/auth/login', json={'username':'tester','password':'new-testing-password-456'}).status_code == 200
 
 
 def test_two_accounts_are_isolated_and_publication_only_exposes_scores(client):
@@ -51,7 +44,7 @@ def test_two_accounts_are_isolated_and_publication_only_exposes_scores(client):
         assert other.get('/api/leaderboard').status_code == 200
         assert other.get('/api/projects').status_code == 401
         assert other.get('/api/runs/' + run['id']).status_code == 200
-        assert other.post('/api/auth/register', json={'username':'second','password':'second-password-123'}).status_code == 201
+        sign_in(other,'second')
         assert other.get('/api/projects').json() == []
         assert other.get('/api/projects/Training%20studio/runs').json() == []
         assert uploaded['id'] not in [d['id'] for d in other.get('/api/datasets').json()]
@@ -97,18 +90,16 @@ def test_api_key_ingestion_revoke_and_studio_metrics_protection(client):
         assert sdk.get('/api/projects').status_code == 401
 
 
-def test_expiry_registration_validation_and_rate_limit(client):
-    assert client.post('/api/auth/register',json={'username':'TESTER','password':'testing-password-123'}).status_code == 409
-    assert client.post('/api/auth/register',json={'username':'new-user','password':'short'}).status_code == 422
+def test_session_expiry_and_hf_rate_limit(client):
     with SessionLocal() as db:
         stored = db.get(AccountSession,digest(client.cookies.get(COOKIE)))
         stored.expires_at = datetime.now(timezone.utc) - timedelta(seconds=1)
         db.commit()
     assert client.get('/api/datasets').status_code == 401
     _attempts.clear()
-    for _ in range(15):
-        assert client.post('/api/auth/login',json={'username':'tester','password':'incorrect-password'}).status_code == 401
-    assert client.post('/api/auth/login',json={'username':'tester','password':'incorrect-password'}).status_code == 429
+    for _ in range(30):
+        assert client.post('/api/auth/huggingface/start',json={}).status_code == 200
+    assert client.post('/api/auth/huggingface/start',json={}).status_code == 429
 
 
 def test_additive_migration_preserves_legacy_data_and_is_idempotent(tmp_path, monkeypatch):

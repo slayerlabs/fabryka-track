@@ -149,13 +149,13 @@ larger models or longer budgets can produce meaningful generalization.
 
 ## User accounts
 
-Register at `/#register` using a username (3–32 ASCII letters, digits, hyphens or
-underscores) and a password of 12–128 characters. No email address is collected.
-`/#account` provides sign-out, password changes and an API key for the SDK.
-Passwords use Argon2id; random session tokens live in HttpOnly, SameSite=Lax
-cookies (Secure over HTTPS), expire after 14 days, and are stored only as hashes.
-Changing a password revokes all other sessions and the API key. Auth endpoints
-limit attempts per IP and username; the service still runs with one worker.
+Sign in at `/#login` with Hugging Face. The first successful HF sign-in creates
+an account automatically. Password login, password registration and password
+changes are disabled; their API routes are not registered.
+`/#account` provides sign-out and SDK API key management. Generating a key requires
+a Hugging Face sign-in within the last five minutes. Session tokens live in
+HttpOnly, SameSite=Lax cookies (Secure over HTTPS), expire after 14 days, and are
+stored only as hashes. HF authentication attempts are rate-limited.
 Browser mutations require X-Track-Request: 1 and reject foreign Origin headers.
 
 Datasets, private run details, notes, logs, manifests and artifacts are owner-only.
@@ -182,24 +182,17 @@ can assign the old workspace:
 python -m fabryka_track.account_admin claim-legacy USERNAME
 ```
 
-Email password recovery is not configured. An operator can reset a password
-after verifying the account holder, without putting a password in shell history:
-
-```bash
-python -m fabryka_track.account_admin reset-password USERNAME
-```
-
 Before upgrading, back up the database with its native consistent-backup tool
 and preserve the installed source. Do not restart while training runs are active.
 
 ## Hugging Face sign-in
 
-Login and registration include Sign in with Hugging Face. Existing Track users
+Hugging Face is the only login and registration method. Existing Track users
 can connect an HF identity from Account; new HF sign-ins receive a separate
 `hf_` username. Identity is keyed by the provider's stable `sub`, never inferred
 from matching usernames or email addresses. No existing workspace is claimed
-automatically. HF-only accounts can set a local password or generate an API key
-within five minutes of signing in; older sessions must sign in with HF again.
+automatically. Accounts can generate an API key within five minutes of signing
+in; older sessions must sign in with HF again.
 
 This uses the Hugging Face documented Client ID Metadata Document flow with
 PKCE S256. `/.well-known/oauth-cimd` publishes the client metadata. Configure
@@ -365,7 +358,23 @@ on the server. GPU access defaults to disabled. Allowed accounts default to GPU
 in the studio; existing explicit compute choices persist. CPU remains selectable
 for Tiny/Small workflow tests. Larger presets are rejected on CPU.
 
-The server permits one active GPU job globally. GPU type, cloud, hourly price cap
+Each GPU run gets its own pod. The controller defaults to 50 parallel pods,
+500 outstanding GPU jobs globally and five per user. Excess runs remain queued;
+queue time does not consume their runtime budget. CPU admission is separate.
+Configure `FABRYKA_RUNPOD_MAX_PARALLEL`, `FABRYKA_RUNPOD_MAX_PENDING`, and
+`FABRYKA_RUNPOD_MAX_PENDING_PER_USER` to change these limits.
+`FABRYKA_RUNPOD_CONTROLLER_WORKERS` (default 16) bounds concurrent provider calls.
+Provisioning pods and pods awaiting confirmed deletion occupy capacity slots.
+
+Run exactly one API/supervisor process (one Uvicorn worker, one replica): capacity
+reservations and submission limits use process-local locks. GPU compute scales
+across pods; adding API replicas requires a distributed scheduler lock first.
+At 50 pods and the configured $0.50 per-pod hourly cap, the aggregate ceiling is
+$25/hour after price checks. Provider availability, account quotas and credit
+balance can reduce actual concurrency. Price is checked after allocation, so
+this is not a provider-enforced total spending limit.
+
+GPU type, cloud, hourly price cap
 and maximum wall time are operator settings; the runtime includes provisioning
 and synchronization. Early stopping or the time cap can end before the requested
 token budget. Byte tokens are not subword tokens. The selected corpus can repeat;
@@ -378,9 +387,27 @@ browser. A pinned worker bundle and every source/checkpoint have SHA-256 hashes.
 uncertain create is reconciled by deterministic pod name rather than retried.
 After verified uploads, the controller deletes the pod before marking the run
 finished. Failed deletions retry across application restarts. An API outage can
-delay deletion; pending jobs remain visible and block another deployment.
+delay deletion; pending cleanup remains visible and occupies its capacity slot.
 
 A failed or cancelled worker uploads available diagnostics and any saved model.
 A startup failure may produce only the controller's failure log. Interrupted GPU
 training cannot resume from optimizer state; checkpoints are selected by best
 validation loss, with actual completed steps and tokens recorded.
+
+The web UI uses document navigation at `/new`, `/runs`, `/run/<id>`,
+`/compare/<ids>`, `/benchmarks`, `/leaderboard`, `/guide`, `/login` and `/account`.
+Legacy hash bookmarks redirect to these pages.
+
+Transient RunPod allocation failures retry for up to one hour, configurable with
+`FABRYKA_RUNPOD_ALLOCATION_WAIT_SECONDS`. Retries reconcile provider state first
+and use exponential cooldown with jitter; waiting does not guarantee capacity.
+
+The target Training Suit architecture and its implementation boundaries are in
+[docs/training-suit-architecture.md](docs/training-suit-architecture.md) and
+[docs/training-suit-implementation.md](docs/training-suit-implementation.md).
+
+The [fast English diagnostic ladder](docs/fast-ladder.md) reports held-out NLL/BPB,
+BLiMP margins, Supplement and ARC-Easy likelihoods alongside the original TinyScore.
+EWoK requires approved Hugging Face dataset access; the combined score remains
+unavailable until all five components are measured. Use full mode for the fixed
+sample sizes; smoke mode checks execution only.

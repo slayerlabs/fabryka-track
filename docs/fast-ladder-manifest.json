@@ -1,0 +1,51 @@
+{
+  "protocol": "fast-en-v1",
+  "seed": 42,
+  "sources": {
+    "fast_blimp": {
+      "url": "https://api.osf.io/v2/nodes/ad7qg/files/osfstorage/66358ee7e8eec5175f6bebc4/",
+      "variant": "BabyLM 2024 vocabulary-filtered",
+      "selection": "seed42; 127 per phenomenon"
+    },
+    "fast_supplement": {
+      "url": "https://api.osf.io/v2/nodes/ad7qg/files/osfstorage/66358ef14664da20a9ed6c6f/",
+      "variant": "BabyLM 2024 vocabulary-filtered",
+      "selection": "all available pairs"
+    },
+    "fast_arc": {
+      "repo": "allenai/ai2_arc",
+      "revision": "210d026faf9955653af8916fad021475a3f00453",
+      "config": "ARC-Easy",
+      "split": "test"
+    },
+    "fast_lm": {
+      "repo": "Salesforce/wikitext",
+      "revision": "b08601e04326c79dfdd32d625aee71d232d685c3",
+      "config": "wikitext-103-raw-v1",
+      "split": "validation",
+      "bytes": 1000000,
+      "contamination": "external validation split; user training overlap not audited"
+    }
+  },
+  "components": {
+    "fast_blimp": {
+      "sha256": "42ec0143a4eead05ab5d2870f63f00fb18b4884dd9a66f913e0b5551e762cd5b",
+      "items": 8509
+    },
+    "fast_supplement": {
+      "sha256": "6bfbc06aa89a916dceb5052266dfaf252ed7f9c457b0a45b4acc7af56f20e10e",
+      "items": 5218
+    },
+    "fast_arc": {
+      "sha256": "6b053afc8b279c3b591bd2891f79a2de5641170f615c1ede150237200c2ce31c",
+      "items": 1000
+    },
+    "fast_lm": {
+      "sha256": "fece77a2556a51aca19e0bdf76deca5198c44d6989eee19a079a2427f3ddcdf2",
+      "items": 1
+    }
+  },
+  "unavailable": {
+    "fast_ewok": "Hugging Face access approval required"
+  }
+}

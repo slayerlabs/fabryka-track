@@ -199,3 +199,35 @@ def test_step_limit_still_saves_best_and_reuse_accounts_for_weights(client):
     assert cfg['expected_max_source_reuse'] == max(cfg['planned_training_tokens'] * d['weight'] / 100 / int(d['bytes'] * .9) for d in cfg['mix'])
     assert launch(client, patience=0).status_code == 422
     assert launch(client, min_delta=-1).status_code == 422
+
+
+def test_dataset_listing_reads_metadata_only_and_counts_utf8(client):
+    from sqlalchemy import event
+    from fabryka_track.database import engine
+    content = ('Zażółć gęślą jaźń 🦊\n' * 100).encode('utf-8')
+    uploaded = client.post('/api/datasets', files={'file': ('polish.txt', content, 'text/plain')})
+    assert uploaded.status_code == 201
+    statements = []
+    def record(conn, cursor, statement, parameters, context, executemany):
+        if statement.lstrip().upper().startswith('SELECT') and 'datasets' in statement:
+            statements.append(statement)
+    event.listen(engine, 'before_cursor_execute', record)
+    try:
+        response = client.get('/api/datasets')
+    finally:
+        event.remove(engine, 'before_cursor_execute', record)
+    assert response.status_code == 200
+    row = next(d for d in response.json() if d['name'] == 'polish.txt')
+    assert row['bytes'] == len(content)
+    assert statements and all('datasets.content' not in sql for sql in statements)
+
+
+def test_existing_dataset_sizes_are_backfilled(client):
+    from sqlalchemy import text
+    from fabryka_track.database import engine, create_tables
+    with engine.begin() as connection:
+        connection.execute(text('UPDATE datasets SET byte_count = NULL'))
+    create_tables()
+    with engine.connect() as connection:
+        assert connection.execute(text('SELECT count(*) FROM datasets WHERE byte_count IS NULL OR byte_count != length(CAST(content AS BLOB))')).scalar() == 0
+    assert client.get('/api/datasets').status_code == 200

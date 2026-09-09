@@ -21,11 +21,13 @@ from .hf_publish import checkpoint_path
 from .models import BenchmarkEvaluation, Run
 
 router = APIRouter(prefix='/api')
+from .fast_ladder import COMPONENTS, PROTOCOL as FAST_PROTOCOL, fast_score
+
 PROTOCOL = 'tinylm-en-v1-byte-sliding'
 CORE = ['sciq','arc_easy','piqa','hellaswag','blimp']
 SUITES = {'core':CORE, 'tinylm':CORE+['lambada_openai'],
           'extended':CORE+['lambada_openai','winogrande','boolq'],
-          'polish': ['multiblimp_polish']}
+          'polish': ['multiblimp_polish'], 'fast':[k for k in COMPONENTS if k!='fast_ewok']}
 TASKS = {
     'sciq': ('SciQ','allenai/sciq'), 'arc_easy': ('ARC-Easy','allenai/ai2_arc'),
     'piqa': ('PIQA','baber/piqa'), 'hellaswag': ('HellaSwag','Rowan/hellaswag'),
@@ -63,14 +65,14 @@ def serialize(row, session=None):
         position=1+session.scalar(select(func.count()).select_from(BenchmarkEvaluation).where(
             BenchmarkEvaluation.status=='queued',
             (BenchmarkEvaluation.created_at<row.created_at) | ((BenchmarkEvaluation.created_at==row.created_at)&(BenchmarkEvaluation.id<row.id))))
-    return {k:getattr(row,k) for k in ('id','run_id','status','mode','tasks','results','provenance','current_task','error','created_at','ended_at')} | {'tiny_score':tiny_score(row.results), 'protocol':PROTOCOL, 'queue_position':position}
+    return {k:getattr(row,k) for k in ('id','run_id','status','mode','tasks','results','provenance','current_task','error','created_at','ended_at')} | {'tiny_score':tiny_score(row.results), 'protocol':row.provenance.get('protocol',PROTOCOL), 'fast_score':fast_score(row.results), 'queue_position':position}
 
 
 @router.get('/benchmarks/catalog')
 def catalog():
     return {'protocol':PROTOCOL, 'available':importlib.util.find_spec('lm_eval') is not None,
             'tasks':[{'id':k,'name':v[0],'url':'https://huggingface.co/datasets/'+v[1]} for k,v in TASKS.items()],
-            'core':CORE,'suites':SUITES,'tiers':TIERS}
+            'core':CORE,'suites':SUITES,'tiers':TIERS,'fast_ladder':COMPONENTS}
 
 
 def visible_run(session,run_id,user):
@@ -87,7 +89,7 @@ def history(run_id:str,user=Depends(current_user),session=Depends(session_scope)
 
 
 class EvaluationInput(BaseModel):
-    suite: Literal['core','tinylm','extended','polish'] = 'tinylm'
+    suite: Literal['core','tinylm','extended','polish','fast'] = 'tinylm'
     mode: Literal['smoke','full'] = 'smoke'
 
 
@@ -103,10 +105,11 @@ def start(run_id:str,body:EvaluationInput,user=Depends(require_user),session=Dep
             raise HTTPException(409,'This run already has a queued or running evaluation.')
         digest=hashlib.sha256(path.read_bytes()).hexdigest()
         tasks=SUITES[body.suite]
+        protocol=FAST_PROTOCOL if body.suite=='fast' else PROTOCOL
         previous=list(session.scalars(select(BenchmarkEvaluation).where(BenchmarkEvaluation.run_id==run_id,
             BenchmarkEvaluation.mode==body.mode).order_by(BenchmarkEvaluation.created_at.desc())))
         compatible=[r for r in previous if r.provenance.get('checkpoint_sha256')==digest and
-                    r.provenance.get('protocol')==PROTOCOL and r.provenance.get('seed')==42 and
+                    r.provenance.get('protocol')==protocol and r.provenance.get('seed')==42 and
                     r.provenance.get('fewshot')==0 and r.provenance.get('limit_per_subtask')==(10 if body.mode=='smoke' else None)]
         # Reuse one coherent pinned evaluation; never mix smoke/full measurements.
         source=max(compatible,key=lambda r:sum(k in r.results and not r.results[k].get('error') for k in tasks),default=None)
@@ -124,7 +127,7 @@ def start(run_id:str,body:EvaluationInput,user=Depends(require_user),session=Dep
             row.results=completed
         else:
             provenance={k:v for k,v in (source.provenance.items() if source else []) if k not in ('runner','lease','heartbeat','worker_pid')}
-            provenance.update(checkpoint_sha256=digest,protocol=PROTOCOL,fewshot=0,seed=42,
+            provenance.update(checkpoint_sha256=digest,protocol=protocol,fewshot=0,seed=42,
                               limit_per_subtask=10 if body.mode=='smoke' else None,reused_tasks=list(completed))
             if source:provenance['reused_from_evaluation']=source.id
             row=BenchmarkEvaluation(run_id=run.id,mode=body.mode,tasks=tasks,results=completed,provenance=provenance,
