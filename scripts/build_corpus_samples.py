@@ -95,7 +95,8 @@ def fineweb(folder):
 if __name__=='__main__':
     parser=argparse.ArgumentParser()
     parser.add_argument('folder',type=Path)
-    parser.add_argument('--max-mb',type=int,default=1,choices=range(1,33))
+    parser.add_argument('--max-mb',type=int,default=1,choices=range(1,513),
+                        help='maximum UTF-8 text per source in decimal MB (1-512)')
     parser.add_argument('--sources',nargs='+',choices=[s[0] for s in SOURCES])
     args=parser.parse_args();args.folder.mkdir(parents=True,exist_ok=True)
     catalog_path=args.folder/'catalog.json'

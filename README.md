@@ -328,11 +328,16 @@ uv run --extra eval python scripts/update_corpus_catalog.py /tmp/corpus-pack
 uv run python scripts/import_corpus_samples.py /tmp/corpus-pack
 ```
 
-Building samples reads the first Parquet row group (some sources exceed 1 GB
-compressed), or the first 100 untruncated HF Viewer rows with an `x-revision`.
+Building samples streams Parquet rows until the requested per-source byte budget
+(up to 512 MB), or reads the first 100 untruncated HF Viewer rows for sources
+without a practical Parquet stream. The Viewer path remains a preview only.
 The builder preserves entire selected documents and records the sampling method.
 The import validates every text hash before its transaction and backs up SQLite.
 Production imports must retain the complete pack for provenance and recovery.
+
+For a larger local pack, run `uv run --extra eval python scripts/build_corpus_samples.py
+/tmp/corpus-pack --max-mb 100`, then update the catalog and import it. The pack is
+stored outside Git; its hashes and pinned HF revisions are retained in the catalog.
 
 The Chinchilla panel calculates D≈20N and C≈6ND in both directions, with 8/16/32/64/
 128M parameter presets. On RunPod it selects the actual GPU model; in CPU mode
