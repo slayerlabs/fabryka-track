@@ -754,7 +754,7 @@
         <a href="/" id="nav-new">Training studio</a
         ><a href="/runs" id="nav-runs">My runs</a
         ><a href="/benchmarks" id="nav-benchmarks">Benchmarks</a>
-        <a href="/leaderboard" id="nav-leaderboard" data-native-navigation>Leaderboard</a><a href="/guide" id="nav-guide">Jak czytać wykresy</a><a href="/login" id="nav-account">Sign in</a>
+        <a href="/leaderboard" id="nav-leaderboard" data-native-navigation>Leaderboard</a><a href="/guide" id="nav-guide">Training guide</a><a href="/login" id="nav-account">Sign in</a>
       </nav>
     </header>
     <main id="app"></main>
@@ -822,45 +822,6 @@
           t.className = "";
         }, 3500);
       }
-      // The product UI is English-first; keep source and dataset proper names intact.
-      const englishUi = {
-        "Charakter datasetu":"Dataset character", "Od czego zaczynamy?":"Where should we start?",
-        "Poeta / literat":"Poet / writer", "Prawnik / urzędnik":"Lawyer / civil servant",
-        "Człowiek internetu":"Internet person", "Zbalansowany (jak korpus)":"Balanced (corpus-like)",
-        "Rozdaj od zera":"Reset points", "20 książek: 1 książka to 1 punkt mieszanki":"20 books: 1 book = 1 mix point",
-        "Zajrzyj do książki →":"Open dataset →", "Początek":"Beginning", "Środek":"Middle", "Koniec":"End",
-        "Szukaj w tekście":"Search the text", "Wpisz słowo lub fragment":"Enter a word or phrase",
-        "Znajdź następny":"Find next", "← Poprzedni fragment":"← Previous excerpt", "Następny fragment →":"Next excerpt →",
-        "Źródło:":"Source:", "Wersja":"Revision", "dokumentów w próbce":"documents in sample",
-        "Próbka rzeczywistego korpusu":"Real corpus sample", "Archiwalny tekst testowy":"Archived test text",
-        "Twój prywatny plik":"Your private file", "Próbki rzeczywistych korpusów do treningu CPU.":"Real corpus samples for CPU training.",
-        "Profile rozdzielają punkty między dostępne próbki rzeczywistych korpusów.":"Profiles distribute points across available real corpus samples.",
-        "Każdą książkę możesz otworzyć, sprawdzić tekst i źródło.":"Open any dataset to inspect its text and source.",
-        "Rozmiary dotyczą pobranej próbki, nie całego korpusu.":"Sizes refer to the downloaded sample, not the full corpus.",
-        "Ile danych potrzebuje model?":"How much data does the model need?",
-        "Orientacyjny punkt startowy":"A useful starting point", "tokenów":"tokens", "Szacowane obliczenia":"Estimated compute",
-        "Zwiększenie skali 2× → koszt około 4×.":"2× the scale → about 4× the compute.",
-        "To plan skali, nie zmiana uruchamianego modelu.":"This plans scale; it does not change the model being launched.",
-        "Ręczna zmiana milionów tokenów ustawia własny budżet.":"Changing millions of tokens sets a custom budget.",
-        "Twoja biblioteka":"Your dataset library", "Próbki rzeczywistych korpusów do treningu CPU.":"Real corpus samples for training.",
-        "Tokeny treningowe (mln)":"Training tokens (millions)", "Parametry modelu N (miliony)":"Model parameters N (millions)",
-        "Reguła 20:1":"The 20:1 rule", "Wybierz profil lub ustaw własną mieszankę suwakami.":"Choose a profile or set a custom mix with the sliders.",
-        "Proporcje według rozmiaru dostępnego tekstu (bajty UTF-8).":"Shares based on available text size (UTF-8 bytes).",
-        "Brak źródeł w kategorii":"No sources are available for the", "Obecna mieszanka pozostaje bez zmian.":"The current mix was left unchanged.",
-        "Literatura":"Literature", "Prawo / administracja":"Law / administration", "Encyklopedia":"Encyclopedia", "Nauka":"Science", "Internet":"Internet", "Kod":"Code", "Inne / nieprzypisane":"Other / uncategorized",
-        "Ten profil wymaga podłączenia odpowiedniego korpusu.":"This profile needs a matching corpus.", "Rozmiary dotyczą pobranej próbki, nie całego korpusu.":"Sizes refer to the downloaded sample, not the full corpus.",
-        "Wybór rozmiaru zmienia rzeczywisty model GPU i ustawia budżet 20×.":"Choosing a size changes the actual GPU model and sets a 20× budget.", "Bajty tego trenera nie są tokenami subword i nie gwarantują tego samego optimum.":"This trainer uses bytes rather than subword tokens, so the same optimum is not guaranteed.",
-        "Model CPU i limit kroków wybierzesz dalej.":"Choose the CPU model and step limit later.", "Szacowane obliczenia:":"Estimated compute:",
-        "Nie udało się pobrać tekstu datasetu.":"Could not load the dataset text.", "Zamknij podgląd":"Close preview",
-        "tekst":"of text", "znaków":"characters", "linii":"lines", "startowa":"initial", "nie pełny korpus ani reprezentatywne losowanie":"not the full corpus or a representative sample",
-      };
-      function translateUi(root=document) {
-        const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);let node;
-        while(node=walker.nextNode()){let value=node.nodeValue;for(const [from,to] of Object.entries(englishUi))if(value.includes(from))value=value.split(from).join(to);if(value!==node.nodeValue)node.nodeValue=value;}
-        root.querySelectorAll?.("[placeholder],[aria-label]").forEach(el=>["placeholder","aria-label"].forEach(attr=>{let v=el.getAttribute(attr),old=v;for(const [from,to] of Object.entries(englishUi))if(v?.includes(from))v=v.split(from).join(to);if(v!==old)el.setAttribute(attr,v);}));
-      }
-      const uiObserver=new MutationObserver(()=>translateUi(app));
-      uiObserver.observe(app,{subtree:true,childList:true,characterData:true});
       function error(e) {
         if (e?.name === "AbortError") return;
         let box = $("#error");
@@ -914,7 +875,7 @@
         $("#nav-account").href = account ? "/account" : "/login";
       }
       function authForm() {
-        app.innerHTML = `<section class="panel" style="max-width:480px;margin:35px auto"><div class="eyebrow">Your workspace</div><h1>Sign in with Hugging Face</h1><p class="muted">Keep datasets and training runs private. Publish selected scores to the leaderboard.</p><div id="hf-account-info" lang="pl" style="margin:20px 0 8px;padding:16px;background:var(--bg);border:1px solid var(--line);border-radius:8px"><strong>Zanim zaczniesz</strong><p class="muted" style="margin:8px 0;line-height:1.5">Do udziału potrzebujesz konta na Hugging Face. Wykonaj kolejno te trzy kroki:</p><ol style="margin:12px 0;padding-left:22px;line-height:1.6"><li><a href="https://huggingface.co/join" target="_blank" rel="noopener noreferrer">Załóż konto na Hugging Face ↗</a>, jeśli jeszcze go nie masz.</li><li>Wejdź na <a href="https://huggingface.co/SlayerLab" target="_blank" rel="noopener noreferrer">profil Slayer Lab ↗</a> i kliknij <strong>Follow</strong>.</li><li><a href="https://huggingface.co/SlayerLab" target="_blank" rel="noopener noreferrer">Dołącz do zespołu Slayer Lab na HF ↗</a> — wyślij prośbę o dołączenie do organizacji.</li></ol><p class="muted" style="margin:8px 0 0;line-height:1.5">Następnie wróć tutaj i kliknij „Sign in with Hugging Face”. Samo obserwowanie profilu nie oznacza dołączenia do zespołu.</p></div><button class="secondary" id="hf-signin" style="width:100%;margin:12px 0">🤗 Sign in with Hugging Face</button><p class="muted">Logowanie jest dostępne wyłącznie przez Hugging Face. Przy pierwszym logowaniu konto Track zostanie utworzone automatycznie.</p><a href="/leaderboard">Browse the public leaderboard →</a></section>`;
+        app.innerHTML = `<section class="panel" style="max-width:480px;margin:35px auto"><div class="eyebrow">Your workspace</div><h1>Sign in with Hugging Face</h1><p class="muted">Keep datasets and training runs private. Publish selected scores to the leaderboard.</p><div id="hf-account-info" lang="en" style="margin:20px 0 8px;padding:16px;background:var(--bg);border:1px solid var(--line);border-radius:8px"><strong>Before you start</strong><p class="muted" style="margin:8px 0;line-height:1.5">You need a Hugging Face account. Complete these three steps:</p><ol style="margin:12px 0;padding-left:22px;line-height:1.6"><li><a href="https://huggingface.co/join" target="_blank" rel="noopener noreferrer">Create a Hugging Face account ↗</a>, if you do not already have one.</li><li>Visit the <a href="https://huggingface.co/SlayerLab" target="_blank" rel="noopener noreferrer">Slayer Lab profile ↗</a> and click <strong>Follow</strong>.</li><li><a href="https://huggingface.co/SlayerLab" target="_blank" rel="noopener noreferrer">Join the Slayer Lab team on HF ↗</a> — request membership in the organization.</li></ol><p class="muted" style="margin:8px 0 0;line-height:1.5">Then return here and click “Sign in with Hugging Face”. Following the profile does not make you a team member.</p></div><button class="secondary" id="hf-signin" style="width:100%;margin:12px 0">🤗 Sign in with Hugging Face</button><p class="muted">Sign-in is available only through Hugging Face. Your Track account is created automatically when you first sign in.</p><a href="/leaderboard">Browse the public leaderboard →</a></section>`;
         $("#hf-signin").onclick = () => startHuggingFace(false);
       }
       async function startHuggingFace(link) {
@@ -947,14 +908,14 @@
       const datasetColor = d => corpusOf(d)?.color || colors[parseInt(d.id.replaceAll('-','').slice(0,6),16)%colors.length];
       const datasetBytes = d => d.bytes >= 1e6 ? `${fmt(d.bytes/1e6,1)} MB` : `${fmt(d.bytes/1000,1)} KB`;
       const datasetSummary = d => corpusOf(d) ? `Corpus sample · ${corpusOf(d).documents} documents · ${datasetBytes(d)} of text` : `${d.example ? 'Archived test text' : 'Your private file'} · ${fmt(d.bytes/1000,1)} KB`;
-      const sourceCategories = {literature:"Literatura", law:"Prawo / administracja", encyclopedia:"Encyklopedia", science:"Nauka", web:"Internet", code:"Kod", other:"Inne / nieprzypisane"};
+      const sourceCategories = {literature:"Literature", law:"Law / administration", encyclopedia:"Encyclopedia", science:"Science", web:"Internet", code:"Code", other:"Other / uncategorized"};
       const characters = [
-        {id:"poet", name:"Poeta / literat", category:"literature"},
-        {id:"lawyer", name:"Prawnik / urzędnik", category:"law"},
-        {id:"wiki", name:"Wikipedysta", category:"encyclopedia"},
-        {id:"scientist", name:"Naukowiec", category:"science"},
-        {id:"internet", name:"Człowiek internetu", category:"web"},
-        {id:"balanced", name:"Zbalansowany (jak korpus)"},
+        {id:"poet", name:"Poet / writer", category:"literature"},
+        {id:"lawyer", name:"Lawyer / civil servant", category:"law"},
+        {id:"wiki", name:"Wikipedia reader", category:"encyclopedia"},
+        {id:"scientist", name:"Scientist", category:"science"},
+        {id:"internet", name:"Internet person", category:"web"},
+        {id:"balanced", name:"Balanced (corpus-like)"},
       ];
       function categoryOf(d) {
         return corpusOf(d)?.category || d.category || (d.example ? {"Polish prose":"literature", "Everyday English":"literature", "Python snippets":"code"}[d.name] : null) || "other";
@@ -983,11 +944,11 @@
         if(!d)return;
         try {
           const response=await fetch('/api/datasets/'+encodeURIComponent(id)+'/content');
-          if(!response.ok)throw new Error('Nie udało się pobrać tekstu datasetu.');
+          if(!response.ok)throw new Error('Could not load the dataset text.');
           const text=await response.text(); if(view!==generation)return;
           $('#dataset-preview')?.remove();
           const dialog=document.createElement('dialog');dialog.id='dataset-preview';dialog.className='book-reader';dialog.setAttribute('aria-labelledby','reader-title');
-          dialog.innerHTML=`<div class="row"><h2 id="reader-title">${esc(d.name)}</h2><button class="secondary" id="close-reader" aria-label="Zamknij podgląd">×</button></div><p class="muted">${esc(datasetSummary(d))} · ${fmt(text.length,0)} znaków · ${fmt(text.split('\n').length,0)} linii</p>${corpusOf(d)?`<p><a href="${esc(corpusOf(d).url)}" target="_blank" rel="noopener">Źródło: ${esc(corpusOf(d).repo)} ↗</a><br><small>Wersja ${esc(corpusOf(d).revision.slice(0,12))} · ${corpusOf(d).documents} dokumentów w próbce. Próbka startowa, nie pełny korpus ani reprezentatywne losowanie.</small></p>`:''}<div class="reader-controls"><button class="secondary" data-reader-position="start">Początek</button><button class="secondary" data-reader-position="middle">Środek</button><button class="secondary" data-reader-position="end">Koniec</button></div><label class="field"><span>Szukaj w tekście</span><input id="reader-query" type="search" placeholder="Wpisz słowo lub fragment"></label><div class="reader-controls"><button class="secondary" id="reader-find">Znajdź następny</button><span class="muted" id="reader-search-status" role="status"></span></div><p class="muted" id="reader-position" role="status"></p><pre id="reader-text" tabindex="0"></pre><div class="reader-controls"><button class="secondary" id="reader-prev">← Poprzedni fragment</button><button class="secondary" id="reader-next">Następny fragment →</button></div><details><summary>Identyfikator treści (SHA-256)</summary><code style="overflow-wrap:anywhere">${esc(d.sha256)}</code></details>`;
+          dialog.innerHTML=`<div class="row"><h2 id="reader-title">${esc(d.name)}</h2><button class="secondary" id="close-reader" aria-label="Close preview">×</button></div><p class="muted">${esc(datasetSummary(d))} · ${fmt(text.length,0)} characters · ${fmt(text.split('\n').length,0)} lines</p>${corpusOf(d)?`<p><a href="${esc(corpusOf(d).url)}" target="_blank" rel="noopener">Source: ${esc(corpusOf(d).repo)} ↗</a><br><small>Revision ${esc(corpusOf(d).revision.slice(0,12))} · ${corpusOf(d).documents} documents in sample. Initial sample, not the full corpus or a representative sample.</small></p>`:''}<div class="reader-controls"><button class="secondary" data-reader-position="start">Beginning</button><button class="secondary" data-reader-position="middle">Middle</button><button class="secondary" data-reader-position="end">End</button></div><label class="field"><span>Search the text</span><input id="reader-query" type="search" placeholder="Enter a word or phrase"></label><div class="reader-controls"><button class="secondary" id="reader-find">Find next</button><span class="muted" id="reader-search-status" role="status"></span></div><p class="muted" id="reader-position" role="status"></p><pre id="reader-text" tabindex="0"></pre><div class="reader-controls"><button class="secondary" id="reader-prev">← Previous excerpt</button><button class="secondary" id="reader-next">Next excerpt →</button></div><details><summary>Content identifier (SHA-256)</summary><code style="overflow-wrap:anywhere">${esc(d.sha256)}</code></details>`;
           document.body.append(dialog);let offset=0,found=-1,lastQuery='',size=2000;
           const paint=()=>{dialog.querySelector('#reader-text').textContent=text.slice(offset,offset+size);dialog.querySelector('#reader-text').scrollTop=0;dialog.querySelector('#reader-position').textContent=`Znaki ${offset+1}–${Math.min(text.length,offset+size)} z ${text.length}`;dialog.querySelector('#reader-prev').disabled=offset===0;dialog.querySelector('#reader-next').disabled=offset+size>=text.length;};
           dialog.querySelector('#close-reader').onclick=()=>dialog.close();dialog.addEventListener('close',()=>dialog.remove());
@@ -1023,7 +984,7 @@
           if (input) {
             input.value = value/5;
             input.closest(".dataset").dataset.empty = String(value === 0);
-            $(`[data-value="${d.id}"]`).textContent = `${value/5} pkt · ${value}%`;
+            $(`[data-value="${d.id}"]`).textContent = `${value/5} points · ${value}%`;
           }
         });
         if ($("#recipe")) $("#recipe").innerHTML = recipe();
@@ -1054,12 +1015,12 @@
         if ($("#data-warning")) $("#data-warning").outerHTML = dataWarning();
       }
       function dataWarning() {
-        if(!mix().length)return `<div class="notice" id="data-warning">Wybierz profil lub rozdaj punkty, aby zbudować mieszankę. Dostępna biblioteka: ${datasets.length} źródeł, ${fmt(datasets.reduce((n,d)=>n+d.bytes,0)/1e6,1)} MB rzeczywistego tekstu.</div>`;
+        if(!mix().length)return `<div class="notice" id="data-warning">Choose a profile or assign points to build a mix. Available library: ${datasets.length} sources, ${fmt(datasets.reduce((n,d)=>n+d.bytes,0)/1e6,1)} MB of actual text.</div>`;
         const p = trainingPlan();
         return `<div class="notice" id="data-warning">${p.available < 10000 ? "Very little training text: this run is a workflow test. Upload more varied text before increasing the model or budget. " : ""}${p.reuse > 4 ? `At the step limit, the most reused source would be sampled approximately ${fmt(p.reuse, 1)} times its training size. These are repeated byte tokens, not fresh data. ` : ""}Validation uses a small fixed sample from the last 10% of each source; its score is only a diagnostic for this mix.</div>`;
       }
       function recipe() {
-        return `<h3>Your recipe</h3><small>${mix().length} sources · ${pointsUsed()} / 20 pkt · ${pointsUsed()*5}% allocated</small><div class="stack" aria-label="Dataset mix">${mix()
+        return `<h3>Your recipe</h3><small>${mix().length} sources · ${pointsUsed()} / 20 points · ${pointsUsed()*5}% allocated</small><div class="stack" aria-label="Dataset mix">${mix()
           .map(
             (d) =>
               `<span style="width:${d.weight}%;background:${datasetColor(d)}"></span>`,
@@ -1130,7 +1091,7 @@
       }
       function datasetRow(d) {
         const value=draft.weights[d.id]||0;
-        return `<div class="dataset compact-dataset" data-empty="${!value}"><div class="dataset-heading"><div class="dataset-cover" style="--book-color:${datasetColor(d)}" aria-hidden="true"><b>${esc(d.name.slice(0,2).toUpperCase())}</b><small>DATASET</small></div><div class="dataset-title"><h3>${esc(d.name)}</h3><small>${esc(datasetSummary(d))}</small><button type="button" class="preview-link" data-preview-dataset="${d.id}">Zajrzyj do książki →</button></div></div><div class="dataset-controls"><button type="button" class="point-control" data-remove-point="${d.id}" aria-label="Odejmij punkt: ${esc(d.name)}">−</button><input id="slider-${d.id}" type="range" min="0" max="20" step="1" value="${value/5}" aria-label="${esc(d.name)} points" data-slider="${d.id}" style="accent-color:${datasetColor(d)}"><button type="button" class="point-control" data-add-point="${d.id}" aria-label="Dodaj punkt: ${esc(d.name)}">+</button><output class="percent" data-value="${d.id}" for="slider-${d.id}">${value/5} pkt · ${value}%</output></div></div>`;
+        return `<div class="dataset compact-dataset" data-empty="${!value}"><div class="dataset-heading"><div class="dataset-cover" style="--book-color:${datasetColor(d)}" aria-hidden="true"><b>${esc(d.name.slice(0,2).toUpperCase())}</b><small>DATASET</small></div><div class="dataset-title"><h3>${esc(d.name)}</h3><small>${esc(datasetSummary(d))}</small><button type="button" class="preview-link" data-preview-dataset="${d.id}">Open dataset →</button></div></div><div class="dataset-controls"><button type="button" class="point-control" data-remove-point="${d.id}" aria-label="Remove a point: ${esc(d.name)}">−</button><input id="slider-${d.id}" type="range" min="0" max="20" step="1" value="${value/5}" aria-label="${esc(d.name)} points" data-slider="${d.id}" style="accent-color:${datasetColor(d)}"><button type="button" class="point-control" data-add-point="${d.id}" aria-label="Add a point: ${esc(d.name)}">+</button><output class="percent" data-value="${d.id}" for="slider-${d.id}">${value/5} points · ${value}%</output></div></div>`;
       }
       function renderStudio() {
         app.innerHTML = `<div class="intro studio-intro"><div class="eyebrow">Training studio</div><h1>A model starts with a mix.</h1><p class="muted">Choose your data, train a model, and follow its progress live.</p></div>${steps()}<div id="error-slot"></div><div class="layout"><section class="panel" id="workspace"></section><div class="studio-sidebar"><label class="field"><span>Compute</span><select id="compute-select"><option value="runpod" ${draft.compute==='runpod'?'selected':''} ${!gpuCapabilities.runpod_available?'disabled':''}>RunPod GPU · ${esc(gpuCapabilities.gpu||'GPU')}</option><option value="cpu" ${draft.compute!=='runpod'?'selected':''}>Local CPU · tiny workflow test</option></select></label><div id="studio-next"></div><aside class="panel aside" id="recipe">${recipe()}</aside><details class="panel" id="chinchilla-fold" hidden><summary id="chinchilla-summary">Chinchilla scaling laws</summary><div id="chinchilla-slot"></div></details></div></div>`;
@@ -1167,13 +1128,13 @@
             }
           };
           if (stage === 1) {
-            w.insertAdjacentHTML("afterbegin", `<section class="character" aria-labelledby="character-title"><div class="eyebrow">Charakter datasetu</div><h2 id="character-title">Od czego zaczynamy?</h2><div class="character-buttons" role="group" aria-label="Charakter datasetu">${characters.map(p => `<button type="button" data-character="${p.id}" aria-pressed="false">${p.name}</button>`).join("")}</div><div class="row" style="margin:16px 0"><b id="point-budget" role="status" aria-live="polite"></b><button class="secondary" type="button" id="reset-points">Rozdaj od zera</button></div><div class="point-shelf" id="point-shelf" role="group" aria-label="20 książek: 1 książka to 1 punkt mieszanki"></div><p class="muted" id="character-status" role="status" aria-live="polite"></p><small>Profile rozdzielają punkty między dostępne próbki rzeczywistych korpusów. Każdą książkę możesz otworzyć, sprawdzić tekst i źródło. Rozmiary dotyczą pobranej próbki, nie całego korpusu.</small></section><section class="character" aria-labelledby="chinchilla-title"><div class="eyebrow">Chinchilla scaling laws</div><h2 id="chinchilla-title">Ile danych potrzebuje model?</h2><p class="muted">Orientacyjny punkt startowy: D ≈ 20 × N. Dwa razy większy model potrzebuje około dwa razy więcej tokenów i cztery razy więcej obliczeń.</p><div class="character-buttons" role="group" aria-label="Planowana liczba parametrów">${[8,16,32,64,128].map(n=>`<button type="button" data-chinchilla-size="${n}">${n}M</button>`).join('')}</div><div class="fields"><label class="field"><span>Parametry modelu N (miliony)</span><input id="chinchilla-parameters" type="number" min="0.005" max="500" step="any" value="${draft.target_tokens/20000000}"></label><label class="field"><span>Tokeny treningowe (mln)</span><input id="target-tokens" type="number" min="0.1" max="10000" step="any" value="${draft.target_tokens/1e6}"></label></div><p id="chinchilla-equation" role="status" aria-live="polite"></p><p class="muted" id="chinchilla-compute"></p><small>To plan skali, nie zmiana uruchamianego modelu. Model CPU i limit kroków wybierzesz dalej. Reguła 20:1 pochodzi z badań dużych modeli; bajty tego trenera nie są tokenami subword i nie gwarantują tego samego optimum. <a href="https://arxiv.org/abs/2203.15556" target="_blank" rel="noopener">Hoffmann et al., 2022 ↗</a></small></section>`);
+            w.insertAdjacentHTML("afterbegin", `<section class="character" aria-labelledby="character-title"><div class="eyebrow">Dataset character</div><h2 id="character-title">Where should we start?</h2><div class="character-buttons" role="group" aria-label="Dataset character">${characters.map(p => `<button type="button" data-character="${p.id}" aria-pressed="false">${p.name}</button>`).join("")}</div><div class="row" style="margin:16px 0"><b id="point-budget" role="status" aria-live="polite"></b><button class="secondary" type="button" id="reset-points">Reset points</button></div><div class="point-shelf" id="point-shelf" role="group" aria-label="20 books: 1 book = 1 mix point"></div><p class="muted" id="character-status" role="status" aria-live="polite"></p><small>Profiles distribute points across available real corpus samples. Open any dataset to inspect its text and source. Sizes refer to the downloaded sample, not the full corpus.</small></section><section class="character" aria-labelledby="chinchilla-title"><div class="eyebrow">Chinchilla scaling laws</div><h2 id="chinchilla-title">How much data does the model need?</h2><p class="muted">A useful starting point: D ≈ 20 × N. A model twice as large needs about twice as many tokens and four times as much compute.</p><div class="character-buttons" role="group" aria-label="Planned parameter count">${[8,16,32,64,128].map(n=>`<button type="button" data-chinchilla-size="${n}">${n}M</button>`).join('')}</div><div class="fields"><label class="field"><span>Model parameters N (millions)</span><input id="chinchilla-parameters" type="number" min="0.005" max="500" step="any" value="${draft.target_tokens/20000000}"></label><label class="field"><span>Training tokens (millions)</span><input id="target-tokens" type="number" min="0.1" max="10000" step="any" value="${draft.target_tokens/1e6}"></label></div><p id="chinchilla-equation" role="status" aria-live="polite"></p><p class="muted" id="chinchilla-compute"></p><small>This plans scale; it does not change the model being launched. Choose the CPU model and step limit later. The 20:1 rule comes from research on large models; this trainer uses bytes rather than subword tokens, so the same optimum is not guaranteed. <a href="https://arxiv.org/abs/2203.15556" target="_blank" rel="noopener">Hoffmann et al., 2022 ↗</a></small></section>`);
             const characterSection=document.querySelector('[aria-labelledby="character-title"]');
-            if(characterSection){characterSection.querySelector('.eyebrow').textContent='Character development';characterSection.querySelector('#character-title').textContent='What should this model become?';characterSection.querySelector('[aria-label="Charakter datasetu"]').setAttribute('aria-label','Character development profile');const intro=document.createElement('p');intro.className='muted';intro.style.maxWidth='720px';intro.textContent='Spend exactly 20 character development points to shape the model’s training profile. Each point assigns 5% of the training mix to a dataset.';characterSection.querySelector('#character-title').after(intro);characterSection.querySelector('#reset-points').textContent='Reset points';characterSection.querySelector('#point-shelf').setAttribute('aria-label','20 character development points');}
+            if(characterSection){characterSection.querySelector('.eyebrow').textContent='Character development';characterSection.querySelector('#character-title').textContent='What should this model become?';characterSection.querySelector('[aria-label="Dataset character"]').setAttribute('aria-label','Character development profile');const intro=document.createElement('p');intro.className='muted';intro.style.maxWidth='720px';intro.textContent='Spend exactly 20 character development points to shape the model’s training profile. Each point assigns 5% of the training mix to a dataset.';characterSection.querySelector('#character-title').after(intro);characterSection.querySelector('#reset-points').textContent='Reset points';characterSection.querySelector('#point-shelf').setAttribute('aria-label','20 character development points');}
             document.querySelectorAll('[data-character]').forEach(button => button.onclick = () => applyCharacter(button.dataset.character));
             $('#reset-points').onclick=()=>{draft.weights=Object.fromEntries(datasets.map(d=>[d.id,0]));draft.character=null;save();updateMix();};
             updateMix();
-            const showChinchilla=()=>{const activeGPU=draft.compute==='runpod';const d=activeGPU?(draft.budget_mode==='chinchilla'?trainingPlan().parameters*20:draft.target_tokens):draft.target_tokens,n=activeGPU?trainingPlan().parameters:d/20;$('#chinchilla-summary').textContent=`Chinchilla · ${fmt(n/1e6,1)}M → ${fmt(d/1e6,0)}M tokenów`;$('#chinchilla-parameters').value=n/1e6;$('#target-tokens').value=d/1e6;$('#chinchilla-equation').textContent=`${fmt(n/1e6,3)}M parametrów × ${fmt(d/n,2)} ≈ ${fmt(d/1e6,1)}M tokenów`;$('#chinchilla-compute').textContent=`Szacowane obliczenia: C ≈ 6ND ≈ ${(6*n*d).toExponential(2)} FLOPs. Zwiększenie skali 2× → koszt około 4×.`;document.querySelectorAll('[data-chinchilla-size]').forEach(b=>b.setAttribute('aria-pressed',String(activeGPU?draft.model_size===b.dataset.chinchillaSize+'m':+b.dataset.chinchillaSize===n/1e6)));save();updateMix();};
+            const showChinchilla=()=>{const activeGPU=draft.compute==='runpod';const d=activeGPU?(draft.budget_mode==='chinchilla'?trainingPlan().parameters*20:draft.target_tokens):draft.target_tokens,n=activeGPU?trainingPlan().parameters:d/20;$('#chinchilla-summary').textContent=`Chinchilla · ${fmt(n/1e6,1)}M → ${fmt(d/1e6,0)}M tokens`;$('#chinchilla-parameters').value=n/1e6;$('#target-tokens').value=d/1e6;$('#chinchilla-equation').textContent=`${fmt(n/1e6,3)}M parameters × ${fmt(d/n,2)} ≈ ${fmt(d/1e6,1)}M tokens`;$('#chinchilla-compute').textContent=`Estimated compute: C ≈ 6ND ≈ ${(6*n*d).toExponential(2)} FLOPs. 2× the scale → about 4× the compute.`;document.querySelectorAll('[data-chinchilla-size]').forEach(b=>b.setAttribute('aria-pressed',String(activeGPU?draft.model_size===b.dataset.chinchillaSize+'m':+b.dataset.chinchillaSize===n/1e6)));save();updateMix();};
             $('#target-tokens').onchange=event=>{if(draft.compute==='runpod')draft.budget_mode='tokens';draft.target_tokens=Math.max(100000,Math.min(1e10,Math.round(Number(event.target.value)*1e6)||100000));showChinchilla();};
             $('#chinchilla-parameters').onchange=event=>{draft.target_tokens=Math.max(100000,Math.min(1e10,(Number(event.target.value)||.005)*20000000));showChinchilla();};
             document.querySelectorAll('[data-chinchilla-size]').forEach(b=>b.onclick=()=>{draft.target_tokens=+b.dataset.chinchillaSize*20000000;if(draft.compute==='runpod'){draft.model_size=b.dataset.chinchillaSize+'m';draft.budget_mode='chinchilla';}showChinchilla();});
@@ -1182,7 +1143,7 @@
             $('#studio-next').append($('#next'));
             if(draft.compute==='runpod'){
               $('#chinchilla-parameters').readOnly=true;
-              document.querySelector('[aria-labelledby="chinchilla-title"] small').textContent='Wybór rozmiaru zmienia rzeczywisty model GPU i ustawia budżet 20×. Tokenizer: bajty UTF-8. Ręczna zmiana milionów tokenów ustawia własny budżet. Early stopping i limit czasu mogą zakończyć run wcześniej.';
+              document.querySelector('[aria-labelledby="chinchilla-title"] small').textContent='Choosing a size changes the actual GPU model and sets a 20× budget. Tokenizer: UTF-8 bytes. Changing millions of tokens sets a custom budget. Early stopping and the time limit may end the run sooner.';
             }
             showChinchilla();
           }
@@ -1291,42 +1252,42 @@
           };
       }
       const learningExamples = [
-        {id:'healthy', group:'healthy', title:'Zdrowe uczenie', tag:'Pożądany przebieg',
+        {id:'healthy', group:'healthy', title:'Healthy learning', tag:'Expected pattern',
           train:[5.5,4.6,3.9,3.4,3.05,2.8,2.6,2.45,2.35,2.28,2.22], val:[5.6,4.8,4.15,3.75,3.45,3.25,3.1,3.0,2.95,2.91,2.89],
-          observation:'Obie krzywe maleją, a różnica między nimi pozostaje umiarkowana. Poprawa walidacji stopniowo zwalnia.',
-          action:'Kontynuuj, dopóki walidacja poprawia się w ramach budżetu. Porównuj checkpointy na tym samym zbiorze i zachowaj niezależny test końcowy.',
-          trap:'Sama różnica train–validation nie oznacza błędu. Liczy się trend oraz to, czy walidacja reprezentuje przyszłe użycie.'},
-        {id:'overfit', group:'problem', title:'Przeuczenie · overfitting', tag:'Jak na Twoim wykresie',
+          observation:'Both curves decrease, with a moderate gap between them. Validation improvements gradually slow down.',
+          action:'Continue while validation improves within your budget. Compare checkpoints on the same dataset and reserve an independent final test.',
+          trap:'A training–validation gap alone does not indicate a problem. Look at the trend and whether validation represents the intended use.'},
+        {id:'overfit', group:'problem', title:'Overfitting', tag:'Training and validation diverge',
           train:[5.6,1.55,.08,.015,.006,.003,.002,.0015,.0013,.0012,.0011], val:[4.9,3.85,4.95,5.45,5.7,5.9,6.05,6.25,6.4,6.6,6.76],
-          observation:'Loss treningowy zbliża się do zera, ale po początkowej poprawie loss walidacyjny rośnie. Model zapamiętuje dane treningowe.',
-          action:'Wybierz checkpoint z minimum walidacji i zatrzymaj trening wcześniej. Dodaj zróżnicowane dane, usuń duplikaty i sprawdź mniejszy model lub regularyzację.',
-          trap:'Kolejne miliony przetworzonych tokenów mogą oznaczać tysiące powtórzeń tego samego krótkiego tekstu. Więcej kroków nie oznacza więcej wiedzy.'},
-        {id:'underfit', group:'problem', title:'Niedouczenie lub brak uczenia', tag:'Obie krzywe prawie płaskie',
+          observation:'Training loss approaches zero, but validation loss rises after an initial improvement. The model is memorizing the training data.',
+          action:'Choose the checkpoint with the lowest validation loss and stop training earlier. Add diverse data, remove duplicates, and try a smaller model or regularization.',
+          trap:'Millions of processed tokens may be thousands of repetitions of the same short text. More steps do not necessarily mean more knowledge.'},
+        {id:'underfit', group:'problem', title:'Underfitting or failure to learn', tag:'Both curves are nearly flat',
           train:[5.5,5.42,5.38,5.35,5.34,5.33,5.32,5.31,5.3,5.3,5.29], val:[5.55,5.49,5.47,5.45,5.44,5.45,5.43,5.44,5.42,5.43,5.42],
-          observation:'Train i validation pozostają blisko poziomu startowego. Niewielka luka nie jest tu oznaką dobrego modelu.',
-          action:'Sprawdź przesunięcie etykiet, maskę, gradienty i aktualizacje wag. Spróbuj celowo dopasować malutki batch. Dopiero potem dobieraj learning rate, czas i rozmiar modelu.',
-          trap:'Nie istnieje uniwersalny próg „dobrego lossu”. Poziom zależy od tokenizera, danych i sposobu liczenia; potrzebujesz punktu odniesienia.'},
-        {id:'unstable', group:'problem', title:'Niestabilny trening', tag:'Skoki, eksplozja lossu',
+          observation:'Training and validation remain close to their initial levels. A small gap does not indicate a good model here.',
+          action:'Check label shifting, masks, gradients, and weight updates. Try deliberately overfitting a tiny batch before adjusting the learning rate, training duration, or model size.',
+          trap:'There is no universal threshold for good loss. Its level depends on the tokenizer, data, and calculation method; you need a baseline.'},
+        {id:'unstable', group:'problem', title:'Unstable training', tag:'Spikes and exploding loss',
           train:[5.5,4.6,4.1,5.8,3.9,7.4,5.2,9,11,14,18], val:[5.6,4.8,4.5,5.6,4.8,7.1,6.4,9.7,12,15,19],
-          observation:'Duże skoki przechodzą w wzrost lossu. W prawdziwym runie mogą pojawić się także NaN albo Inf.',
-          action:'Sprawdź normy gradientów, learning rate, warmup i precyzję obliczeń. Zmniejsz learning rate, rozważ gradient clipping i obejrzyj batch poprzedzający skok.',
-          trap:'Nie wygładzaj problemu na wykresie. Zobacz surowe pomiary; pojedynczy skok może mieć inną przyczynę niż trwała rozbieżność.'},
-        {id:'noisy', group:'healthy', title:'Szum, ale poprawny trend', tag:'Nierówne nie znaczy zepsute',
+          observation:'Large spikes turn into increasing loss. A real run may also produce NaN or Inf values.',
+          action:'Check gradient norms, learning rate, warmup, and numerical precision. Lower the learning rate, consider gradient clipping, and inspect the batch preceding the spike.',
+          trap:'Do not smooth away the problem. Inspect the raw measurements; a single spike may have a different cause from sustained divergence.'},
+        {id:'noisy', group:'healthy', title:'Noise with a healthy trend', tag:'Uneven does not mean broken',
           train:[5.5,4.3,4.7,3.7,4.1,3.2,3.55,2.85,3.1,2.55,2.7], val:[5.6,4.95,4.65,4.4,4.05,3.9,3.6,3.5,3.25,3.1,3.05],
-          observation:'Loss kolejnych batchy oscyluje, ale walidacja i ogólny trend maleją. Batche mogą mieć różną trudność.',
-          action:'Patrz na kilka kolejnych ewaluacji, nie jeden punkt. Używaj stałej walidacji; w razie potrzeby zwiększ jej rozmiar. Wygładzanie pomaga czytać trend, ale zachowaj surowe wartości.',
-          trap:'Nie wybieraj nowej konfiguracji po każdym wahnięciu. Trwałe pogarszanie walidacji to coś innego niż szum batchy.'},
-        {id:'leakage', group:'problem', title:'Podejrzanie dobra walidacja', tag:'Sprawdź dane i metrykę',
+          observation:'Batch losses fluctuate, but validation loss and the overall trend decrease. Batches can differ in difficulty.',
+          action:'Look at several consecutive evaluations, not a single point. Use a fixed validation set and increase its size if necessary. Smoothing helps reveal the trend, but retain the raw values.',
+          trap:'Do not change the configuration after every fluctuation. Sustained validation degradation is different from batch noise.'},
+        {id:'leakage', group:'problem', title:'Suspiciously good validation', tag:'Check the data and metric',
           train:[5.5,3.8,2.6,1.6,.8,.4,.18,.09,.05,.03,.02], val:[5.45,3.78,2.55,1.57,.79,.39,.17,.085,.048,.029,.019],
-          observation:'Walidacja niemal idealnie śledzi trening i spada bardzo nisko. Może to być łatwe zadanie — albo przeciek danych bądź błąd ewaluacji.',
-          action:'Sprawdź wspólne dokumenty, duplikaty i fragmenty tego samego źródła po obu stronach podziału. Sprawdź etykiety i maskowanie; oceń model na niezależnych danych.',
-          trap:'Sam wykres nie dowodzi wycieku. Podział tokenów jednego dokumentu na 90/10 daje słabszy test generalizacji niż rozdzielenie niezależnych dokumentów.'}
+          observation:'Validation closely tracks training and becomes very low. This could indicate an easy task, data leakage, or an evaluation error.',
+          action:'Check for shared documents, duplicates, and fragments from the same source across the split. Verify labels and masking, then evaluate on independent data.',
+          trap:'The chart alone does not prove leakage. Splitting one document into 90/10 token segments tests generalization less reliably than separating independent documents.'}
       ];
       async function trainingGuide() {
-        app.innerHTML = `<section lang="pl" class="learning-guide"><div class="intro"><div class="eyebrow">Biblioteka przykładów</div><h1>Jak czytać trening modelu</h1><p class="muted">Najniższy loss treningowy nie zawsze oznacza najlepszy model. Porównuj go z walidacją i sprawdzaj dane.</p></div><div class="notice"><strong>Wszystkie wykresy poniżej są ilustracyjne.</strong> To wymyślone serie pokazujące typowe wzorce, nie pomiary rzeczywistych modeli ani benchmarki. Skale służą objaśnieniu trendu.</div><div class="actions guide-filters" aria-label="Filtr przykładów"><button class="secondary" data-guide-filter="all" aria-pressed="true">Wszystkie przykłady</button><button class="secondary" data-guide-filter="healthy" aria-pressed="false">Zdrowy przebieg</button><button class="secondary" data-guide-filter="problem" aria-pressed="false">Sygnały problemów</button><a class="secondary" href="/new">Otwórz studio →</a></div><div class="guide-grid">${learningExamples.map(example=>{
+        app.innerHTML = `<section lang="en" class="learning-guide"><div class="intro"><div class="eyebrow">Example library</div><h1>How to read model training</h1><p class="muted">The lowest training loss does not always mean the best model. Compare it with validation and inspect the data.</p></div><div class="notice"><strong>All charts below are illustrative.</strong> These invented series show common patterns; they are not real model measurements or benchmarks. The scales illustrate the trends.</div><div class="actions guide-filters" aria-label="Filter examples"><button class="secondary" data-guide-filter="all" aria-pressed="true">All examples</button><button class="secondary" data-guide-filter="healthy" aria-pressed="false">Healthy patterns</button><button class="secondary" data-guide-filter="problem" aria-pressed="false">Warning signs</button><a class="secondary" href="/new">Open studio →</a></div><div class="guide-grid">${learningExamples.map(example=>{
           const best=example.val.indexOf(Math.min(...example.val));
-          return `<article class="panel guide-card" data-guide-group="${example.group}"><div class="eyebrow">${esc(example.tag)}</div><h2>${esc(example.title)}</h2><div class="chart">${chart([{name:'Training loss',color:'#b54f2d',points:example.train.map((value,i)=>({step:i*100,value}))},{name:'Validation loss',color:'#448777',points:example.val.map((value,i)=>({step:i*100,value}))}], 'guide-'+example.id)}</div><p class="muted guide-caption">Dane ilustracyjne · minimum walidacji: krok ${best*100}. Wartości w legendzie dotyczą końca krzywej.</p><h3>Co widać</h3><p>${esc(example.observation)}</p><h3>Co zrobić</h3><p>${esc(example.action)}</p><details><summary>Na co uważać</summary><p>${esc(example.trap)}</p></details></article>`;
-        }).join('')}</div><section class="panel guide-notes"><h2>Trzy zasady przed kolejnym runem</h2><ol><li><strong>Wybieraj checkpoint po walidacji.</strong> Track zapisuje model z najniższym zmierzonym validation loss, a wykres pokazuje także późniejsze kroki. Early stopping zatrzymuje run dopiero po ustawionej liczbie ewaluacji bez poprawy.</li><li><strong>Sprawdzaj ilość unikalnych danych.</strong> Budżet tokenów to liczba przetworzonych tokenów, także powtórzeń. Trzy teksty po kilkaset bajtów nadają się do testu technicznego, nie do oceny jakości modelu 8M.</li><li><strong>Porównuj zgodne metryki.</strong> Dla średniego cross-entropy w natach perplexity = exp(loss). Nie porównuj bezpośrednio perplexity różnych tokenizerów; w Track tokenem jest bajt UTF-8. Wysoki throughput mówi o szybkości, nie o jakości.</li></ol><p class="muted">Jeden wykres daje wskazówkę, nie pełną diagnozę. Sprawdź podział danych, konfigurację, logi i próbki generacji. Test końcowy trzymaj poza doborem hiperparametrów.</p></section></section>`;
+          return `<article class="panel guide-card" data-guide-group="${example.group}"><div class="eyebrow">${esc(example.tag)}</div><h2>${esc(example.title)}</h2><div class="chart">${chart([{name:'Training loss',color:'#b54f2d',points:example.train.map((value,i)=>({step:i*100,value}))},{name:'Validation loss',color:'#448777',points:example.val.map((value,i)=>({step:i*100,value}))}], 'guide-'+example.id)}</div><p class="muted guide-caption">Illustrative data · lowest validation loss at step ${best*100}. Legend values refer to the end of each curve.</p><h3>What you see</h3><p>${esc(example.observation)}</p><h3>What to do</h3><p>${esc(example.action)}</p><details><summary>What to watch for</summary><p>${esc(example.trap)}</p></details></article>`;
+        }).join('')}</div><section class="panel guide-notes"><h2>Three checks before your next run</h2><ol><li><strong>Select checkpoints using validation.</strong> Track saves the model with the lowest measured validation loss, while the chart also shows later steps. Early stopping ends a run after the configured number of evaluations without improvement.</li><li><strong>Check the amount of unique data.</strong> The token budget counts processed tokens, including repetitions. Three texts of a few hundred bytes can test the pipeline, but cannot establish the quality of an 8M model.</li><li><strong>Compare compatible metrics.</strong> For mean cross-entropy in nats, perplexity = exp(loss). Do not directly compare perplexity across tokenizers; Track uses one UTF-8 byte per token. High throughput measures speed, not quality.</li></ol><p class="muted">One chart provides a clue, not a complete diagnosis. Check the data split, configuration, logs, and generated samples. Keep the final test separate from hyperparameter selection.</p></section></section>`;
         await TrackCharts.render(app);
         document.querySelectorAll('[data-guide-filter]').forEach(button=>button.onclick=()=>{
           const filter=button.dataset.guideFilter;
@@ -1342,12 +1303,12 @@
         const c=g.cost;
         if(!c)return '';
         const money=v=>'$'+Number(v).toFixed(4)+' USD';
-        if(c.basis==='no_pod')return c.complete?'<p><b>Koszt GPU: $0.0000 USD</b> · Nie przydzielono poda.</p>':'';
-        return `<section class="panel" style="padding:16px;margin-top:14px" aria-label="Koszt treningu"><h3>Koszt treningu · RunPod</h3>
-          <p><b>${c.estimated_usd!=null?money(c.estimated_usd):'Brak danych do oszacowania'}</b> · ${c.complete?'szacowany koszt całego runu':'szacowany koszt do tej chwili'}</p>
-          <p>${c.seconds!=null?`Czas przydziału GPU: ${duration(c.seconds)}`:''}${c.hourly_usd!=null?` · Stawka: ${money(c.hourly_usd)}/h`:''}</p>
-          <p>${c.billed_usd!=null?`RunPod naliczył dotąd: <b>${money(c.billed_usd)}</b> · naliczony czas: ${duration(c.billed_seconds)} · odczyt: ${esc(new Date(c.billing_checked_at).toLocaleString())}`:'Oczekiwanie na rozliczenie RunPod.'}</p>
-          <small>Oszacowanie: stawka GPU × czas od próby przydziału do zwolnienia poda. Obejmuje uruchamianie i zapis artefaktów. Rozliczenie RunPod może być opóźnione. Nie obejmuje osobnych ewaluacji, VPS ani zewnętrznego storage.</small></section>`;
+        if(c.basis==='no_pod')return c.complete?'<p><b>GPU cost: $0.0000 USD</b> · No pod was allocated.</p>':'';
+        return `<section class="panel" style="padding:16px;margin-top:14px" aria-label="Training cost"><h3>Training cost · RunPod</h3>
+          <p><b>${c.estimated_usd!=null?money(c.estimated_usd):'Not enough data to estimate'}</b> · ${c.complete?'estimated total run cost':'estimated cost so far'}</p>
+          <p>${c.seconds!=null?`GPU allocation time: ${duration(c.seconds)}`:''}${c.hourly_usd!=null?` · Rate: ${money(c.hourly_usd)}/h`:''}</p>
+          <p>${c.billed_usd!=null?`RunPod billed so far: <b>${money(c.billed_usd)}</b> · billed time: ${duration(c.billed_seconds)} · checked: ${esc(new Date(c.billing_checked_at).toLocaleString())}`:'Waiting for RunPod billing.'}</p>
+          <small>Estimate: GPU rate × time from the allocation attempt to pod release. Includes startup and artifact uploads. RunPod billing may be delayed. Excludes separate evaluations, the VPS, and external storage.</small></section>`;
       }
       function operationalStatus(r) {
         const g=r.gpu_status;
@@ -1497,7 +1458,7 @@
           $('#namespace-browse').onclick=()=>{cursor='';load().catch(error);};$('#namespace-next').onclick=()=>load().catch(error);
           await load();
         }
-        $('#run-explorer').innerHTML=`<div class="metric-explorer"><div><h2>Metric explorer</h2><small>Hover to inspect · drag to zoom · <a href="/guide">Jak czytać te wykresy? →</a></small></div><div class="explorer-controls"><input id="metric-filter" type="search" aria-label="Filter metrics" placeholder="Find a metric…"><select id="metric-range" aria-label="Visible training range"><option value="0">All steps</option><option value="0.1">Skip first 10%</option><option value="0.5">Latest half</option></select><select id="metric-layout" aria-label="Chart layout"><option value="grid">Mosaic</option><option value="column">One column</option></select></div></div>`;
+        $('#run-explorer').innerHTML=`<div class="metric-explorer"><div><h2>Metric explorer</h2><small>Hover to inspect · drag to zoom · <a href="/guide">How to read these charts? →</a></small></div><div class="explorer-controls"><input id="metric-filter" type="search" aria-label="Filter metrics" placeholder="Find a metric…"><select id="metric-range" aria-label="Visible training range"><option value="0">All steps</option><option value="0.1">Skip first 10%</option><option value="0.5">Latest half</option></select><select id="metric-layout" aria-label="Chart layout"><option value="grid">Mosaic</option><option value="column">One column</option></select></div></div>`;
         // Move the persistent toolbar into place above the charts after each paint.
         function filterMetrics(){document.querySelectorAll('#live .chart').forEach(el=>el.hidden=!el.querySelector('h3').textContent.toLowerCase().includes($('#metric-filter').value.toLowerCase()));}
         $('#metric-filter').oninput=filterMetrics;

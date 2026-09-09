@@ -37,7 +37,7 @@ test('guide renders six labeled illustrative examples and both loss curves',asyn
   let content='';let renders=0;
   const context=vm.createContext({esc:String,chart:series=>{assert.equal(series.length,2);return '<div class="test-chart"></div>';},app:{set innerHTML(v){content=v;}},TrackCharts:{render:async()=>renders++},document:{querySelectorAll:()=>[]}});
   vm.runInContext(between('      const learningExamples', '      function chart(series,key)')+'\nglobalThis.show=trainingGuide;',context);
-  await context.show();assert.equal((content.match(/data-guide-group=/g)||[]).length,6);assert.match(content,/Wszystkie wykresy poniżej są ilustracyjne/);assert.match(content,/Przeuczenie/);assert.equal(renders,1);
+  await context.show();assert.equal((content.match(/data-guide-group=/g)||[]).length,6);assert.match(content,/All charts below are illustrative/);assert.match(content,/Overfitting/);assert.equal(renders,1);
 });
 
 
@@ -62,10 +62,10 @@ test('cost summary distinguishes estimates, pending billing and reported zero',(
   vm.runInContext(between('      function trainingCost(g)', '      function operationalStatus(r)')+'\nglobalThis.render=trainingCost;',context);
   const cost={estimated_usd:0.01234,seconds:120,hourly_usd:0.37,complete:true};
   const pending=context.render({cost});
-  assert.match(pending,/\$0.0123 USD/);assert.match(pending,/szacowany koszt/);
-  assert.match(pending,/Oczekiwanie na rozliczenie/);
+  assert.match(pending,/\$0.0123 USD/);assert.match(pending,/estimated total run cost/);
+  assert.match(pending,/Waiting for RunPod billing/);
   const billed=context.render({cost:{...cost,billed_usd:0,billed_seconds:0,billing_checked_at:'2026-09-09T20:00:00Z'}});
-  assert.match(billed,/RunPod naliczył dotąd: <b>\$0.0000 USD/);
+  assert.match(billed,/RunPod billed so far: <b>\$0.0000 USD/);
 });
 
 test('benchmark panel selectors remain IDs after document navigation migration',()=>{
