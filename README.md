@@ -15,6 +15,10 @@ Open <http://localhost:8000>. Local development uses SQLite and filesystem artif
 storage. For production, copy `.env.example`, start PostgreSQL with
 `docker compose up -d`, and configure Cloudflare R2 variables if desired.
 
+Production deployments from GitHub Actions are documented in
+[docs/deployment.md](docs/deployment.md). CI runs for `main` and pull requests;
+deployment to the existing server is a separate manual action from `main`.
+
 ## Track a run
 
 ```python
@@ -166,7 +170,7 @@ username, run name, metrics, date, update count and mixture percentages. Uploade
 filenames, content, logs, notes and model downloads stay private. Unpublishing
 removes the public score. The SDK cannot overwrite studio metrics or checkpoints.
 
-Set `FABRYKA_API_URL=https://track.fabryka.ai` and `FABRYKA_API_KEY` in the SDK
+Set `FABRYKA_API_URL=https://contest.fabryka.ai` and `FABRYKA_API_KEY` in the SDK
 process environment. HTTP API clients send `Authorization: Bearer <key>`.
 API keys can be rotated or revoked in Account, and are shown only when generated.
 The server does not need a global API key. Existing SDK processes must configure
@@ -203,7 +207,7 @@ within five minutes of signing in; older sessions must sign in with HF again.
 
 This uses the Hugging Face documented Client ID Metadata Document flow with
 PKCE S256. `/.well-known/oauth-cimd` publishes the client metadata. Configure
-`FABRYKA_PUBLIC_URL` to the public HTTPS origin (default `https://track.fabryka.ai`).
+`FABRYKA_PUBLIC_URL` to the public HTTPS origin (default `https://contest.fabryka.ai`).
 The callback is `/api/auth/huggingface/callback`; the client ID is the metadata
 URL. Hugging Face fetches this public document, so no client secret is required.
 A local development origin must be configured separately and reachable by HF.

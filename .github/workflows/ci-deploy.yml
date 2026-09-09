@@ -1,0 +1,170 @@
+name: CI and deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: 0.12.3
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --locked --extra test --extra eval
+
+      - name: Run tests
+        run: uv run pytest
+
+      - name: Build Python package
+        run: uv build
+
+      - name: Validate deployment files
+        run: |
+          docker compose -f compose.production.yml config --quiet
+          docker build --check .
+
+  deploy:
+    name: Deploy to production
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    concurrency:
+      group: fabryka-track-production
+      cancel-in-progress: false
+    env:
+      DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+      DEPLOY_PORT: ${{ vars.DEPLOY_PORT || '22' }}
+      DEPLOY_PATH: /srv/track-fabryka-ai
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Validate deployment configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in DEPLOY_HOST DEPLOY_USER DEPLOY_PORT DEPLOY_PATH; do
+            value="${!name-}"
+            if [[ -z "$value" ]]; then
+              echo "Missing GitHub Actions setting: $name" >&2
+              exit 1
+            fi
+          done
+
+          [[ "$DEPLOY_USER" =~ ^[a-z_][a-z0-9_-]*$ ]] || { echo "DEPLOY_USER has an invalid format" >&2; exit 1; }
+          [[ "$DEPLOY_HOST" =~ ^[A-Za-z0-9._:-]+$ ]] || { echo "DEPLOY_HOST has an invalid format" >&2; exit 1; }
+          [[ "$DEPLOY_PORT" =~ ^[0-9]{1,5}$ ]] || { echo "DEPLOY_PORT must be a number" >&2; exit 1; }
+          (( DEPLOY_PORT >= 1 && DEPLOY_PORT <= 65535 )) || { echo "DEPLOY_PORT is outside the valid range" >&2; exit 1; }
+          [[ "$DEPLOY_PATH" =~ ^/[A-Za-z0-9._/-]+$ ]] || { echo "DEPLOY_PATH must be an absolute path without spaces" >&2; exit 1; }
+          case "$DEPLOY_PATH" in
+            /|/home|/root|/srv|/opt|/var) echo "DEPLOY_PATH is too broad" >&2; exit 1 ;;
+            */../*|*/..|*/./*|*/.) echo "DEPLOY_PATH must not contain relative segments" >&2; exit 1 ;;
+          esac
+
+      - name: Configure SSH
+        shell: bash
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          for name in DEPLOY_SSH_KEY DEPLOY_KNOWN_HOSTS; do
+            value="${!name-}"
+            if [[ -z "$value" ]]; then
+              echo "Missing GitHub Actions secret: $name" >&2
+              exit 1
+            fi
+          done
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$DEPLOY_SSH_KEY" > "$HOME/.ssh/deploy_key"
+          chmod 600 "$HOME/.ssh/deploy_key"
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+          cat > "$HOME/.ssh/config" <<EOF
+          Host deploy-target
+            HostName $DEPLOY_HOST
+            User $DEPLOY_USER
+            Port $DEPLOY_PORT
+            IdentityFile $HOME/.ssh/deploy_key
+            IdentitiesOnly yes
+            BatchMode yes
+            StrictHostKeyChecking yes
+          EOF
+          chmod 600 "$HOME/.ssh/config"
+
+      - name: Check deployment host
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh deploy-target bash -s <<'REMOTE'
+          set -euo pipefail
+          command -v rsync >/dev/null || { echo 'rsync is not installed on the deployment host' >&2; exit 1; }
+          command -v docker >/dev/null || { echo 'Docker is not installed on the deployment host' >&2; exit 1; }
+          docker compose version >/dev/null || { echo 'The Docker Compose plugin is not available' >&2; exit 1; }
+          docker info >/dev/null 2>&1 || { echo 'The deployment user cannot access the Docker daemon' >&2; exit 1; }
+          REMOTE
+
+      - name: Synchronize application files
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh deploy-target mkdir -p -- "$DEPLOY_PATH"
+          rsync -az --delete-delay \
+            --exclude='.git/' \
+            --exclude='.env' \
+            --exclude='.venv/' \
+            --exclude='artifacts/' \
+            --exclude='backups/' \
+            --exclude='benchmark-work/' \
+            --exclude='corpus-samples/' \
+            --exclude='*.db' \
+            --exclude='*.db-*' \
+            --exclude='DEPLOYED_COMMIT' \
+            --exclude='compose.override.yml' \
+            --exclude='compose.override.yaml' \
+            ./ "deploy-target:$DEPLOY_PATH/"
+
+      - name: Start application
+        shell: bash
+        env:
+          DEPLOY_COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          ssh deploy-target bash -s -- "$DEPLOY_PATH" "$DEPLOY_COMMIT" <<'REMOTE'
+          set -euo pipefail
+          deploy_path=$1
+          deploy_commit=$2
+          cd "$deploy_path"
+          test -f .env || { echo 'Missing server-side .env' >&2; exit 1; }
+          grep -Eq '^FABRYKA_DATABASE_URL=.+' .env || { echo 'FABRYKA_DATABASE_URL is missing from server-side .env' >&2; exit 1; }
+          docker volume inspect fabryka-track_postgres >/dev/null || { echo 'Missing existing fabryka-track_postgres volume; refusing to start with an empty database' >&2; exit 1; }
+          docker compose -f compose.production.yml config --quiet
+          docker compose -f compose.production.yml up -d --build --wait --remove-orphans
+          printf '%s\n' "$deploy_commit" > DEPLOYED_COMMIT
+          docker compose -f compose.production.yml ps
+          REMOTE
+
+      - name: Remove SSH credentials
+        if: always()
+        run: rm -f "$HOME/.ssh/deploy_key" "$HOME/.ssh/config" "$HOME/.ssh/known_hosts"

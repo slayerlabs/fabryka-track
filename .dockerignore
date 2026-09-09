@@ -1,0 +1,17 @@
+.git
+.github
+.env
+.venv
+.pytest_cache
+__pycache__
+*.db
+*.db-*
+*.egg-info
+artifacts
+backups
+benchmark-work
+corpus-samples
+dist
+graphify-out
+test-artifacts
+tests

@@ -21,7 +21,7 @@ def child(spec_path,progress_path):
 
 
 def main():
-    base=os.environ.get('TRACK_URL','https://track.fabryka.ai').rstrip('/')+'/api/benchmark-runner'
+    base=os.environ.get('TRACK_URL','https://contest.fabryka.ai').rstrip('/')+'/api/benchmark-runner'
     root=Path(os.environ.get('TRACK_BENCHMARK_WORKDIR','./benchmark-work'));root.mkdir(parents=True,exist_ok=True)
     with httpx.Client(headers={'Authorization':'Bearer '+os.environ['TRACK_RUNNER_TOKEN']},timeout=30) as client:
         while True:

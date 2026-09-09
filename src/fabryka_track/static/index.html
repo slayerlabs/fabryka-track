@@ -933,7 +933,7 @@
         };
         $("#key-form").onsubmit = async event => {
           event.preventDefault(); const f=event.currentTarget; const b=f.querySelector("button"); b.disabled=true;
-          try { const result=await post("/auth/api-key", {password:f.elements.password.value}); f.reset(); $("#key-result").innerHTML=`<p>Copy this key now. It is shown only once.</p><label class="field"><span>API key</span><input readonly value="${esc(result.api_key)}"></label><p class="muted">Set FABRYKA_API_KEY and FABRYKA_API_URL=https://track.fabryka.ai in your training environment.</p>`; } catch(e) { error(e); } finally { b.disabled=false; }
+          try { const result=await post("/auth/api-key", {password:f.elements.password.value}); f.reset(); $("#key-result").innerHTML=`<p>Copy this key now. It is shown only once.</p><label class="field"><span>API key</span><input readonly value="${esc(result.api_key)}"></label><p class="muted">Set FABRYKA_API_KEY and FABRYKA_API_URL=https://contest.fabryka.ai in your training environment.</p>`; } catch(e) { error(e); } finally { b.disabled=false; }
         };
         $("#revoke-key").onclick = async () => { try { await api("/auth/api-key", {method:"DELETE"}); $("#key-result").replaceChildren(); toast("API key revoked."); } catch(e) { error(e); } };
       }

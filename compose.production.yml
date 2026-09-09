@@ -1,0 +1,49 @@
+name: fabryka-track
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: fabryka
+      POSTGRES_PASSWORD: fabryka
+      POSTGRES_DB: fabryka
+    ports: ["127.0.0.1:5432:5432"]
+    volumes: [postgres:/var/lib/postgresql/data]
+    restart: unless-stopped
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U fabryka -d fabryka"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  app:
+    image: fabryka-track:production
+    build: .
+    init: true
+    restart: unless-stopped
+    network_mode: host
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      FABRYKA_ARTIFACT_DIR: /app/artifacts
+    command: [uvicorn, fabryka_track.api:app, --host, 127.0.0.1, --port, "8130", --workers, "1"]
+    volumes:
+      - ${FABRYKA_ARTIFACT_PATH:-./artifacts}:/app/artifacts
+      - model-cache:/root/.cache
+    depends_on:
+      postgres:
+        condition: service_healthy
+    stop_grace_period: 2m
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8130/health', timeout=3)"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+      start_period: 10s
+
+volumes:
+  postgres:
+    external: true
+    name: fabryka-track_postgres
+  model-cache:

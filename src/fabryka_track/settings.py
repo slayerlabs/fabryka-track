@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="FABRYKA_", env_file=".env", extra="ignore")
 
     database_url: str = "sqlite:///./fabryka-track.db"
-    public_url: str = "https://track.fabryka.ai"
+    public_url: str = "https://contest.fabryka.ai"
     api_key: str | None = None
     api_url: str = "http://localhost:8000"
     spool_dir: Path = Path("~/.fabryka-track/spool").expanduser()
