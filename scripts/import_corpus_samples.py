@@ -31,9 +31,16 @@ if __name__=='__main__':
             else:
                 # Keep old IDs immutable for historical runs, but make the larger
                 # replacement unambiguous in the dataset picker.
-                previous = db.scalar(select(Dataset).where(Dataset.name == meta['name'], Dataset.example == True))
-                if previous and not previous.name.endswith(' · legacy sample'):
-                    previous.name += ' · legacy sample'
+                previous = db.scalars(
+                    select(Dataset).where(
+                        Dataset.name == meta['name'],
+                        Dataset.example == True,
+                        Dataset.id != meta['id'],
+                    )
+                ).all()
+                for old in previous:
+                    if not old.name.endswith(' · legacy sample'):
+                        old.name += ' · legacy sample'
                 db.add(Dataset(id=meta['id'],name=meta['name'],content=content,example=True,sha256=meta['sha256']))
         db.commit()
     print('Imported',len(verified),'real corpus samples; existing sources and run weights retained.')
