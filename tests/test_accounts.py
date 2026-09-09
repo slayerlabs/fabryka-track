@@ -39,7 +39,7 @@ def test_two_accounts_are_isolated_and_publication_only_exposes_scores(client):
     run = finished(client, response.json()['id'])
     assert run['state'] == 'finished'
     artifact = run['artifacts'][0]['id']
-    assert client.get('/api/leaderboard').json()['models'][0]['owner'] == 'tester'
+    assert client.get('/api/leaderboard').json()['sizes'][0]['models'][0]['owner'] == 'tester'
     with TestClient(app, headers={'X-Track-Request': '1'}) as other:
         assert other.get('/api/leaderboard').status_code == 200
         assert other.get('/api/projects').status_code == 401
@@ -60,7 +60,7 @@ def test_two_accounts_are_isolated_and_publication_only_exposes_scores(client):
         assert other.post('/api/events',json={'events':[event('run.finish',{'run_id':run['id']})]}).status_code == 404
         duplicate = other.post('/api/datasets', files={'file':('own.txt', b'This is private text. ' * 50)}).json()
         assert duplicate['id'] != uploaded['id']
-        board = other.get('/api/leaderboard').json()['models']
+        board = other.get('/api/leaderboard').json()['sizes'][0]['models']
         assert board[0]['owner'] == 'tester'
         assert board[0]['is_owner'] is False
         assert board[0]['mix'][0]['name'] == 'Private dataset'
@@ -71,7 +71,7 @@ def test_two_accounts_are_isolated_and_publication_only_exposes_scores(client):
         assert 'secret-corpus-name' not in str(public)
         assert public['metrics']['val/loss']
         assert client.patch('/api/training/' + run['id'] + '/visibility',json={'is_public':False}).status_code == 200
-        assert other.get('/api/leaderboard').json()['models'] == []
+        assert other.get('/api/leaderboard').json()['sizes'] == []
 
 
 def test_api_key_ingestion_revoke_and_studio_metrics_protection(client):

@@ -80,12 +80,15 @@ def test_leaderboard_ranks_completed_models(client):
         assert client.patch('/api/training/' + run_id + '/visibility', json={'is_public': True}).status_code == 200
     board = client.get('/api/leaderboard')
     assert board.status_code == 200
-    rows = board.json()['models']
+    sizes = board.json()['sizes']
+    assert len(sizes) == 1 and sizes[0]['model_size'] == 'tiny'
+    rows = sizes[0]['models']
     assert len(rows) >= 2
     assert rows[0]['rank'] == 1
     assert rows[0]['val_loss'] <= rows[1]['val_loss']
     assert rows[0]['mix'][0]['weight'] == 60
-    assert client.get('/api/leaderboard?sort=throughput&order=desc').json()['models'][0]['throughput'] >= 0
+    fast = client.get('/api/leaderboard?sort=throughput&order=desc').json()['sizes'][0]['models']
+    assert fast[0]['throughput'] >= 0
     assert client.get('/api/leaderboard?sort=nope').status_code == 422
 
 
@@ -184,7 +187,7 @@ def test_early_stopping_saves_actual_best_checkpoint(client):
     assert recipe['status'] == 'finished'
     assert recipe['result'] == result
     assert client.patch('/api/training/' + run['id'] + '/visibility', json={'is_public': True}).status_code == 200
-    board = client.get('/api/leaderboard').json()['models']
+    board = [row for size in client.get('/api/leaderboard').json()['sizes'] for row in size['models']]
     assert next(r for r in board if r['id'] == run['id'])['val_loss'] == best['value']
     assert result['tokens_seen'] == result['completed_steps'] * cfg['batch_size'] * cfg['training_context_length']
 

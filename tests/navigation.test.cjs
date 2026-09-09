@@ -62,10 +62,9 @@ test('cost summary distinguishes estimates, pending billing and reported zero',(
   vm.runInContext(between('      function trainingCost(g)', '      function operationalStatus(r)')+'\nglobalThis.render=trainingCost;',context);
   const cost={estimated_usd:0.01234,seconds:120,hourly_usd:0.37,complete:true};
   const pending=context.render({cost});
-  assert.match(pending,/\$0.0123 USD/);assert.match(pending,/estimated total run cost/);
-  assert.match(pending,/Waiting for RunPod billing/);
+  assert.match(pending,/\$0.0123 total/);assert.match(pending,/billed: pending/);
   const billed=context.render({cost:{...cost,billed_usd:0,billed_seconds:0,billing_checked_at:'2026-09-09T20:00:00Z'}});
-  assert.match(billed,/RunPod billed so far: <b>\$0.0000 USD/);
+  assert.match(billed,/billed \$0.0000/);
 });
 
 test('benchmark panel selectors remain IDs after document navigation migration',()=>{

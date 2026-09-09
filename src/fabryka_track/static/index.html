@@ -716,8 +716,9 @@
       .namespace-leaf button {border:0;background:#edf2f5;color:#496478;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;}
       .namespace-value {max-width:100%;overflow-wrap:anywhere;white-space:pre-wrap;}
       #namespace-tree pre {white-space:pre-wrap;overflow-wrap:anywhere;max-height:400px;overflow:auto;font-size:11px;}
-      .gpu-status {margin:14px 0;}
-      .gpu-status p {margin:8px 0;}
+      .gpu-status {margin:8px 0;}
+      .gpu-status p {margin:6px 0;}
+      .gpu-status small {display:block;margin:4px 0 0;}
       .run-live {min-width:0;width:100%;}
       .run-view .intro {margin-bottom:20px;}
       .run-view h1 {font-size:36px;}
@@ -1302,13 +1303,12 @@
       function trainingCost(g) {
         const c=g.cost;
         if(!c)return '';
-        const money=v=>'$'+Number(v).toFixed(4)+' USD';
-        if(c.basis==='no_pod')return c.complete?'<p><b>GPU cost: $0.0000 USD</b> · No pod was allocated.</p>':'';
-        return `<section class="panel" style="padding:16px;margin-top:14px" aria-label="Training cost"><h3>Training cost · RunPod</h3>
-          <p><b>${c.estimated_usd!=null?money(c.estimated_usd):'Not enough data to estimate'}</b> · ${c.complete?'estimated total run cost':'estimated cost so far'}</p>
-          <p>${c.seconds!=null?`GPU allocation time: ${duration(c.seconds)}`:''}${c.hourly_usd!=null?` · Rate: ${money(c.hourly_usd)}/h`:''}</p>
-          <p>${c.billed_usd!=null?`RunPod billed so far: <b>${money(c.billed_usd)}</b> · billed time: ${duration(c.billed_seconds)} · checked: ${esc(new Date(c.billing_checked_at).toLocaleString())}`:'Waiting for RunPod billing.'}</p>
-          <small>Estimate: GPU rate × time from the allocation attempt to pod release. Includes startup and artifact uploads. RunPod billing may be delayed. Excludes separate evaluations, the VPS, and external storage.</small></section>`;
+        const money=v=>'$'+Number(v).toFixed(4);
+        if(c.basis==='no_pod')return c.complete?'<small class="muted">GPU cost: $0.0000 · no pod allocated</small>':'';
+        const est=c.estimated_usd!=null?`${money(c.estimated_usd)} ${c.complete?'total':'so far'}`:'estimating…';
+        const rate=c.hourly_usd!=null?` · ${money(c.hourly_usd)}/h`:'';
+        const billed=c.billed_usd!=null?` · billed ${money(c.billed_usd)}`:' · billed: pending';
+        return `<small class="muted" title="Estimate: GPU rate × time from allocation to pod release. Excludes evaluations, VPS and storage.">Cost: <b>${est}</b>${rate}${billed}</small>`;
       }
       function operationalStatus(r) {
         const g=r.gpu_status;
@@ -1368,7 +1368,7 @@
         };
         function showActive(data) {
           const active=data.filter(r=>['queued','running','stopping'].includes(r.state));
-          $('#active-runs').innerHTML=active.length?`<h2 style="font-size:24px">Current runs</h2>${active.map(r=>`<article class="panel" style="margin-bottom:16px;padding:20px"><div class="row"><a href="/run/${r.id}"><h3>${esc(r.name)}</h3><small>${esc(r.config.model||r.project)}</small></a><a class="secondary" href="/run/${r.id}">Open live dashboard →</a></div>${operationalStatus(r)}<progress max="100" value="${r.latest_metrics.progress||0}" aria-label="${esc(r.name)} progress"></progress><div class="row"><small>${fmt(r.latest_metrics.progress||0,1)}% · ${fmt((r.latest_metrics['training/tokens_seen']||0)/1e6,2)}M tokens</small><small>Train ${fmt(r.latest_metrics['train/loss'],3)} · Validation ${fmt(r.latest_metrics['val/loss'],3)}</small></div></article>`).join('')}`:'';
+          $('#active-runs').innerHTML=active.length?`<h2 style="font-size:24px">Current runs</h2><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:10px">${active.map(r=>`<article class="panel" style="padding:12px"><div class="row"><a href="/run/${r.id}"><h3 style="font-size:14px;margin:0">${esc(r.name)}</h3><small class="muted">${esc(r.config.model||r.project)}</small></a><a class="secondary" href="/run/${r.id}" style="font-size:12px">Open →</a></div>${operationalStatus(r)}<progress max="100" value="${r.latest_metrics.progress||0}" aria-label="${esc(r.name)} progress"></progress><div class="row"><small>${fmt(r.latest_metrics.progress||0,1)}% · ${fmt((r.latest_metrics['training/tokens_seen']||0)/1e6,2)}M tokens</small><small>Train ${fmt(r.latest_metrics['train/loss'],3)} · Val ${fmt(r.latest_metrics['val/loss'],3)}</small></div></article>`).join('')}</div>`:'';
           for(const r of data){const row=document.querySelector(`[data-run-id="${r.id}"]`);if(row){row.querySelector('.badge').textContent=r.state;row.querySelector('.badge').className='badge '+r.state;row.querySelector('.loss-label').textContent='Loss '+fmt(r.latest_metrics['train/loss']??r.latest_metrics.loss);}}
         }
         showActive(rs);
@@ -1707,16 +1707,42 @@
         await refresh();
       }
       let leaderboardRevision = 0;
+      function leaderFamily(name) { return name.replace(/-seed\d+$/i, ""); }
+      function renderLeaderScatter(id, rows) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const pts = rows.filter(r => Number.isFinite(r.val_loss) && Number.isFinite(r.perplexity));
+        if (!pts.length) { el.innerHTML = '<p class="muted" style="margin:0">No numeric scores yet.</p>'; return; }
+        const palette = TrackCharts.palette;
+        const families = [...new Set(pts.map(r => leaderFamily(r.name)))];
+        const traces = families.map((fam, i) => {
+          const subset = pts.filter(r => leaderFamily(r.name) === fam);
+          return { type: "scatter", mode: "markers", name: fam,
+            x: subset.map(r => r.val_loss), y: subset.map(r => r.perplexity),
+            text: subset.map(r => `${esc(r.name)} · ${esc(r.owner)}<br>${fmt(r.throughput, 0)} byte tokens/s · ${r.steps} steps`),
+            hovertemplate: "%{text}<br>loss %{x:.4f} · perplexity %{y:.3f}<extra></extra>",
+            marker: { size: 9, color: palette[i % palette.length] } };
+        });
+        Plotly.newPlot(el, traces, { margin: {l:52,r:16,t:8,b:40}, height: 300,
+          paper_bgcolor: "#ffffff", plot_bgcolor: "#ffffff", font: {size:11,color:"#9298a1"},
+          xaxis: { title: {text:"Validation loss",font:{size:10}}, gridcolor:"#edf0f2", zeroline:false },
+          yaxis: { title: {text:"Perplexity",font:{size:10}}, gridcolor:"#edf0f2", zeroline:false },
+          legend: { orientation:"h", y:-0.28, font:{size:10} } },
+          { responsive:true, displaylogo:false, displayModeBar:false });
+      }
       async function leaderboard(token = generation) {
         const revision = ++leaderboardRevision;
         const sort = document.querySelector("#leader-sort")?.value || "val_loss";
         const data = await api("/leaderboard?sort=" + sort + "&order=" + (sort === "throughput" ? "desc" : "asc"));
         if (token !== generation || revision !== leaderboardRevision) return;
-        const models = data.models;
-        app.innerHTML = `<div class="intro row"><div><div class="eyebrow">Model leaderboard</div><h1>Measured progress, side by side.</h1><p class="muted">Published scores ranked by saved-checkpoint validation. Create an account to train and publish your own results.</p></div><a class="primary" href="/new">+ New training run</a></div><div class="row" style="margin-bottom:20px"><label class="field" style="margin:0;max-width:240px"><span>Rank by</span><select id="leader-sort"><option value="val_loss" ${sort === "val_loss" ? "selected" : ""}>Lowest validation loss</option><option value="perplexity" ${sort === "perplexity" ? "selected" : ""}>Lowest perplexity</option><option value="throughput" ${sort === "throughput" ? "selected" : ""}>Highest throughput</option><option value="started_at" ${sort === "started_at" ? "selected" : ""}>Newest run</option></select></label><small class="muted">Lower loss and perplexity are better.</small></div>${models.length ? `<div class="panel table-scroll"><table><thead><tr><th>#</th><th>Model</th><th>Author</th><th>Validation loss</th><th>Perplexity</th><th>Last train loss</th><th>Tokens / sec</th><th>Recipe</th></tr></thead><tbody>${models.map((r) => `<tr><td><strong>${r.rank}</strong></td><td><a href="/run/${r.id}">${esc(r.name)}</a><br><small>${new Date(r.started_at).toLocaleString()} · ${r.steps} steps</small></td><td>${esc(r.owner)}</td><td><strong>${fmt(r.val_loss)}</strong></td><td>${fmt(r.perplexity)}</td><td>${fmt(r.train_loss)}</td><td>${fmt(r.throughput, 0)}</td><td>${r.mix.map((d) => `${esc(d.name)} ${d.weight}%`).join("<br>")}</td></tr>`).join("")}</tbody></table></div>` : `<div class="panel empty"><h2>No completed models yet.</h2><p class="muted">Finish a training run and its measured validation metrics will appear here.</p><a class="primary" href="/new">Start your first run →</a></div>`}<p class="muted" style="font-size:12px;margin-top:18px">This is a smoke-test leaderboard. Scores are comparable when runs use the same validation data and model settings.</p>`;
+        const sizes = data.sizes || [];
+        const allModels = sizes.flatMap(s => s.models);
+        const sizeTable = (size) => `<h2 style="font-size:20px;margin:28px 0 10px">${esc((size.model_size||"unknown").toUpperCase())} · ${size.parameters ? size.parameters.toLocaleString() + " parameters" : "unknown size"}</h2><div class="panel table-scroll"><table><thead><tr><th>#</th><th>Model</th><th>Author</th><th>Validation loss</th><th>Perplexity</th><th>Last train loss</th><th>Tokens / sec</th><th>Recipe</th></tr></thead><tbody>${size.models.map((r) => `<tr><td><strong>${r.rank}</strong></td><td><a href="/run/${r.id}">${esc(r.name)}</a><br><small>${new Date(r.started_at).toLocaleString()} · ${r.steps} steps</small></td><td>${esc(r.owner)}</td><td><strong>${fmt(r.val_loss)}</strong></td><td>${fmt(r.perplexity)}</td><td>${fmt(r.train_loss)}</td><td>${fmt(r.throughput, 0)}</td><td>${r.mix.map((d) => `${esc(d.name)} ${d.weight}%`).join("<br>")}</td></tr>`).join("")}</tbody></table></div><div class="panel" style="padding:14px 18px;margin-top:10px"><strong style="font-size:13px">Validation loss vs perplexity</strong><div id="${"leader-scatter-" + size.model_size}" style="margin-top:8px"></div></div>`;
+        app.innerHTML = `<div class="intro row"><div><div class="eyebrow">Model leaderboard</div><h1>Measured progress, side by side.</h1><p class="muted">Published scores ranked by saved-checkpoint validation, grouped by model size — sizes aren't comparable on raw loss. Create an account to train and publish your own results.</p></div><a class="primary" href="/new">+ New training run</a></div><div class="row" style="margin-bottom:20px"><label class="field" style="margin:0;max-width:240px"><span>Rank by</span><select id="leader-sort"><option value="val_loss" ${sort === "val_loss" ? "selected" : ""}>Lowest validation loss</option><option value="perplexity" ${sort === "perplexity" ? "selected" : ""}>Lowest perplexity</option><option value="throughput" ${sort === "throughput" ? "selected" : ""}>Highest throughput</option><option value="started_at" ${sort === "started_at" ? "selected" : ""}>Newest run</option></select></label><small class="muted">Lower loss and perplexity are better.</small></div>${sizes.length ? sizes.map(sizeTable).join("") : `<div class="panel empty"><h2>No completed models yet.</h2><p class="muted">Finish a training run and its measured validation metrics will appear here.</p><a class="primary" href="/new">Start your first run →</a></div>`}<p class="muted" style="font-size:12px;margin-top:18px">This is a smoke-test leaderboard. Scores are comparable when runs use the same model size, validation data and settings.</p>`;
         $("#leader-sort").onchange = () => leaderboard().catch(error);
+        for (const size of sizes) renderLeaderScatter("leader-scatter-" + size.model_size, size.models);
         const compareBox=document.createElement("section"); compareBox.className="panel"; compareBox.style.cssText="padding:14px 18px;margin:0 0 18px";
-        compareBox.innerHTML=`<div class="row"><strong>Compare validation perplexity</strong><button class="secondary" id="leader-compare" disabled>Compare selected runs</button></div><small class="muted">Select two or more finished runs to draw their validation perplexity on one synchronized chart.</small><div class="row" style="margin-top:10px;gap:14px;flex-wrap:wrap">${models.map(r=>`<label><input type="checkbox" data-leader-run="${r.id}"> ${esc(r.name)}</label>`).join("")}</div>`;
+        compareBox.innerHTML=`<div class="row"><strong>Compare validation perplexity</strong><button class="secondary" id="leader-compare" disabled>Compare selected runs</button></div><small class="muted">Select two or more finished runs to draw their validation perplexity on one synchronized chart.</small><div class="row" style="margin-top:10px;gap:14px;flex-wrap:wrap">${allModels.map(r=>`<label><input type="checkbox" data-leader-run="${r.id}"> ${esc(r.name)}</label>`).join("")}</div>`;
         app.querySelector(".intro").after(compareBox);
         const selectedLeader=new Set(); document.querySelectorAll("[data-leader-run]").forEach(input=>input.onchange=()=>{if(input.checked)selectedLeader.add(input.dataset.leaderRun);else selectedLeader.delete(input.dataset.leaderRun);const b=$("#leader-compare");b.disabled=selectedLeader.size<2;b.textContent=selectedLeader.size<2?"Compare selected runs":`Compare ${selectedLeader.size} runs`;});
         $("#leader-compare").onclick=()=>{location.assign("/" + ("compare/"+[...selectedLeader].join(",")+"?metric=val%2Fperplexity"));};

@@ -245,12 +245,21 @@ def leaderboard(sort: str = "val_loss", order: str = "asc", session=Depends(sess
                        "ended_at": run.ended_at, "val_loss": latest.get("val/loss"),
                        "perplexity": latest.get("val/perplexity"), "train_loss": latest.get("train/loss"),
                        "throughput": latest.get("throughput/tokens_sec"), "steps": result.get("completed_steps", run.config.get("steps")),
+                       "model_size": run.config.get("model_size"), "parameters": run.config.get("parameters"),
                        "mix": [{"name": d.get("name") if d.get("example") else "Private dataset", "weight": d.get("weight")} for d in run.config.get("mix", [])]})
     key = {"val_loss": "val_loss", "perplexity": "perplexity", "throughput": "throughput", "started_at": "started_at"}[sort]
-    models.sort(key=lambda row: (row.get(key) is None, row.get(key) or 0), reverse=order == "desc")
-    for rank, row in enumerate(models, 1):
-        row["rank"] = rank
-    return {"sort": sort, "order": order, "models": models}
+    # Different model sizes are not comparable on raw loss/perplexity; rank within each size.
+    grouped = {}
+    for row in models:
+        grouped.setdefault(row["model_size"] or "unknown", []).append(row)
+    sizes = []
+    for size, rows in grouped.items():
+        rows.sort(key=lambda row: (row.get(key) is None, row.get(key) or 0), reverse=order == "desc")
+        for rank, row in enumerate(rows, 1):
+            row["rank"] = rank
+        sizes.append({"model_size": size, "parameters": rows[0]["parameters"], "models": rows})
+    sizes.sort(key=lambda g: g["parameters"] or 0)
+    return {"sort": sort, "order": order, "sizes": sizes}
 
 
 class VisibilityInput(BaseModel):
