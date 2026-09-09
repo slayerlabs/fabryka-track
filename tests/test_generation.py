@@ -1,3 +1,4 @@
+from conftest import sign_in
 import torch
 from fabryka_track.generation_worker import sample
 from fabryka_track.native_model import TinyTransformer
@@ -30,5 +31,5 @@ def test_generation_permissions_limits_and_busy_slot(client,monkeypatch):
     finally:generation._slot.release()
     client.post('/api/auth/logout')
     assert client.post(url,json={'prompt':'hello'}).status_code==401
-    client.post('/api/auth/register',json={'username':'other','password':'different-password-123'})
+    sign_in(client, 'other')
     assert client.post(url,json={'prompt':'hello'}).status_code==404

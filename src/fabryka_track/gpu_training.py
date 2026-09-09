@@ -6,6 +6,7 @@ import math
 import secrets
 import threading
 import zipfile
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -24,6 +25,8 @@ router = APIRouter(prefix='/api')
 HALT = threading.Event()
 THREAD = None
 LOCK = threading.Lock()
+DISPATCH_LOCK = threading.Lock()
+TICK_LOCK = threading.Lock()
 METRICS = {'train/loss','val/loss','val/perplexity','throughput/tokens_sec','progress','training/tokens_seen'}
 FILES = {'model.pt','recipe.json','metrics.jsonl','training.log','result.json'}
 SIZES = {'8m':(256,10,8),'16m':(384,9,8),'32m':(512,10,8),'64m':(640,13,10),'128m':(768,18,12)}
@@ -54,6 +57,9 @@ def allowed(user, session=None):
 @router.get('/training/capabilities')
 def capabilities(user=Depends(require_user), session=Depends(session_scope)):
     return {'runpod_available':allowed(user, session),'models':PRESETS,'gpu':settings.runpod_gpu_type,
+            'max_parallel':settings.runpod_max_parallel,
+            'max_pending':settings.runpod_max_pending,
+            'max_pending_per_user':settings.runpod_max_pending_per_user,
             'max_seconds':settings.runpod_max_seconds,'max_hourly_usd':settings.runpod_max_hourly_usd,
             'image':settings.runner_image,'gpu_fallbacks':[s.strip() for s in settings.runpod_gpu_fallbacks.split(',') if s.strip()]}
 
@@ -67,6 +73,8 @@ def status(session, run):
     return {'phase':job.state, 'error':job.error, 'heartbeat_at':job.heartbeat_at,
             'deadline':job.deadline if job.state!='queued' else None,
             'queue_position':ahead+1 if job.state=='queued' else None,
+            'allocation_attempts':job.dispatch_attempts, 'allocation_deadline':job.allocation_deadline,
+            'next_retry_at':job.next_retry_at if job.state=='queued' else None,
             'cleanup_done':job.cleanup_done, 'gpu':run.metadata_.get('gpu'),
             'hourly_usd':run.metadata_.get('hourly_usd')}
 
@@ -224,15 +232,48 @@ runpy.run_path('runpod_worker.py',run_name='__main__')
 
 
 def tick():
-    with SessionLocal() as session:
-        jobs=list(session.scalars(select(GPUJob).where(GPUJob.cleanup_done==False).order_by(GPUJob.created_at)))
-    for snapshot in jobs:
-        try:
-            advance(snapshot.run_id)
-        except Exception as exc:
-            with SessionLocal() as session:
-                j=session.get(GPUJob,snapshot.run_id)
-                if j:j.error=j.error or f'Control plane retry: {type(exc).__name__}';session.commit()
+    # One supervisor process per deployment; never overlap ticks for a run.
+    with TICK_LOCK:
+        with SessionLocal() as session:
+            ids=list(session.scalars(select(GPUJob.run_id).where(GPUJob.cleanup_done==False)
+                                     .order_by(GPUJob.created_at, GPUJob.run_id)))
+        def reconcile(run_id):
+            try:
+                advance(run_id)
+            except Exception as exc:
+                with SessionLocal() as session:
+                    j=session.get(GPUJob,run_id)
+                    if j:
+                        j.error=j.error or f'Control plane retry: {type(exc).__name__}'
+                        session.commit()
+        with ThreadPoolExecutor(max_workers=settings.runpod_controller_workers,
+                                thread_name_prefix='gpu-control') as pool:
+            list(pool.map(reconcile, ids))
+
+
+def claim(run_id):
+    # Reserve capacity serially; provider requests run concurrently. Cleanup
+    # continues occupying a slot until deletion has been confirmed.
+    with DISPATCH_LOCK, SessionLocal() as session:
+        j=session.get(GPUJob,run_id);r=session.get(Run,run_id)
+        if j.cleanup_done or j.state!='queued' or r.state=='stopping':return None
+        if j.allocation_deadline and now()>=utc(j.allocation_deadline):
+            j.state='failed';j.cleanup_done=True
+            j.error='GPU allocation wait limit reached. No pod was allocated.'
+            r.state='failed';r.ended_at=now()
+            session.add(RunLog(run_id=run_id,message=j.error));session.commit();return None
+        if j.next_retry_at and now()<utc(j.next_retry_at):return None
+        active=session.scalar(select(func.count()).select_from(GPUJob).where(
+            GPUJob.cleanup_done==False, GPUJob.state!='queued'))
+        if active>=settings.runpod_max_parallel:return None
+        token=secrets.token_urlsafe(32)
+        claimed=session.execute(update(GPUJob).where(GPUJob.run_id==run_id,GPUJob.state=='queued').values(
+            token_hash=hashlib.sha256(token.encode()).hexdigest(),state='provisioning',heartbeat_at=now(),
+            allocation_deadline=j.allocation_deadline or now()+timedelta(seconds=settings.runpod_allocation_wait_seconds),
+            dispatch_attempts=GPUJob.dispatch_attempts+1,missing_checks=0,next_retry_at=now()+timedelta(seconds=30),
+            deadline=now()+timedelta(seconds=min(r.config.get('max_runtime_seconds',3600),settings.runpod_max_seconds))))
+        session.commit()
+        return token if claimed.rowcount==1 else None
 
 
 def advance(run_id):
@@ -242,15 +283,11 @@ def advance(run_id):
         if j.state=='queued' and r.state=='stopping':
             j.state='cancelled';j.cleanup_done=True;r.state='cancelled';r.ended_at=now();session.commit();return
         if j.state=='queued' and r.state!='stopping':
-            if session.scalar(select(GPUJob).where(GPUJob.cleanup_done==False,GPUJob.state!='queued',GPUJob.run_id!=run_id)):return
-            token=secrets.token_urlsafe(32)
-            claimed=session.execute(update(GPUJob).where(GPUJob.run_id==run_id,GPUJob.state=='queued').values(
-                token_hash=hashlib.sha256(token.encode()).hexdigest(),state='provisioning',heartbeat_at=now(),
-                dispatch_attempts=GPUJob.dispatch_attempts+1,missing_checks=0,next_retry_at=now()+timedelta(seconds=30),
-                deadline=now()+timedelta(seconds=min(r.config.get('max_runtime_seconds',3600),settings.runpod_max_seconds))))
-            session.commit()
-            if claimed.rowcount!=1:return
+            session.rollback()
+            token=claim(run_id)
+            if token is None:return
             session.refresh(j)
+            session.commit()
             payload={'name':'fabryka-track-'+run_id,'imageName':settings.runner_image,
                      'computeType':'GPU','cloudType':settings.runpod_cloud_type,'gpuCount':1,
                      'gpuTypeIds':list(dict.fromkeys([settings.runpod_gpu_type]+[x.strip() for x in settings.runpod_gpu_fallbacks.split(',') if x.strip()])),'gpuTypePriority':'availability','containerDiskInGb':30,'volumeInGb':0,
@@ -278,15 +315,21 @@ def advance(run_id):
                 # Two separate provider-list confirmations precede another create.
                 j.missing_checks+=1;j.next_retry_at=now()+timedelta(seconds=30)
                 if j.missing_checks>=2:
-                    if j.dispatch_attempts<3:
-                        j.state='queued';session.add(RunLog(run_id=run_id,message='No pod exists after reconciliation. Queued another allocation attempt.'))
-                    else:j.state='failed';j.error='RunPod allocation failed after three attempts. No pod was allocated.'
+                    if j.allocation_deadline is None:
+                        j.allocation_deadline=now()+timedelta(seconds=settings.runpod_allocation_wait_seconds)
+                    if now()<utc(j.allocation_deadline):
+                        delay=min(30*2**min(max(j.dispatch_attempts-1,0),4),300)+secrets.randbelow(16)
+                        j.state='queued';j.next_retry_at=now()+timedelta(seconds=delay)
+                        j.error=f'Waiting for GPU availability; retrying in {delay}s. Allocation attempt {j.dispatch_attempts+1}.'
+                        session.add(RunLog(run_id=run_id,message='Provider confirmed no pod exists. '+j.error))
+                    else:
+                        j.state='failed';j.error='GPU allocation wait limit reached. No pod was allocated.'
                 session.commit()
                 if j.state=='queued':return
         expired=now()>=utc(j.deadline)
         boot_failed=j.state=='provisioning' and now()-utc(j.heartbeat_at or j.created_at)>timedelta(minutes=12)
         cancel_stalled=r.state=='stopping' and now()-utc(j.heartbeat_at)>timedelta(seconds=120)
-        if expired or boot_failed or cancel_stalled or (j.state=='queued' and r.state=='stopping'):
+        if j.state not in ('finished','failed','cancelled') and (expired or boot_failed or cancel_stalled or (j.state=='queued' and r.state=='stopping')):
             j.state='cancelled' if r.state=='stopping' else 'failed'
             j.error='Cancelled by owner.' if r.state=='stopping' else 'GPU time limit or startup deadline exceeded.'
             session.commit()

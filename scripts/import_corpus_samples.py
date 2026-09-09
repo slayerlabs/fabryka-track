@@ -14,18 +14,27 @@ if __name__=='__main__':
     catalog=json.loads((args.folder/'catalog.json').read_text())
     verified=[]
     for meta in catalog:
-        content=(args.folder/(meta['key']+'.txt')).read_text()
-        assert hashlib.sha256(content.encode()).hexdigest()==meta['sha256']
-        assert 300<=len(content.encode())<=32_000_000
-        verified.append((meta,content))
+        path=args.folder/(meta['key']+'.txt')
+        assert 300<=path.stat().st_size<=128_000_000
+        digest=hashlib.sha256()
+        with path.open('rb') as source:
+            for chunk in iter(lambda: source.read(1024*1024), b''):
+                digest.update(chunk)
+        assert digest.hexdigest()==meta['sha256']
+        verified.append((meta,path))
     if engine.url.drivername=='sqlite':
         backup=Path('backups')/('corpus-import-'+datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S'));backup.mkdir(parents=True,exist_ok=True)
         with sqlite3.connect(engine.url.database) as source, sqlite3.connect(backup/'database.sqlite') as target:source.backup(target)
     with SessionLocal() as db:
-        for meta,content in verified:
+        for meta,path in verified:
+            content=path.read_bytes().decode('utf-8')
             item=db.get(Dataset,meta['id'])
             if item:
                 assert item.sha256==meta['sha256'] and item.content==content
-            else:db.add(Dataset(id=meta['id'],name=meta['name'],content=content,example=True,sha256=meta['sha256']))
+            else:
+                db.add(Dataset(id=meta['id'],name=meta['name'],content=content,example=True,sha256=meta['sha256']))
+                db.flush()
+            db.commit()
+            db.expunge_all()
         db.commit()
     print('Imported',len(verified),'real corpus samples; existing sources and run weights retained.')

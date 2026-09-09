@@ -17,6 +17,7 @@ from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field, model_validator
 from typing import Literal
 from sqlalchemy import select, or_
+from sqlalchemy.orm import load_only
 
 from .accounts import require_user, current_user, owned_run
 from .database import SessionLocal, session_scope
@@ -58,7 +59,7 @@ def stop_worker():
 
 
 def describe(d):
-    return {"id": d.id, "name": d.name, "bytes": len(d.content.encode()), "example": d.example, "sha256": d.sha256}
+    return {"id": d.id, "name": d.name, "bytes": d.byte_count if d.byte_count is not None else len(d.content.encode()), "example": d.example, "sha256": d.sha256}
 
 
 @router.get("/datasets/{dataset_id}/content", response_class=PlainTextResponse)
@@ -93,7 +94,7 @@ def training_manifest(run):
 
 @router.get("/datasets")
 def datasets(session=Depends(session_scope), user=Depends(require_user)):
-    return [describe(d) for d in session.scalars(select(Dataset).where(or_(Dataset.example == True, Dataset.owner_id == user.id)).order_by(Dataset.created_at))]
+    return [describe(d) for d in session.scalars(select(Dataset).options(load_only(Dataset.id, Dataset.name, Dataset.byte_count, Dataset.example, Dataset.sha256, raiseload=True)).where(or_(Dataset.example == True, Dataset.owner_id == user.id)).order_by(Dataset.created_at))]
 
 
 @router.post("/datasets", status_code=201)
@@ -160,11 +161,18 @@ def launch(body: TrainingInput, session=Depends(session_scope), user=Depends(req
     elif body.model_size not in ('tiny','small'):
         raise HTTPException(422, 'Models 8M and larger require RunPod.')
     with launch_lock:
-        if body.compute == 'runpod' and len(list(session.scalars(select(GPUJob).where(GPUJob.cleanup_done==False))))>=5:
-            raise HTTPException(409, 'The GPU queue is full (five jobs). Wait for a run to finish.')
-        active = list(session.scalars(select(Run).where(Run.state.in_(["running", "queued", "stopping"]))))
-        if sum(r.metadata_.get("engine") == "tiny-transformer" for r in active) >= 5:
-            raise HTTPException(409, "Five runs are already active. Wait for one to finish.")
+        if body.compute == 'runpod':
+            pending = list(session.scalars(select(GPUJob).where(GPUJob.cleanup_done==False)))
+            if len(pending) >= settings.runpod_max_pending:
+                raise HTTPException(409, 'The GPU queue is full. Wait for a run to finish.')
+            owned = session.scalars(select(Run.id).where(
+                Run.id.in_([j.run_id for j in pending]), Run.owner_id==user.id)).all()
+            if len(owned) >= settings.runpod_max_pending_per_user:
+                raise HTTPException(409, f'You already have {settings.runpod_max_pending_per_user} active GPU runs. Wait for one to finish.')
+        else:
+            active = session.scalars(select(Run).where(Run.state.in_(["running", "queued", "stopping"])))
+            if sum(r.metadata_.get("engine") == "tiny-transformer" and r.config.get("compute", "cpu") == "cpu" for r in active) >= 5:
+                raise HTTPException(409, "Five CPU runs are already active. Wait for one to finish.")
         mix = []
         for item in body.mix:
             d = session.get(Dataset, item.dataset_id)

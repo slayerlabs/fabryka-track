@@ -283,4 +283,25 @@ def static_asset(name: str):
 
 @app.get("/{path:path}", response_class=HTMLResponse)
 def web(path: str = ""):
-    return HTMLResponse((Path(__file__).parent / "static" / "index.html").read_text())
+    pages = {"": "Training studio", "new": "Training studio", "runs": "My runs",
+             "benchmarks": "Benchmarks", "leaderboard": "Leaderboard", "guide": "Learning guide",
+             "login": "Sign in", "register": "Sign in", "account": "Account"}
+    path = path.rstrip("/")
+    title = pages.get(path)
+    if title is None:
+        kind, _, identifiers = path.partition("/")
+        try:
+            if kind not in {"run", "compare"} or not identifiers:
+                raise ValueError()
+            from uuid import UUID
+            for identifier in identifiers.split(","):
+                UUID(identifier)
+            if kind == "run" and "," in identifiers:
+                raise ValueError()
+        except ValueError:
+            raise HTTPException(404, "Page not found")
+        title = "Run dashboard" if kind == "run" else "Compare runs"
+    content = (Path(__file__).parent / "static" / "index.html").read_text()
+    import re
+    content = re.sub(r"<title>.*?</title>", f"<title>{title} · Fabryka Track</title>", content, count=1)
+    return HTMLResponse(content, headers={"Cache-Control": "no-cache"})

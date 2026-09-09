@@ -31,8 +31,13 @@ def create_tables():
             connection.execute(text("INSERT INTO track_migrations(name) VALUES ('owner-runs-public-v1')"))
 
         connection.execute(text("CREATE INDEX IF NOT EXISTS ix_metrics_run_key_id ON metrics (run_id, key, id)"))
+        dataset_columns = {c['name'] for c in inspect(connection).get_columns('datasets')}
+        if 'byte_count' not in dataset_columns:
+            connection.execute(text('ALTER TABLE datasets ADD COLUMN byte_count INTEGER'))
+        byte_length = 'length(CAST(content AS BLOB))' if engine.dialect.name == 'sqlite' else 'octet_length(content)'
+        connection.execute(text(f'UPDATE datasets SET byte_count = {byte_length} WHERE byte_count IS NULL'))
         gpu_columns={c['name'] for c in inspect(connection).get_columns('gpu_jobs')}
-        for name,definition in {'dispatch_attempts':'INTEGER NOT NULL DEFAULT 0','missing_checks':'INTEGER NOT NULL DEFAULT 0','next_retry_at':'DATETIME'}.items():
+        for name,definition in {'allocation_deadline':'DATETIME','dispatch_attempts':'INTEGER NOT NULL DEFAULT 0','missing_checks':'INTEGER NOT NULL DEFAULT 0','next_retry_at':'DATETIME'}.items():
             if name not in gpu_columns:connection.execute(text(f'ALTER TABLE gpu_jobs ADD COLUMN {name} {definition}'))
 
 
