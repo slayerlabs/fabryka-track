@@ -29,7 +29,8 @@ with tarfile.open(sys.argv[1]) as archive:
     archive.extractall(sys.argv[2], filter='data')
 PY
 printf '%s\n' "$revision" > "$release/REVISION"
-previous=$(readlink -f "$base/current" 2>/dev/null || true)
+previous=''
+if [[ -L "$base/current" ]]; then previous=$(readlink -f "$base/current"); fi
 venv_source="${previous:-$base}/.venv"
 cp -a --reflink=auto "$venv_source" "$release/.venv"
 "$release/.venv/bin/python" -m pip install --disable-pip-version-check "$release"
