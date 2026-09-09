@@ -73,6 +73,7 @@ if [[ $healthy != true ]]; then
     ln -s "$previous" "$base/current.rollback"
     mv -Tf "$base/current.rollback" "$base/current"
   else
+    unlink "$base/current"
     rm /etc/systemd/system/fabryka-track.service.d/deployment.conf
     systemctl daemon-reload
   fi
