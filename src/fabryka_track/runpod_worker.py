@@ -97,7 +97,11 @@ def train(remote,manifest):
     remote.progress(0,message='CUDA initialized; downloading and verifying selected datasets.',gpu=torch.cuda.get_device_name(0))
     sources=[];validation=[];holdout_seen=set()
     for d in cfg['mix']:
-        data=remote.call('GET','/datasets/'+d['id']).content
+        vol=os.environ.get('TRACK_DATASET_DIR');vp=os.path.join(vol,d['id']) if vol else None
+        if vp and os.path.exists(vp):
+            with open(vp,'rb') as f:data=f.read()
+        else:
+            data=remote.call('GET','/datasets/'+d['id']).content
         if hashlib.sha256(data).hexdigest()!=d['sha256']:raise RuntimeError('Dataset SHA-256 mismatch')
         # Whole-document content-hash holdout keeps train/eval disjoint and drops cross-source duplicates.
         train_bytes,val_bytes=_holdout_split(bytes(data),cfg['seed'],holdout_seen)

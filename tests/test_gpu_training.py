@@ -123,6 +123,7 @@ def test_dispatch_uses_scoped_bundle_and_selected_image(client,monkeypatch):
     monkeypatch.setattr(gpu,'provider',provider);gpu.advance(rid)
     payload=calls[0][2]['json'];assert payload['imageName']=='dawidmkrk/dmpod-gpt:1.0'
     assert payload['gpuCount']==1 and payload['env']['TRACK_RUN_ID']==rid
+    assert 'networkVolumeId' not in payload
     assert 'test-provider-secret' not in str(payload)
     token=payload['env']['TRACK_RUN_TOKEN'];h={'Authorization':'Bearer '+token}
     bundle=client.get('/api/runner/'+rid+'/bundle',headers=h)
@@ -130,6 +131,19 @@ def test_dispatch_uses_scoped_bundle_and_selected_image(client,monkeypatch):
     with SessionLocal() as s:
         j=s.get(GPUJob,rid);assert j.pod_id=='created-pod'
         assert j.token_hash==hashlib.sha256(token.encode()).hexdigest()
+
+
+def test_network_volume_attached_when_configured(client,monkeypatch):
+    enable(monkeypatch)
+    monkeypatch.setattr(settings,'runpod_network_volume_id','vol-123')
+    rid=launch(client).json()['id'];calls=[]
+    def provider(method,path,**kw):
+        calls.append((method,path,kw));return {'id':'created-pod'}
+    monkeypatch.setattr(gpu,'provider',provider);gpu.advance(rid)
+    payload=calls[0][2]['json']
+    assert payload['networkVolumeId']=='vol-123'
+    assert payload['volumeMountPath']=='/workspace'
+    assert payload['env']['TRACK_DATASET_DIR']=='/workspace/datasets'
 
 
 def test_queue_waits_without_allocating_or_consuming_runtime(client,monkeypatch):

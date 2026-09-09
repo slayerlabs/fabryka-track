@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     runpod_max_hourly_usd: float = 0.50
     runpod_allowed_users: str = ""
     runpod_max_concurrent: int = 4
+    runpod_network_volume_id: str = ""
+    runpod_volume_mount: str = "/workspace"
     benchmark_runner_tokens: str = "{}"
     r2_endpoint: str | None = None
     r2_bucket: str | None = None

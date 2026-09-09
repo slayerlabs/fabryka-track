@@ -261,6 +261,10 @@ def advance(run_id):
                      'env':{'TRACK_URL':settings.public_url.rstrip('/'),'TRACK_RUN_ID':run_id,
                             'TRACK_RUN_TOKEN':token,'TRACK_BUNDLE_SHA256':j.bundle_sha256},
                      'ports':[], 'interruptible':False}
+            if settings.runpod_network_volume_id:
+                payload['networkVolumeId']=settings.runpod_network_volume_id
+                payload['volumeMountPath']=settings.runpod_volume_mount
+                payload['env']['TRACK_DATASET_DIR']=settings.runpod_volume_mount.rstrip('/')+'/datasets'
             try:pod=provider('POST','/pods',json=payload)
             except httpx.HTTPStatusError as exc:
                 j.error=(f'RunPod allocation unavailable (HTTP {exc.response.status_code}); reconciling before retry.' if exc.response.status_code>=500 or exc.response.status_code==429 else f'RunPod rejected deployment (HTTP {exc.response.status_code}).')
