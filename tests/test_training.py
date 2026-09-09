@@ -137,7 +137,7 @@ def test_chinchilla_plan_matches_model_and_short_training_context(client, monkey
         assert manifest['training']['planned_training_tokens'] == cfg['planned_training_tokens']
     uploaded = client.post('/api/datasets', files={'file': ('short-context.txt', b'a' * 100)}).json()
     # Model contexts fit this source; exercise the shortened-context calculation directly too.
-    body = training.TrainingInput(name='Short', mix=[{'dataset_id': uploaded['id'], 'weight': 100}], budget_mode='chinchilla', model_size='small')
+    body = training.TrainingInput(name='Short context', mix=[{'dataset_id': uploaded['id'], 'weight': 100}], budget_mode='chinchilla', model_size='small')
     plan = training.plan_training(body, [{'bytes': 50, 'weight': 100}])
     assert plan['training_context_length'] == 44
     assert plan['planned_training_tokens'] == plan['steps'] * body.batch_size * 44

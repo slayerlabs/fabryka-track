@@ -1,3 +1,4 @@
+import os
 import mimetypes
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -271,7 +272,7 @@ def download_artifact(artifact_id: str, session: Session = Depends(db), user=Dep
 @app.get("/health")
 def health(session: Session = Depends(db)):
     session.scalar(select(func.count()).select_from(Project))
-    return {"status": "ok", "time": datetime.now(timezone.utc)}
+    return {"status": "ok", "time": datetime.now(timezone.utc), "release": os.environ.get("FABRYKA_DEPLOY_SHA")}
 
 
 @app.get("/assets/{name}")

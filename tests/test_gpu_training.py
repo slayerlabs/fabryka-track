@@ -202,7 +202,7 @@ def test_fifty_users_parallel_nodes_and_backpressure(client, monkeypatch):
         ids = []
         for n in range(5):
             with SessionLocal() as session:
-                ids.append(submit(TrainingInput(name=f'{i}-{n}', compute='runpod', model_size='8m',
+                ids.append(submit(TrainingInput(name=f'Parallel run {i}-{n}', compute='runpod', model_size='8m',
                     steps=10, mix=[{'dataset_id':dataset, 'weight':100}]), session, user)['id'])
         return ids
     with ThreadPoolExecutor(max_workers=50) as pool:
