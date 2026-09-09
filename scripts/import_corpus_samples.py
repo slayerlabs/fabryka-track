@@ -6,6 +6,7 @@ import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
+from sqlalchemy import select
 from fabryka_track.database import SessionLocal, engine
 from fabryka_track.models import Dataset
 
@@ -26,6 +27,12 @@ if __name__=='__main__':
             item=db.get(Dataset,meta['id'])
             if item:
                 assert item.sha256==meta['sha256'] and item.content==content
-            else:db.add(Dataset(id=meta['id'],name=meta['name'],content=content,example=True,sha256=meta['sha256']))
+            else:
+                # Keep old IDs immutable for historical runs, but make the larger
+                # replacement unambiguous in the dataset picker.
+                previous = db.scalar(select(Dataset).where(Dataset.name == meta['name'], Dataset.example == True))
+                if previous and not previous.name.endswith(' · legacy sample'):
+                    previous.name += ' · legacy sample'
+                db.add(Dataset(id=meta['id'],name=meta['name'],content=content,example=True,sha256=meta['sha256']))
         db.commit()
     print('Imported',len(verified),'real corpus samples; existing sources and run weights retained.')
