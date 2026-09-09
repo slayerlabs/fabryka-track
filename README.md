@@ -389,3 +389,9 @@ and use exponential cooldown with jitter; waiting does not guarantee capacity.
 The target Training Suit architecture and its implementation boundaries are in
 [docs/training-suit-architecture.md](docs/training-suit-architecture.md) and
 [docs/training-suit-implementation.md](docs/training-suit-implementation.md).
+
+The [fast English diagnostic ladder](docs/fast-ladder.md) reports held-out NLL/BPB,
+BLiMP margins, Supplement and ARC-Easy likelihoods alongside the original TinyScore.
+EWoK requires approved Hugging Face dataset access; the combined score remains
+unavailable until all five components are measured. Use full mode for the fixed
+sample sizes; smoke mode checks execution only.

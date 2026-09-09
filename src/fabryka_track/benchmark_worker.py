@@ -87,6 +87,11 @@ def run(eid, job=None, reporter=None):
         if name in results and not results[name].get('error'):continue
         save(current_task=name)
         try:
+            if name.startswith('fast_'):
+                from .fast_ladder import evaluate
+                results[name]=evaluate(name,model,mode)
+                save(results=results,provenance=provenance)
+                continue
             if name == 'multiblimp_polish':
                 from datasets import load_dataset
                 revision = provenance['dataset_revisions'].get('jumelet/multiblimp') or api.dataset_info('jumelet/multiblimp').sha

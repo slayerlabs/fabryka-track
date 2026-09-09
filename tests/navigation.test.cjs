@@ -67,3 +67,15 @@ test('cost summary distinguishes estimates, pending billing and reported zero',(
   const billed=context.render({cost:{...cost,billed_usd:0,billed_seconds:0,billing_checked_at:'2026-09-09T20:00:00Z'}});
   assert.match(billed,/RunPod naliczył dotąd: <b>\$0.0000 USD/);
 });
+
+test('benchmark panel selectors remain IDs after document navigation migration',()=>{
+  assert.doesNotMatch(html, /\$\(['"]\/(?:benchmarks|runs|account)['"]\)/);
+  assert.match(html,/\$\('#benchmarks'\)/);
+});
+
+test('fast ladder shows unavailable EWoK without presenting a combined score',()=>{
+  const context=vm.createContext({esc:String,pct:v=>v==null?'—':String(v),fmt:v=>v==null?'—':String(v)});
+  vm.runInContext(between('      function fastLadderResults(e)', '      async function benchmarkDashboard')+'\nglobalThis.render=fastLadderResults;',context);
+  const output=context.render({protocol:'fast-en-v1',mode:'full',fast_score:null,results:{fast_lm:{bpb:7,nll:4.85,samples:1000000}}});
+  assert.match(output,/FastScore EN: —/);assert.match(output,/HF access required/);assert.match(output,/BPB 7/);
+});
