@@ -56,7 +56,7 @@ zweryfikowane z bajtów; wszystkie commity pod kontem właściciela repo. Do prz
 - **Cała suita `pytest tests/`: 57 przechodzi** (poza 2 pre-existing niżej), odpalone niezależnie na izolowanym klonie (system-torch, CPU).
 - `tests/test_gpu_training.py`: **13/13** — w tym nowe testy capa `test_parallel_dispatch_up_to_cap` i `test_capacity_blocks_beyond_cap`; DELETE-guard nie zregresował sprzątania.
 - Holdout/dedup: **2/2** (whole-doc disjoint train/val, cross-source dedup, determinizm).
-- Guard throughput potwierdzony **N=15 powtórzeń bez flaka** (wcześniejszy „regres" okazał się flaky one-off, nie regresją — potwierdzone bisekcją).
+- Guard throughput potwierdzony **N=15 powtórzeń bez flaka** (wcześniejszy „regres" okazał się flaky one-off, nie regresją — potwierdzone N=15 powtórzeniami; bisekcja na n=1 mylnie wskazała regresję — lekcja: n=1 nie wystarcza).
 - **NIE zmierzone na żywym RunPod** (wall-time N-parallel vs serial, start-success %, brak pod-leak przy realnym
   crashu) — wymaga klucza RunPod + publicznego `public_url`.
 - **Znane, nie nasze:** `test_api` (1.9 vs 1.8 — różnica numeryczna platformy) i `test_benchmark_remote`
