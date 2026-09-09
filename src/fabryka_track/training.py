@@ -295,22 +295,59 @@ def plan_training(body, mix):
 from .native_model import TinyTransformer
 
 
+def _holdout_split(source, seed, seen):
+    """Whole-document content-hash holdout with cross-source dedup.
+
+    Splits a source on blank-line document boundaries and assigns each unique
+    document to training or the seeded ~10% validation holdout by a hash of its
+    content, so a document never spans train and eval and duplicate documents
+    across sources are dropped. Falls back to a contiguous 90/10 byte split when
+    a source has fewer than two distinct documents, so a run never fails on it.
+    """
+    documents = [d for d in source.split(b"\n\n") if d.strip()]
+    unique = []
+    picked = set()
+    for document in documents:
+        digest = hashlib.sha256(document).hexdigest()
+        if digest in seen or digest in picked:
+            continue
+        picked.add(digest)
+        unique.append((digest, document))
+    if len(unique) < 2:
+        cut = int(len(source) * 0.9)
+        return source[:cut], source[cut:]
+    ordered = sorted(unique, key=lambda u: hashlib.sha256(f"{seed}:{u[0]}".encode()).hexdigest())
+    holdout = {digest for digest, _ in ordered[:max(1, len(ordered) // 10)]}
+    train, val = bytearray(), bytearray()
+    for digest, document in unique:
+        seen.add(digest)
+        target = val if digest in holdout else train
+        if target:
+            target += b"\n\n"
+        target += document
+    return bytes(train), bytes(val)
+
+
 def _train(run_id):
     torch.set_num_threads(1)
     with SessionLocal() as session:
         run = session.get(Run, run_id)
         cfg = run.config
-        data = [torch.tensor(list(session.get(Dataset, d["id"]).content.encode()), dtype=torch.long) for d in cfg["mix"]]
+        raw = [session.get(Dataset, d["id"]).content.encode() for d in cfg["mix"]]
         if run.state != "stopping":
             run.state = "running"
-        session.add(RunLog(run_id=run_id, message="Training a tiny causal transformer from scratch on CPU. The final 10% of each source is held out for validation."))
+        session.add(RunLog(run_id=run_id, message="Training a tiny causal transformer from scratch on CPU. A seeded ~10% content-hash holdout of whole documents is reserved for validation; duplicate documents are removed so train and validation stay disjoint."))
         session.commit()
     torch.manual_seed(cfg["seed"])
     architecture = MODEL_PRESETS.get(cfg.get("model_size", "tiny"), MODEL_PRESETS["tiny"])["architecture"]
     model = TinyTransformer(**architecture)
     optimizer = torch.optim.AdamW(model.parameters(), lr=cfg["learning_rate"])
-    train_data = [d[:int(len(d)*.9)] for d in data]
-    val_data = [d[int(len(d)*.9):] for d in data]
+    holdout_seen = set()
+    train_data, val_data = [], []
+    for source in raw:
+        train_bytes, val_bytes = _holdout_split(source, cfg["seed"], holdout_seen)
+        train_data.append(torch.tensor(list(train_bytes), dtype=torch.long))
+        val_data.append(torch.tensor(list(val_bytes), dtype=torch.long))
     probabilities = torch.tensor([d["weight"] / 100 for d in cfg["mix"]])
     train_rng = torch.Generator().manual_seed(cfg["seed"])
     validation_rng = torch.Generator().manual_seed(cfg["seed"] + 1)
