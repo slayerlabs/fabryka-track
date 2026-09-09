@@ -242,6 +242,8 @@ def advance(run_id):
         if j.state=='queued' and r.state=='stopping':
             j.state='cancelled';j.cleanup_done=True;r.state='cancelled';r.ended_at=now();session.commit();return
         if j.state=='queued' and r.state!='stopping':
+            # Cap is process-local: advance() runs serially on the single supervisor thread,
+            # so this count-then-claim is race-free. Multi-process scaling would need atomic reservation.
             active=session.scalar(select(func.count()).select_from(GPUJob).where(GPUJob.cleanup_done==False,GPUJob.state!='queued',GPUJob.run_id!=run_id))
             if active>=settings.runpod_max_concurrent:return
             token=secrets.token_urlsafe(32)
@@ -303,7 +305,10 @@ def advance(run_id):
             elif pod:
                 r.metadata_={**r.metadata_,'hourly_usd':pod.get('costPerHr'),'pod_id':j.pod_id};session.commit()
         if j.state in ('finished','failed','cancelled'):
-            if j.pod_id:provider('DELETE','/pods/'+j.pod_id)
+            if j.pod_id:
+                try:provider('DELETE','/pods/'+j.pod_id)
+                except httpx.HTTPStatusError as exc:
+                    if exc.response.status_code!=404:raise
             j.cleanup_done=True;r.state=j.state;r.ended_at=now()
             r.metadata_={**r.metadata_,'gpu_cleanup':'terminated','pod_id':j.pod_id}
             session.add(RunLog(run_id=run_id,message=(j.error+' ' if j.error else '')+'RunPod cleanup complete.'))
