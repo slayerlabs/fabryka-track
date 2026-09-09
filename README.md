@@ -252,6 +252,11 @@ are under `/opt/fabryka-track/backups/remove-legacy-20260908-113443/`.
 
 ## TinyLM evaluation
 
+In **Benchmarks**, click the **TinyScore** column header to sort all evaluation
+history from highest to lowest; click again for lowest to highest. Missing scores
+stay last. Sorting persists across pagination and automatic refreshes. The client
+fetches all history pages when sorting, using the existing owner-scoped API.
+
 Install the pinned evaluator with `uv sync --extra eval` (or add
 `lm-eval==0.4.13` to the server environment). Finished studio run details have a
 **Run benchmarks** button. Core covers SciQ, ARC-Easy, PIQA, HellaSwag and all
