@@ -123,6 +123,7 @@ def test_dispatch_uses_scoped_bundle_and_selected_image(client,monkeypatch):
     monkeypatch.setattr(gpu,'provider',provider);gpu.advance(rid)
     payload=calls[0][2]['json'];assert payload['imageName']=='dawidmkrk/dmpod-gpt:1.0'
     assert payload['gpuCount']==1 and payload['env']['TRACK_RUN_ID']==rid
+    assert 'networkVolumeId' not in payload
     assert 'test-provider-secret' not in str(payload)
     token=payload['env']['TRACK_RUN_TOKEN'];h={'Authorization':'Bearer '+token}
     bundle=client.get('/api/runner/'+rid+'/bundle',headers=h)
@@ -132,9 +133,24 @@ def test_dispatch_uses_scoped_bundle_and_selected_image(client,monkeypatch):
         assert j.token_hash==hashlib.sha256(token.encode()).hexdigest()
 
 
+def test_network_volume_attached_when_configured(client,monkeypatch):
+    enable(monkeypatch)
+    monkeypatch.setattr(settings,'runpod_network_volume_id','vol-123')
+    monkeypatch.setattr(settings,'runpod_volume_mount','/vol')
+    rid=launch(client).json()['id'];calls=[]
+    def provider(method,path,**kw):
+        calls.append((method,path,kw));return {'id':'created-pod'}
+    monkeypatch.setattr(gpu,'provider',provider);gpu.advance(rid)
+    payload=calls[0][2]['json']
+    assert payload['networkVolumeId']=='vol-123'
+    assert payload['volumeMountPath']=='/vol'
+    assert payload['env']['TRACK_DATASET_DIR']=='/vol/datasets'
+
+
 def test_queue_waits_without_allocating_or_consuming_runtime(client,monkeypatch):
     monkeypatch.setattr(settings,'runpod_max_parallel',1)
     first,_=create(client,monkeypatch)
+    monkeypatch.setattr(settings,'runpod_max_concurrent',1)
     second=launch(client).json()['id']
     def unexpected(*a,**kw):raise AssertionError('Queued run must not contact provider')
     monkeypatch.setattr(gpu,'provider',unexpected)
@@ -146,6 +162,32 @@ def test_queue_waits_without_allocating_or_consuming_runtime(client,monkeypatch)
     client.post('/api/training/'+second+'/stop')
     gpu.advance(second)
     assert client.get('/api/runs/'+second).json()['state']=='cancelled'
+
+
+def test_parallel_dispatch_up_to_cap(client,monkeypatch):
+    first,_=create(client,monkeypatch)
+    monkeypatch.setattr(settings,'runpod_max_concurrent',2)
+    second=launch(client).json()['id']
+    calls=[]
+    def provider(method,path,**kw):
+        calls.append((method,path));return {'id':'second-pod'}
+    monkeypatch.setattr(gpu,'provider',provider);gpu.advance(second)
+    assert ('POST','/pods') in calls
+    with SessionLocal() as s:assert s.get(GPUJob,second).pod_id=='second-pod'
+
+
+def test_capacity_blocks_beyond_cap(client,monkeypatch):
+    first,_=create(client,monkeypatch)
+    monkeypatch.setattr(settings,'runpod_max_concurrent',2)
+    second=launch(client).json()['id']
+    with SessionLocal() as s:
+        j=s.get(GPUJob,second);j.state='running';j.pod_id='pod-2';s.commit()
+    third=launch(client).json()['id']
+    def unexpected(*a,**kw):raise AssertionError('Run beyond cap must not contact provider')
+    monkeypatch.setattr(gpu,'provider',unexpected)
+    gpu.advance(third)
+    assert client.get('/api/runs/'+third).json()['gpu_status']['deadline'] is None
+    client.post('/api/training/'+third+'/stop')
 
 
 def test_capacity_retry_requires_two_empty_reconciliations(client,monkeypatch):

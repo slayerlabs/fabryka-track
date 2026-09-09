@@ -268,7 +268,7 @@ def claim(run_id):
         if j.next_retry_at and now()<utc(j.next_retry_at):return None
         active=session.scalar(select(func.count()).select_from(GPUJob).where(
             GPUJob.cleanup_done==False, GPUJob.state!='queued'))
-        if active>=settings.runpod_max_parallel:return None
+        if active>=settings.runpod_max_parallel or active>=settings.runpod_max_concurrent:return None
         token=secrets.token_urlsafe(32)
         claimed=session.execute(update(GPUJob).where(GPUJob.run_id==run_id,GPUJob.state=='queued').values(
             token_hash=hashlib.sha256(token.encode()).hexdigest(),state='provisioning',heartbeat_at=now(),
@@ -298,6 +298,10 @@ def advance(run_id):
                      'env':{'TRACK_URL':settings.public_url.rstrip('/'),'TRACK_RUN_ID':run_id,
                             'TRACK_RUN_TOKEN':token,'TRACK_BUNDLE_SHA256':j.bundle_sha256},
                      'ports':[], 'interruptible':False}
+            if settings.runpod_network_volume_id:
+                payload['networkVolumeId']=settings.runpod_network_volume_id
+                payload['volumeMountPath']=settings.runpod_volume_mount
+                payload['env']['TRACK_DATASET_DIR']=settings.runpod_volume_mount.rstrip('/')+'/datasets'
             try:pod=provider('POST','/pods',json=payload)
             except httpx.HTTPStatusError as exc:
                 j.error=(f'RunPod allocation unavailable (HTTP {exc.response.status_code}); reconciling before retry.' if exc.response.status_code>=500 or exc.response.status_code==429 else f'RunPod rejected deployment (HTTP {exc.response.status_code}).')
@@ -348,7 +352,10 @@ def advance(run_id):
             elif pod:
                 r.metadata_={**r.metadata_,'hourly_usd':pod.get('adjustedCostPerHr',pod.get('costPerHr')),'pod_id':j.pod_id};session.commit()
         if j.state in ('finished','failed','cancelled'):
-            if j.pod_id:provider('DELETE','/pods/'+j.pod_id)
+            if j.pod_id:
+                try:provider('DELETE','/pods/'+j.pod_id)
+                except httpx.HTTPStatusError as exc:
+                    if exc.response.status_code!=404:raise
             j.cleanup_done=True;r.state=j.state;r.ended_at=now()
             r.metadata_={**r.metadata_,'gpu_cleanup':'terminated','pod_id':j.pod_id}
             session.add(RunLog(run_id=run_id,message=(j.error+' ' if j.error else '')+'RunPod cleanup complete.'))

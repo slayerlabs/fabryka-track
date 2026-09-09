@@ -201,6 +201,39 @@ def test_step_limit_still_saves_best_and_reuse_accounts_for_weights(client):
     assert launch(client, min_delta=-1).status_code == 422
 
 
+def _documents(blob):
+    return [d for d in blob.split(b"\n\n") if d.strip()]
+
+
+def test_holdout_split_is_whole_document_and_deduplicated():
+    from fabryka_track.training import _holdout_split
+    docs_a = [f"A{i:02d}-".encode() + bytes((65 + i,)) * 96 for i in range(12)]
+    docs_b = [docs_a[0]] + [f"B{i:02d}-".encode() + bytes((97 + i,)) * 96 for i in range(3)]
+    source_a, source_b = b"\n\n".join(docs_a), b"\n\n".join(docs_b)
+    originals = set(docs_a) | set(docs_b)
+    seen = set()
+    a_train, a_val = _holdout_split(source_a, 0, seen)
+    b_train, b_val = _holdout_split(source_b, 0, seen)
+    train_docs = _documents(a_train) + _documents(b_train)
+    val_docs = _documents(a_val) + _documents(b_val)
+    # Only whole original documents survive: the last-10% byte split cut mid-document.
+    assert all(d in originals for d in train_docs + val_docs)
+    # A document never lands in both train and validation (no train/eval leakage).
+    assert set(train_docs).isdisjoint(val_docs)
+    # Every multi-document source keeps a non-empty train and validation split.
+    assert _documents(a_train) and _documents(a_val)
+    assert _documents(b_train) and _documents(b_val)
+    # The document shared across sources is kept exactly once (cross-source dedup).
+    assert (train_docs + val_docs).count(docs_a[0]) == 1
+
+
+def test_holdout_split_is_deterministic():
+    from fabryka_track.training import _holdout_split
+    docs = [f"D{i:02d}-".encode() + bytes((65 + i,)) * 80 for i in range(20)]
+    source = b"\n\n".join(docs)
+    assert _holdout_split(source, 7, set()) == _holdout_split(source, 7, set())
+
+
 def test_dataset_listing_reads_metadata_only_and_counts_utf8(client):
     from sqlalchemy import event
     from fabryka_track.database import engine

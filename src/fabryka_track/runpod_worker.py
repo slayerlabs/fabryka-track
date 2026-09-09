@@ -59,19 +59,54 @@ class Remote:
                 time.sleep(2**attempt)
 
 
+def _holdout_split(source, seed, seen):
+    """Whole-document content-hash holdout with cross-source dedup.
+
+    Mirrors the studio trainer: split a source on blank-line document
+    boundaries, assign each unique document to training or the seeded ~10%
+    validation holdout by a hash of its content (so a document never spans
+    train and eval and duplicates across sources are dropped), and fall back to
+    a contiguous 90/10 byte split when a source has fewer than two documents.
+    """
+    documents=[d for d in source.split(b"\n\n") if d.strip()]
+    unique=[];picked=set()
+    for document in documents:
+        digest=hashlib.sha256(document).hexdigest()
+        if digest in seen or digest in picked:continue
+        picked.add(digest)
+        unique.append((digest,document))
+    if len(unique)<2:
+        cut=int(len(source)*0.9)
+        return source[:cut],source[cut:]
+    ordered=sorted(unique,key=lambda u:hashlib.sha256(f"{seed}:{u[0]}".encode()).hexdigest())
+    holdout={digest for digest,_ in ordered[:max(1,len(ordered)//10)]}
+    train,val=bytearray(),bytearray()
+    for digest,document in unique:
+        seen.add(digest)
+        target=val if digest in holdout else train
+        if target:target+=b"\n\n"
+        target+=document
+    return bytes(train),bytes(val)
+
+
 def train(remote,manifest):
     if not torch.cuda.is_available():raise RuntimeError('CUDA unavailable; refusing CPU fallback on a GPU job')
     torch.set_num_threads(4);torch.manual_seed(manifest['config']['seed'])
     cfg=manifest['config'];rng=random.Random(cfg['seed']);device='cuda'
     deadline=datetime.fromisoformat(manifest['deadline']).timestamp()-120
     remote.progress(0,message='CUDA initialized; downloading and verifying selected datasets.',gpu=torch.cuda.get_device_name(0))
-    sources=[];validation=[]
+    sources=[];validation=[];holdout_seen=set()
     for d in cfg['mix']:
-        data=remote.call('GET','/datasets/'+d['id']).content
+        vol=os.environ.get('TRACK_DATASET_DIR');vp=os.path.join(vol,d['id']) if vol else None
+        if vp and os.path.exists(vp):
+            with open(vp,'rb') as f:data=f.read()
+        else:
+            data=remote.call('GET','/datasets/'+d['id']).content
         if hashlib.sha256(data).hexdigest()!=d['sha256']:raise RuntimeError('Dataset SHA-256 mismatch')
-        # Compact CPU byte buffers; only a batch is converted to int64 and moved to GPU.
-        raw=torch.frombuffer(bytearray(data),dtype=torch.uint8).clone();split=int(len(raw)*.9)
-        sources.append(raw[:split]);validation.append(raw[split:])
+        # Whole-document content-hash holdout keeps train/eval disjoint and drops cross-source duplicates.
+        train_bytes,val_bytes=_holdout_split(bytes(data),cfg['seed'],holdout_seen)
+        sources.append(torch.frombuffer(bytearray(train_bytes),dtype=torch.uint8).clone())
+        validation.append(torch.frombuffer(bytearray(val_bytes),dtype=torch.uint8).clone())
     model=TinyTransformer(**{k:cfg[k] for k in ('width','layers','heads','context_length')}).to(device)
     count=sum(p.numel() for p in model.parameters())
     if count!=cfg['parameters']:raise RuntimeError('Model parameter count differs from recipe')

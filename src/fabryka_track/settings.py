@@ -26,6 +26,11 @@ class Settings(BaseSettings):
     runpod_max_pending_per_user: int = Field(default=5, ge=1)
     runpod_controller_workers: int = Field(default=16, ge=1, le=64)
     runpod_allowed_users: str = ""
+    # Independent, optional stricter cap (e.g. for a single workshop event); unset deployments
+    # must not be silently throttled below the tested runpod_max_parallel capacity.
+    runpod_max_concurrent: int = Field(default=50, ge=1, le=500)
+    runpod_network_volume_id: str = ""
+    runpod_volume_mount: str = "/runpod-volume"
     benchmark_runner_tokens: str = "{}"
     r2_endpoint: str | None = None
     r2_bucket: str | None = None
