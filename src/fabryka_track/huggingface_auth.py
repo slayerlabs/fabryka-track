@@ -93,7 +93,7 @@ def fetch_grant(code, verifier):
 
 def failure(request, message, status=400):
     # Messages are application constants, never provider-supplied text.
-    response = HTMLResponse('<!doctype html><meta name="viewport" content="width=device-width"><title>Hugging Face sign-in</title><main style="max-width:38rem;margin:4rem auto;font:18px system-ui;padding:1rem"><h1>Hugging Face sign-in</h1><p>' + message + '</p><a href="/#login">Return to sign in</a> · <a href="/#account">Account settings</a></main>', status_code=status)
+    response = HTMLResponse('<!doctype html><meta name="viewport" content="width=device-width"><title>Hugging Face sign-in</title><main style="max-width:38rem;margin:4rem auto;font:18px system-ui;padding:1rem"><h1>Hugging Face sign-in</h1><p>' + message + '</p><a href="/login">Return to sign in</a> · <a href="/account">Account settings</a></main>', status_code=status)
     response.delete_cookie(FLOW_COOKIE, path=FLOW_PATH, secure=request.url.scheme == 'https', httponly=True, samesite='lax')
     return response
 
@@ -154,7 +154,7 @@ def callback(request: Request, background_tasks: BackgroundTasks, state: str = '
         session.add(HuggingFaceIdentity(subject=subject, account_id=target.id, username=hf_name))
     else:
         identity.username = hf_name
-    response = RedirectResponse('/#account', status_code=303)
+    response = RedirectResponse('/account', status_code=303)
     try:
         new_session(request, response, session, target)
     except IntegrityError:

@@ -1,3 +1,4 @@
+from conftest import sign_in
 import math
 
 import pytest
@@ -40,7 +41,7 @@ def test_evaluation_owner_visibility_and_cancellation(client,monkeypatch):
     # Completed run benchmark history is public alongside the leaderboard.
     assert client.get(url).status_code==200
     assert client.post(url,json={}).status_code==401
-    client.post('/api/auth/register',json={'username':'second','password':'different-password-123'})
+    sign_in(client, 'second')
     assert client.get(url).status_code==200
     assert client.post(url,json={}).status_code==404
     assert client.get(url).status_code==200
