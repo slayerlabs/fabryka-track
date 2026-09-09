@@ -809,6 +809,7 @@
       const englishUi = {
         "Charakter datasetu":"Dataset character", "Od czego zaczynamy?":"Where should we start?",
         "Poeta / literat":"Poet / writer", "Prawnik / urzędnik":"Lawyer / civil servant",
+        "Wikipedysta":"Wikipedian", "Naukowiec":"Scientist",
         "Człowiek internetu":"Internet person", "Zbalansowany (jak korpus)":"Balanced (corpus-like)",
         "Rozdaj od zera":"Reset points", "20 książek: 1 książka to 1 punkt mieszanki":"20 books: 1 book = 1 mix point",
         "Zajrzyj do książki →":"Open dataset →", "Początek":"Beginning", "Środek":"Middle", "Koniec":"End",
@@ -821,7 +822,7 @@
         "Każdą książkę możesz otworzyć, sprawdzić tekst i źródło.":"Open any dataset to inspect its text and source.",
         "Rozmiary dotyczą pobranej próbki, nie całego korpusu.":"Sizes refer to the downloaded sample, not the full corpus.",
         "Ile danych potrzebuje model?":"How much data does the model need?",
-        "Orientacyjny punkt startowy":"A useful starting point", "tokenów":"tokens", "Szacowane obliczenia":"Estimated compute",
+        "Orientacyjny punkt startowy":"A useful starting point", "Dwa razy większy model potrzebuje około dwa razy więcej tokenów i cztery razy więcej obliczeń.":"A model twice as large needs about twice as many tokens and four times as much compute.", "tokenów":"tokens", "Szacowane obliczenia":"Estimated compute",
         "Zwiększenie skali 2× → koszt około 4×.":"2× the scale → about 4× the compute.",
         "To plan skali, nie zmiana uruchamianego modelu.":"This plans scale; it does not change the model being launched.",
         "Ręczna zmiana milionów tokenów ustawia własny budżet.":"Changing millions of tokens sets a custom budget.",
@@ -1174,7 +1175,7 @@
             document.querySelectorAll('[data-character]').forEach(button => button.onclick = () => applyCharacter(button.dataset.character));
             $('#reset-points').onclick=()=>{draft.weights=Object.fromEntries(datasets.map(d=>[d.id,0]));draft.character=null;save();updateMix();};
             updateMix();
-            const showChinchilla=()=>{const activeGPU=draft.compute==='runpod';const d=activeGPU?(draft.budget_mode==='chinchilla'?trainingPlan().parameters*20:draft.target_tokens):draft.target_tokens,n=activeGPU?trainingPlan().parameters:d/20;$('#chinchilla-summary').textContent=`Chinchilla · ${fmt(n/1e6,1)}M → ${fmt(d/1e6,0)}M tokenów`;$('#chinchilla-parameters').value=n/1e6;$('#target-tokens').value=d/1e6;$('#chinchilla-equation').textContent=`${fmt(n/1e6,3)}M parametrów × ${fmt(d/n,2)} ≈ ${fmt(d/1e6,1)}M tokenów`;$('#chinchilla-compute').textContent=`Szacowane obliczenia: C ≈ 6ND ≈ ${(6*n*d).toExponential(2)} FLOPs. Zwiększenie skali 2× → koszt około 4×.`;document.querySelectorAll('[data-chinchilla-size]').forEach(b=>b.setAttribute('aria-pressed',String(activeGPU?draft.model_size===b.dataset.chinchillaSize+'m':+b.dataset.chinchillaSize===n/1e6)));save();updateMix();};
+            const showChinchilla=()=>{const activeGPU=draft.compute==='runpod';const d=activeGPU?(draft.budget_mode==='chinchilla'?trainingPlan().parameters*20:draft.target_tokens):draft.target_tokens,n=activeGPU?trainingPlan().parameters:d/20;$('#chinchilla-summary').textContent=`Chinchilla · ${fmt(n/1e6,1)}M → ${fmt(d/1e6,0)}M tokens`;$('#chinchilla-parameters').value=n/1e6;$('#target-tokens').value=d/1e6;$('#chinchilla-equation').textContent=`${fmt(n/1e6,3)}M parameters × ${fmt(d/n,2)} ≈ ${fmt(d/1e6,1)}M tokens`;$('#chinchilla-compute').textContent=`Estimated compute: C ≈ 6ND ≈ ${(6*n*d).toExponential(2)} FLOPs. 2× the scale → about 4× the compute.`;document.querySelectorAll('[data-chinchilla-size]').forEach(b=>b.setAttribute('aria-pressed',String(activeGPU?draft.model_size===b.dataset.chinchillaSize+'m':+b.dataset.chinchillaSize===n/1e6)));save();updateMix();};
             $('#target-tokens').onchange=event=>{if(draft.compute==='runpod')draft.budget_mode='tokens';draft.target_tokens=Math.max(100000,Math.min(1e10,Math.round(Number(event.target.value)*1e6)||100000));showChinchilla();};
             $('#chinchilla-parameters').onchange=event=>{draft.target_tokens=Math.max(100000,Math.min(1e10,(Number(event.target.value)||.005)*20000000));showChinchilla();};
             document.querySelectorAll('[data-chinchilla-size]').forEach(b=>b.onclick=()=>{draft.target_tokens=+b.dataset.chinchillaSize*20000000;if(draft.compute==='runpod'){draft.model_size=b.dataset.chinchillaSize+'m';draft.budget_mode='chinchilla';}showChinchilla();});
@@ -1183,7 +1184,7 @@
             $('#studio-next').append($('#next'));
             if(draft.compute==='runpod'){
               $('#chinchilla-parameters').readOnly=true;
-              document.querySelector('[aria-labelledby="chinchilla-title"] small').textContent='Wybór rozmiaru zmienia rzeczywisty model GPU i ustawia budżet 20×. Tokenizer: bajty UTF-8. Ręczna zmiana milionów tokenów ustawia własny budżet. Early stopping i limit czasu mogą zakończyć run wcześniej.';
+              document.querySelector('[aria-labelledby="chinchilla-title"] small').textContent='Choosing a size changes the actual GPU model and sets a 20× budget. Tokenizer: UTF-8 bytes. Changing millions of tokens sets a custom budget. Early stopping and the time limit may end the run early.';
             }
             showChinchilla();
           }
