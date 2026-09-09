@@ -160,6 +160,20 @@ def test_parallel_dispatch_up_to_cap(client,monkeypatch):
     with SessionLocal() as s:assert s.get(GPUJob,second).pod_id=='second-pod'
 
 
+def test_capacity_blocks_beyond_cap(client,monkeypatch):
+    first,_=create(client,monkeypatch)
+    monkeypatch.setattr(settings,'runpod_max_concurrent',2)
+    second=launch(client).json()['id']
+    with SessionLocal() as s:
+        j=s.get(GPUJob,second);j.state='running';j.pod_id='pod-2';s.commit()
+    third=launch(client).json()['id']
+    def unexpected(*a,**kw):raise AssertionError('Run beyond cap must not contact provider')
+    monkeypatch.setattr(gpu,'provider',unexpected)
+    gpu.advance(third)
+    assert client.get('/api/runs/'+third).json()['gpu_status']['deadline'] is None
+    client.post('/api/training/'+third+'/stop')
+
+
 def test_capacity_retry_requires_two_empty_reconciliations(client,monkeypatch):
     import httpx
     enable(monkeypatch);rid=launch(client).json()['id'];calls=[]
