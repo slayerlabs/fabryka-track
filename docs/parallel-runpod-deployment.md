@@ -95,3 +95,12 @@ The controller now uses a persisted one-hour allocation window (`FABRYKA_RUNPOD_
 Navigation now uses full document loads for studio, runs, run detail, comparisons, benchmarks, leaderboard, guide and account pages. The server validates page paths and supplies page titles; unknown paths return 404. Old hash bookmarks receive one canonical redirect. Shared JavaScript still renders interactive data and charts within each document, but clicks do not use SPA routing or hashchange handlers.
 
 Validation: 65 existing Python tests, one new page-route test, seven JavaScript navigation/guide tests, live page title and JavaScript syntax checks. Interactive browser verification was unavailable in this session.
+
+## Per-run cost reporting
+
+The owner's GPU run dashboard shows a USD estimate, allocated duration and hourly rate, plus the amount and billed duration returned by RunPod when available. Estimate uses the final allocation attempt's start (derived from its persisted runtime deadline) through cleanup, excluding earlier queue attempts. It includes container startup and artifact transfer; it is not an invoice or a pure training-kernel cost.
+
+A background refresh every five minutes reads `/billing/pods` grouped by pod ID, summing daily billing buckets only for known run pods. Snapshots replace previous totals instead of accumulating on every refresh. Missing records remain pending, and displayed provider totals are explicitly billed-so-far because reporting can lag. No provider billing request is made by a page load. Separate evaluation workers, VPS, and external storage are excluded. Existing deleted pods can be matched through retained GPUJob pod IDs.
+
+Provider contract: https://docs.runpod.io/api-reference/billing/GET/billing/pods
+Validation: 16 GPU controller tests, two cost calculation/aggregation tests, eight JavaScript tests against published HTML, and published script syntax check. At deployment, the provider had not yet reported billing rows for the new server's pods; estimates were available for prior completed runs.

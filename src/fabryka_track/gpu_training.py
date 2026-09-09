@@ -64,6 +64,9 @@ def capabilities(user=Depends(require_user), session=Depends(session_scope)):
             'image':settings.runner_image,'gpu_fallbacks':[s.strip() for s in settings.runpod_gpu_fallbacks.split(',') if s.strip()]}
 
 
+from .gpu_costs import cost_summary, refresh_billing
+
+
 def status(session, run):
     job=session.get(GPUJob,run.id)
     if not job:return None
@@ -76,7 +79,7 @@ def status(session, run):
             'allocation_attempts':job.dispatch_attempts, 'allocation_deadline':job.allocation_deadline,
             'next_retry_at':job.next_retry_at if job.state=='queued' else None,
             'cleanup_done':job.cleanup_done, 'gpu':run.metadata_.get('gpu'),
-            'hourly_usd':run.metadata_.get('hourly_usd')}
+            'hourly_usd':run.metadata_.get('hourly_usd'), 'cost':cost_summary(job, run)}
 
 
 def provider(method,path,**kwargs):
@@ -303,7 +306,7 @@ def advance(run_id):
             # Callback may already have updated the row while provider answered.
             session.expire_all();j=session.get(GPUJob,run_id)
             j.pod_id=pod['id'];j.error=None
-            r=session.get(Run,run_id);r.metadata_={**r.metadata_,'pod_id':j.pod_id}
+            r=session.get(Run,run_id);r.metadata_={**r.metadata_,'pod_id':j.pod_id,'hourly_usd':pod.get('adjustedCostPerHr',pod.get('costPerHr'))}
             session.commit()
             return
         if not j.pod_id:
@@ -343,7 +346,7 @@ def advance(run_id):
             elif float(pod.get('costPerHr') or 0)>settings.runpod_max_hourly_usd:
                 j.state='failed';j.error='Provider hourly price exceeds configured cap.';session.commit()
             elif pod:
-                r.metadata_={**r.metadata_,'hourly_usd':pod.get('costPerHr'),'pod_id':j.pod_id};session.commit()
+                r.metadata_={**r.metadata_,'hourly_usd':pod.get('adjustedCostPerHr',pod.get('costPerHr')),'pod_id':j.pod_id};session.commit()
         if j.state in ('finished','failed','cancelled'):
             if j.pod_id:provider('DELETE','/pods/'+j.pod_id)
             j.cleanup_done=True;r.state=j.state;r.ended_at=now()
@@ -358,7 +361,7 @@ def start_supervisor():
     HALT.clear()
     def loop():
         while not HALT.is_set():
-            tick();HALT.wait(10)
+            tick();refresh_billing();HALT.wait(10)
     THREAD=threading.Thread(target=loop,daemon=True,name='runpod-supervisor');THREAD.start()
 
 

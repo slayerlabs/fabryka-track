@@ -56,3 +56,14 @@ test('old run and comparison bookmarks redirect to full pages',()=>{
     assert.equal(context.redirect(),true);assert.equal(target,'/'+legacy);
   }
 });
+
+test('cost summary distinguishes estimates, pending billing and reported zero',()=>{
+  const context=vm.createContext({esc:String,duration:s=>s+'s'});
+  vm.runInContext(between('      function trainingCost(g)', '      function operationalStatus(r)')+'\nglobalThis.render=trainingCost;',context);
+  const cost={estimated_usd:0.01234,seconds:120,hourly_usd:0.37,complete:true};
+  const pending=context.render({cost});
+  assert.match(pending,/\$0.0123 USD/);assert.match(pending,/szacowany koszt/);
+  assert.match(pending,/Oczekiwanie na rozliczenie/);
+  const billed=context.render({cost:{...cost,billed_usd:0,billed_seconds:0,billing_checked_at:'2026-09-09T20:00:00Z'}});
+  assert.match(billed,/RunPod naliczył dotąd: <b>\$0.0000 USD/);
+});
