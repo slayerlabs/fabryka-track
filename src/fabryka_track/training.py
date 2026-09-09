@@ -58,7 +58,10 @@ def stop_worker():
 
 
 def describe(d):
-    return {"id": d.id, "name": d.name, "bytes": len(d.content.encode()), "example": d.example, "sha256": d.sha256}
+    byte_count = len(d.content.encode("utf-8"))
+    return {"id": d.id, "name": d.name, "bytes": byte_count,
+            "size_mb": byte_count / 1_000_000, "token_count": byte_count,
+            "tokenizer": "utf8-bytes", "example": d.example, "sha256": d.sha256}
 
 
 @router.get("/datasets/{dataset_id}/content", response_class=PlainTextResponse)

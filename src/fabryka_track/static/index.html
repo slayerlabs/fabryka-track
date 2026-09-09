@@ -947,8 +947,9 @@
       // CORPUS_CATALOG_END
       const corpusOf = d => corpusSources[d.id];
       const datasetColor = d => corpusOf(d)?.color || colors[parseInt(d.id.replaceAll('-','').slice(0,6),16)%colors.length];
-      const datasetBytes = d => d.bytes >= 1e6 ? `${fmt(d.bytes/1e6,1)} MB` : `${fmt(d.bytes/1000,1)} KB`;
-      const datasetSummary = d => corpusOf(d) ? `Corpus sample · ${corpusOf(d).documents} documents · ${datasetBytes(d)} of text` : `${d.example ? 'Archived test text' : 'Your private file'} · ${fmt(d.bytes/1000,1)} KB`;
+      const datasetBytes = d => `${(d.bytes / 1e6).toLocaleString('en-US', {minimumFractionDigits: 3, maximumFractionDigits: 6})} MB`;
+      const datasetSize = d => `${Number(d.token_count ?? d.bytes).toLocaleString('en-US')} byte tokens · ${datasetBytes(d)}`;
+      const datasetSummary = d => `${corpusOf(d) ? `Corpus sample · ${corpusOf(d).documents} documents` : d.example ? 'Archived test text' : 'Your private file'} · ${datasetSize(d)}`;
       const sourceCategories = {literature:"Literatura", law:"Prawo / administracja", encyclopedia:"Encyklopedia", science:"Nauka", web:"Internet", code:"Kod", other:"Inne / nieprzypisane"};
       const characters = [
         {id:"poet", name:"Poeta / literat", category:"literature"},
@@ -1139,7 +1140,7 @@
         $('#compute-select').onchange=e=>{draft.compute=e.target.value;draft.model_size=draft.compute==='runpod'?'8m':'tiny';draft.learning_rate=draft.compute==='runpod'?.0003:.003;draft.budget_mode='chinchilla';save();renderStudio();};
         const w = $("#workspace");
         if (stage === 1) {
-          w.innerHTML = `<div class="row"><div><h2 style="font-size:20px;margin-bottom:6px">Your dataset library</h2></div></div><div>${datasets.map(datasetRow).join("")}</div><div class="upload"><div><b style="font-size:13px">Bring your own data</b><p class="muted">UTF-8 plain text · 100+ characters · up to 2 MB</p></div><button class="secondary" id="upload-button">+ Add text file</button><input type="file" id="upload" accept=".txt,text/plain" hidden></div><div class="actions"><small>Real corpus samples for training.</small><button class="primary" id="next">Training settings →</button></div>`;
+          w.innerHTML = `<div class="row"><div><h2 style="font-size:20px;margin-bottom:6px">Your dataset library</h2><p class="muted" style="font-size:12px;margin:0 0 12px">Measured from available text: 1 byte token = 1 UTF-8 byte; 1 MB = 1,000,000 bytes. These are sample sizes, not the full source corpus or subword-token counts.</p></div></div><div>${datasets.map(datasetRow).join("")}</div><div class="upload"><div><b style="font-size:13px">Bring your own data</b><p class="muted">UTF-8 plain text · 100+ characters · up to 2 MB</p></div><button class="secondary" id="upload-button">+ Add text file</button><input type="file" id="upload" accept=".txt,text/plain" hidden></div><div class="actions"><small>Real corpus samples for training.</small><button class="primary" id="next">Training settings →</button></div>`;
           document
             .querySelectorAll("[data-slider]")
             .forEach(
