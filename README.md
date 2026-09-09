@@ -223,7 +223,14 @@ Open a finished studio run and use **Publish model to SlayerLab**. Connect your
 Hugging Face account in Account first. Choose a new repository name and private
 (default) or public visibility, then authorize the export with that same HF
 identity. Grant access to SlayerLab; the HF account must have permission to
-create models in that organization. The destination namespace is fixed.
+create models in that organization. The destination namespace is fixed. Models can only be exported under `SlayerLab/`.
+
+To join, sign in at [SlayerLab on Hugging Face](https://huggingface.co/SlayerLab)
+and request membership if that option is available. Otherwise, ask a SlayerLab
+administrator for an invitation and provide your HF username. After approval,
+you need permission to create model repositories. Connect that same HF account
+in Track and select SlayerLab when authorizing publication.
+See [HF membership instructions](https://huggingface.co/docs/hub/organizations-managing).
 
 Export authorization requests `openid profile contribute-repos read-memberships`
 with the same PKCE and browser/session binding as sign-in. The upload token is
