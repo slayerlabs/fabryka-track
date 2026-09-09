@@ -136,14 +136,15 @@ def test_dispatch_uses_scoped_bundle_and_selected_image(client,monkeypatch):
 def test_network_volume_attached_when_configured(client,monkeypatch):
     enable(monkeypatch)
     monkeypatch.setattr(settings,'runpod_network_volume_id','vol-123')
+    monkeypatch.setattr(settings,'runpod_volume_mount','/vol')
     rid=launch(client).json()['id'];calls=[]
     def provider(method,path,**kw):
         calls.append((method,path,kw));return {'id':'created-pod'}
     monkeypatch.setattr(gpu,'provider',provider);gpu.advance(rid)
     payload=calls[0][2]['json']
     assert payload['networkVolumeId']=='vol-123'
-    assert payload['volumeMountPath']=='/workspace'
-    assert payload['env']['TRACK_DATASET_DIR']=='/workspace/datasets'
+    assert payload['volumeMountPath']=='/vol'
+    assert payload['env']['TRACK_DATASET_DIR']=='/vol/datasets'
 
 
 def test_queue_waits_without_allocating_or_consuming_runtime(client,monkeypatch):

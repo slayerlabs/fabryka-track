@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     runpod_allowed_users: str = ""
     runpod_max_concurrent: int = 4
     runpod_network_volume_id: str = ""
-    runpod_volume_mount: str = "/workspace"
+    runpod_volume_mount: str = "/runpod-volume"
     benchmark_runner_tokens: str = "{}"
     r2_endpoint: str | None = None
     r2_bucket: str | None = None

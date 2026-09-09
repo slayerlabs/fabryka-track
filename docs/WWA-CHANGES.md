@@ -56,6 +56,7 @@ zweryfikowane z bajtów; wszystkie commity pod kontem właściciela repo. Do prz
 - **Problem:** pody miały `volumeInGb:0` (brak volume) → worker ściągał każdy dataset po HTTPS z Track per-pod (wolny start, zależność od sieci).
 - **Zmiana:** gdy ustawione `FABRYKA_RUNPOD_NETWORK_VOLUME_ID`, payload dołącza RunPod Network Volume (`networkVolumeId` + `volumeMountPath`, Secure Cloud); worker czyta datasety z `<mount>/datasets/<id>` z fallbackiem na HTTPS gdy brak. Weryfikacja SHA-256 zachowana niezależnie od źródła. W pełni wstecznie kompatybilne (bez ID = dotychczasowe zachowanie).
 - **Efekt:** szybszy start podów i mniej ruchu sieciowego — datasety pre-baked na volume zamiast pobierania za każdym razem.
+- **Mount ≠ `/workspace`:** volume montowany domyślnie w `/runpod-volume`, celowo NIE w `/workspace` — tam BOOTSTRAP rozpakowuje kod runnera do `/workspace/track` (per-pod, container disk). Przy równoległych podach współdzielących jeden volume mount na `/workspace` powodowałby kolizję/nadpisywanie; dane trzymamy osobno na `<mount>/datasets/<id>`.
 - **Wymaga (infra RunPod):** utworzony Network Volume (Secure Cloud) z datasetami pod `<mount>/datasets/<id>` (konto RunPod). Volume dołączany tylko przy deployu poda — ograniczenie RunPod.
 - **Pliki:** `src/fabryka_track/gpu_training.py`, `src/fabryka_track/runpod_worker.py`, `src/fabryka_track/settings.py`.
 
@@ -76,7 +77,7 @@ zweryfikowane z bajtów; wszystkie commity pod kontem właściciela repo. Do prz
 - `FABRYKA_PUBLIC_URL` — publicznie osiągalny adres control-plane (pody raportują tu przez HTTPS).
 - `FABRYKA_RUNPOD_MAX_CONCURRENT` — liczba równoległych podów (dobierz pod liczbę kursantów i limit konta RunPod).
 - `FABRYKA_RUNPOD_NETWORK_VOLUME_ID` — (opcjonalny) ID RunPod Network Volume z pre-baked datasetami; pusty = ściąganie po HTTPS jak dotąd.
-- `FABRYKA_RUNPOD_VOLUME_MOUNT` — ścieżka montowania volume (domyślnie `/workspace`; datasety oczekiwane pod `<mount>/datasets/<id>`).
+- `FABRYKA_RUNPOD_VOLUME_MOUNT` — ścieżka montowania volume (domyślnie `/runpod-volume`; datasety pod `<mount>/datasets/<id>`; celowo poza `/workspace`, gdzie żyje per-pod kod runnera).
 - Uruchom `scripts/preflight.py` — powinno dać RESULT: OK.
 
 ## Bezpieczeństwo i prowieniencja
