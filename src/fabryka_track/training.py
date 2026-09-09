@@ -411,7 +411,7 @@ def _train(run_id):
                 stale_checks = 0
             else:
                 stale_checks += 1
-            values = {"train/loss": loss.item(), "val/loss": val_loss, "val/perplexity": math.exp(val_loss), "throughput/tokens_sec": seen_tokens/(time.monotonic()-start), "progress": step/cfg["steps"]*100, "training/tokens_seen": seen_tokens}
+            values = {"train/loss": loss.item(), "val/loss": val_loss, "val/perplexity": math.exp(val_loss), "throughput/tokens_sec": seen_tokens/max(time.monotonic()-start, 1e-3), "progress": step/cfg["steps"]*100, "training/tokens_seen": seen_tokens}
             with SessionLocal() as session:
                 for key, value in values.items():
                     session.add(Metric(run_id=run_id, key=key, step=step, value=value))
