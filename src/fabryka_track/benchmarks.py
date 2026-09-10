@@ -68,6 +68,28 @@ def serialize(row, session=None):
     return {k:getattr(row,k) for k in ('id','run_id','status','mode','tasks','results','provenance','current_task','error','created_at','ended_at')} | {'tiny_score':tiny_score(row.results), 'protocol':row.provenance.get('protocol',PROTOCOL), 'fast_score':fast_score(row.results), 'queue_position':position}
 
 
+def auto_benchmark_summary(session, run):
+    """Headline of a run's automatic benchmark for the leaderboard: suite, human label, state, and one score.
+    Single-task suites (polish, piqa) report the task accuracy; multi-task core reports the chance-normalized TinyScore."""
+    eid = (run.metadata_ or {}).get('auto_benchmark_id')
+    if not eid:
+        return None
+    ev = session.get(BenchmarkEvaluation, eid)
+    if ev is None:
+        return None
+    results = ev.results or {}
+    tasks = ev.tasks or []
+    if 'multiblimp_polish' in tasks:
+        cell = results.get('multiblimp_polish') or {}
+        label, score, is_percent = 'Polish MultiBLiMP', (None if cell.get('error') else cell.get('accuracy')), True
+    elif len(tasks) == 1:
+        cell = results.get(tasks[0]) or {}
+        label, score, is_percent = TASKS.get(tasks[0], (tasks[0],))[0], (None if cell.get('error') else cell.get('accuracy')), True
+    else:
+        label, score, is_percent = 'TinyScore', tiny_score(results), False
+    return {'suite': run.config.get('auto_benchmark_suite'), 'label': label, 'state': ev.status, 'score': score, 'is_percent': is_percent}
+
+
 @router.get('/benchmarks/catalog')
 def catalog():
     return {'protocol':PROTOCOL, 'available':importlib.util.find_spec('lm_eval') is not None,
