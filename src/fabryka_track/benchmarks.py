@@ -91,28 +91,24 @@ class EvaluationInput(BaseModel):
     mode: Literal['smoke','full'] = 'smoke'
 
 
-@router.post('/runs/{run_id}/benchmarks',status_code=202)
-def start(run_id:str,body:EvaluationInput,user=Depends(require_user),session=Depends(session_scope)):
-    run=owned_run(session,run_id,user)
-    path=checkpoint_path(session,run)
-    if importlib.util.find_spec('lm_eval') is None:
-        raise HTTPException(503,'The benchmark worker is not installed on this server.')
+def _enqueue(session, run, path, suite, mode):
+    """Queue (or reuse a pinned) evaluation for a run+checkpoint. Callers guard access and lm_eval availability."""
     with lock:
-        active=session.scalar(select(BenchmarkEvaluation).where(BenchmarkEvaluation.run_id==run_id, BenchmarkEvaluation.status.in_(['queued','running'])))
+        active=session.scalar(select(BenchmarkEvaluation).where(BenchmarkEvaluation.run_id==run.id, BenchmarkEvaluation.status.in_(['queued','running'])))
         if active:
             raise HTTPException(409,'This run already has a queued or running evaluation.')
         digest=hashlib.sha256(path.read_bytes()).hexdigest()
-        tasks=SUITES[body.suite]
-        previous=list(session.scalars(select(BenchmarkEvaluation).where(BenchmarkEvaluation.run_id==run_id,
-            BenchmarkEvaluation.mode==body.mode).order_by(BenchmarkEvaluation.created_at.desc())))
+        tasks=SUITES[suite]
+        previous=list(session.scalars(select(BenchmarkEvaluation).where(BenchmarkEvaluation.run_id==run.id,
+            BenchmarkEvaluation.mode==mode).order_by(BenchmarkEvaluation.created_at.desc())))
         compatible=[r for r in previous if r.provenance.get('checkpoint_sha256')==digest and
                     r.provenance.get('protocol')==PROTOCOL and r.provenance.get('seed')==42 and
-                    r.provenance.get('fewshot')==0 and r.provenance.get('limit_per_subtask')==(10 if body.mode=='smoke' else None)]
+                    r.provenance.get('fewshot')==0 and r.provenance.get('limit_per_subtask')==(10 if mode=='smoke' else None)]
         # Reuse one coherent pinned evaluation; never mix smoke/full measurements.
         source=max(compatible,key=lambda r:sum(k in r.results and not r.results[k].get('error') for k in tasks),default=None)
         completed={k:v for k,v in (source.results.items() if source else []) if k in tasks and not v.get('error')}
         if source and set(source.tasks)==set(tasks) and len(completed)==len(tasks):
-            return serialize(source,session)
+            return source
         if session.scalar(select(func.count()).select_from(BenchmarkEvaluation).where(BenchmarkEvaluation.status=='queued'))>=20:
             raise HTTPException(409,'The benchmark queue is full (20 waiting evaluations).')
         if source and set(source.tasks)==set(tasks):
@@ -125,14 +121,38 @@ def start(run_id:str,body:EvaluationInput,user=Depends(require_user),session=Dep
         else:
             provenance={k:v for k,v in (source.provenance.items() if source else []) if k not in ('runner','lease','heartbeat','worker_pid')}
             provenance.update(checkpoint_sha256=digest,protocol=PROTOCOL,fewshot=0,seed=42,
-                              limit_per_subtask=10 if body.mode=='smoke' else None,reused_tasks=list(completed))
+                              limit_per_subtask=10 if mode=='smoke' else None,reused_tasks=list(completed))
             if source:provenance['reused_from_evaluation']=source.id
-            row=BenchmarkEvaluation(run_id=run.id,mode=body.mode,tasks=tasks,results=completed,provenance=provenance,
+            row=BenchmarkEvaluation(run_id=run.id,mode=mode,tasks=tasks,results=completed,provenance=provenance,
                                     status='finished' if len(completed)==len(tasks) else 'queued',
                                     ended_at=datetime.now(timezone.utc) if len(completed)==len(tasks) else None)
             session.add(row)
         session.commit();session.refresh(row)
-    return serialize(row,session)
+    return row
+
+
+@router.post('/runs/{run_id}/benchmarks',status_code=202)
+def start(run_id:str,body:EvaluationInput,user=Depends(require_user),session=Depends(session_scope)):
+    run=owned_run(session,run_id,user)
+    path=checkpoint_path(session,run)
+    if importlib.util.find_spec('lm_eval') is None:
+        raise HTTPException(503,'The benchmark worker is not installed on this server.')
+    return serialize(_enqueue(session,run,path,body.suite,body.mode),session)
+
+
+def enqueue_auto_polish(session, run):
+    """Queue the Polish ladder smoke the moment a run finishes, so the leaderboard shows Polish quality
+    without a manual click. Best-effort: a missing worker, absent checkpoint, full queue, or an already
+    queued evaluation is a no-op and never blocks or fails training completion."""
+    if run.state != 'finished' or importlib.util.find_spec('lm_eval') is None:
+        return None
+    try:
+        path=checkpoint_path(session,run)
+        if not path or not Path(path).exists():
+            return None
+        return _enqueue(session,run,path,'polish','smoke')
+    except Exception:
+        return None
 
 
 @router.post('/runs/{run_id}/benchmarks/{evaluation_id}/cancel')

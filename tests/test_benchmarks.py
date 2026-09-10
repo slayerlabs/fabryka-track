@@ -6,7 +6,10 @@ from sqlalchemy import select
 
 from fabryka_track import benchmarks
 from fabryka_track.database import SessionLocal
-from fabryka_track.models import BenchmarkEvaluation, Run
+from fabryka_track.models import Artifact, BenchmarkEvaluation, Metric, Run
+from fabryka_track.settings import settings
+from fabryka_track import training
+from datetime import datetime, timezone
 from test_training import finished, launch
 
 
@@ -27,6 +30,7 @@ def test_evaluation_owner_visibility_and_cancellation(client,monkeypatch):
     monkeypatch.setattr(benchmarks,'supervise',lambda eid:None)
     original_find_spec=benchmarks.importlib.util.find_spec
     monkeypatch.setattr(benchmarks.importlib.util,'find_spec',lambda n:True if n=='lm_eval' else original_find_spec(n))
+    monkeypatch.setattr(benchmarks,'enqueue_auto_polish',lambda *a,**k:None)
     run=finished(client,launch(client).json()['id'])
     url='/api/runs/'+run['id']+'/benchmarks'
     r=client.post(url,json={'suite':'extended','mode':'smoke'})
@@ -59,6 +63,7 @@ def test_recovery_marks_interrupted(client):
 def test_queue_accepts_different_models_and_preserves_fifo_on_restart(client,monkeypatch):
     original=benchmarks.importlib.util.find_spec
     monkeypatch.setattr(benchmarks.importlib.util,'find_spec',lambda n:True if n=='lm_eval' else original(n))
+    monkeypatch.setattr(benchmarks,'enqueue_auto_polish',lambda *a,**k:None)
     first=finished(client,launch(client).json()['id'])
     second=finished(client,launch(client).json()['id'])
     a=client.post('/api/runs/'+first['id']+'/benchmarks',json={})
@@ -161,3 +166,44 @@ def test_batched_requests_match_individual_scores(tmp_path):
     for actual,expected in zip(batched,individual):
         assert actual[0]==pytest.approx(expected[0],abs=1e-5)
         assert actual[1]==expected[1]
+
+
+def test_polish_ladder_auto_queues_after_finish_and_surfaces_on_leaderboard(client, monkeypatch):
+    # Drive the finished checkpoint directly; the real CPU loop is timing-flaky on some hosts.
+    monkeypatch.setattr(training, 'train', lambda run_id: None)
+    monkeypatch.setattr(benchmarks, 'supervise', lambda eid: None)
+    original = benchmarks.importlib.util.find_spec
+    monkeypatch.setattr(benchmarks.importlib.util, 'find_spec', lambda n: True if n == 'lm_eval' else original(n))
+    run_id = launch(client).json()['id']
+    folder = settings.artifact_dir / run_id
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / 'model.pt').write_bytes(b'stub-checkpoint')
+    with SessionLocal() as db:
+        run = db.get(Run, run_id)
+        run.state = 'finished'
+        run.is_public = True
+        run.ended_at = datetime.now(timezone.utc)
+        run.metadata_ = {**run.metadata_, 'engine': 'tiny-transformer',
+                         'training_result': {'best_val_loss': 1.5, 'best_val_perplexity': 4.4816890703, 'completed_steps': 10}}
+        db.add(Metric(run_id=run_id, key='val/loss', step=10, value=1.5))
+        db.add(Artifact(run_id=run_id, name='model.pt', storage_key=f'{run_id}/model.pt', size=15))
+        db.commit()
+        # The Polish ladder auto-queues on finish exactly as the training-completion hook runs it.
+        assert benchmarks.enqueue_auto_polish(db, db.get(Run, run_id)) is not None
+    history = client.get(f'/api/runs/{run_id}/benchmarks').json()
+    polish = [e for e in history if 'multiblimp_polish' in e['tasks']]
+    assert len(polish) == 1 and polish[0]['mode'] == 'smoke' and polish[0]['status'] == 'queued'
+    # Once the evaluation completes, its accuracy surfaces on the leaderboard as an extra column.
+    with SessionLocal() as db:
+        row = db.get(BenchmarkEvaluation, polish[0]['id'])
+        row.status = 'finished'
+        row.results = {'multiblimp_polish': {'accuracy': 0.72, 'normalized': 0.44, 'samples': 100}}
+        row.ended_at = datetime.now(timezone.utc)
+        db.commit()
+    entry = next(m for m in client.get('/api/leaderboard').json()['models'] if m['id'] == run_id)
+    assert entry['polish_multiblimp'] == 0.72 and entry['polish_state'] == 'finished'
+    # Idempotent: with a pinned finished result the hook reuses it instead of stacking a second eval.
+    with SessionLocal() as db:
+        benchmarks.enqueue_auto_polish(db, db.get(Run, run_id))
+    again = client.get(f'/api/runs/{run_id}/benchmarks').json()
+    assert len([e for e in again if 'multiblimp_polish' in e['tasks']]) == 1

@@ -307,6 +307,10 @@ def advance(run_id):
             r.metadata_={**r.metadata_,'gpu_cleanup':'terminated','pod_id':j.pod_id}
             session.add(RunLog(run_id=run_id,message=(j.error+' ' if j.error else '')+'RunPod cleanup complete.'))
             session.commit()
+            if r.state=='finished':
+                # Auto-queue the Polish ladder smoke so the leaderboard shows Polish quality without a manual click.
+                from .benchmarks import enqueue_auto_polish
+                enqueue_auto_polish(session,r)
 
 
 def start_supervisor():

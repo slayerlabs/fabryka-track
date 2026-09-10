@@ -20,7 +20,7 @@ from sqlalchemy import select, or_
 
 from .accounts import require_user, current_user, owned_run
 from .database import SessionLocal, session_scope
-from .models import Account, Artifact, Dataset, Metric, Project, Run, RunLog
+from .models import Account, Artifact, BenchmarkEvaluation, Dataset, Metric, Project, Run, RunLog
 from .settings import settings
 
 router = APIRouter(prefix="/api")
@@ -228,10 +228,20 @@ def leaderboard(sort: str = "val_loss", order: str = "asc", session=Depends(sess
         result = run.metadata_.get("training_result", {})
         latest["val/loss"] = result.get("best_val_loss", latest["val/loss"])
         latest["val/perplexity"] = result.get("best_val_perplexity", latest.get("val/perplexity"))
+        polish_acc = polish_state = None
+        for ev in session.scalars(select(BenchmarkEvaluation).where(BenchmarkEvaluation.run_id == run.id).order_by(BenchmarkEvaluation.created_at.desc())):
+            if "multiblimp_polish" not in (ev.tasks or []):
+                continue
+            polish_state = ev.status
+            cell = (ev.results or {}).get("multiblimp_polish") or {}
+            if not cell.get("error"):
+                polish_acc = cell.get("accuracy")
+            break
         models.append({"id": run.id, "owner": session.get(Account, run.owner_id).username if run.owner_id else "Legacy", "is_owner": bool(user and run.owner_id == user.id), "name": run.name, "state": run.state, "started_at": run.started_at,
                        "ended_at": run.ended_at, "val_loss": latest.get("val/loss"),
                        "perplexity": latest.get("val/perplexity"), "train_loss": latest.get("train/loss"),
                        "throughput": latest.get("throughput/tokens_sec"), "steps": result.get("completed_steps", run.config.get("steps")),
+                       "polish_multiblimp": polish_acc, "polish_state": polish_state,
                        "mix": [{"name": d.get("name") if d.get("example") else "Private dataset", "weight": d.get("weight")} for d in run.config.get("mix", [])]})
     key = {"val_loss": "val_loss", "perplexity": "perplexity", "throughput": "throughput", "started_at": "started_at"}[sort]
     models.sort(key=lambda row: (row.get(key) is None, row.get(key) or 0), reverse=order == "desc")
@@ -407,3 +417,8 @@ def _train(run_id):
         run.ended_at = datetime.now(timezone.utc)
         session.add(RunLog(run_id=run_id, message=f"Training complete ({stop_reason}) after {completed_steps} updates. Saved best validation checkpoint from step {best_step} (loss {best_loss:.4f})." if final_state == "finished" else "Training stopped."))
         session.commit()
+    if final_state == "finished":
+        # Auto-queue the Polish ladder smoke so the leaderboard shows Polish quality without a manual click.
+        with SessionLocal() as session:
+            from .benchmarks import enqueue_auto_polish
+            enqueue_auto_polish(session, session.get(Run, run_id))
