@@ -25,6 +25,7 @@ from .database import SessionLocal, session_scope
 from .models import Account, Artifact, Dataset, Metric, Project, Run, RunLog
 from .settings import settings
 from .lr_schedule import learning_rate_at
+from .dataset_storage import content_response, content_bytes, dataset_path
 
 router = APIRouter(prefix="/api")
 executor = None
@@ -69,12 +70,17 @@ def describe(d):
 
 
 @router.get("/datasets/{dataset_id}/content", response_class=PlainTextResponse)
-def dataset_content(dataset_id: str, session=Depends(session_scope), user=Depends(require_user)):
+def dataset_content(dataset_id: str, preview: bool = False, session=Depends(session_scope), user=Depends(require_user)):
     """Stable UTF-8 source endpoint for a runner; verify the ETag before use."""
     dataset = session.get(Dataset, dataset_id)
     if not dataset or (not dataset.example and dataset.owner_id != user.id):
         raise HTTPException(404, "Dataset not found")
-    return PlainTextResponse(dataset.content, headers={"ETag": f'"{dataset.sha256}"', "X-Dataset-SHA256": dataset.sha256})
+    if preview:
+        if (dataset.source or {}).get("storage") == "file":
+            with dataset_path(dataset).open("rb") as source: raw = source.read(2000000)
+        else: raw = dataset.content.encode()[:2000000]
+        return PlainTextResponse(raw.decode("utf-8", errors="replace"))
+    return content_response(dataset)
 
 
 def training_manifest(run):
@@ -192,6 +198,8 @@ def launch(body: TrainingInput, session=Depends(session_scope), user=Depends(req
             if not d or (not d.example and d.owner_id != user.id):
                 raise HTTPException(422, "A selected dataset no longer exists.")
             mix.append({**describe(d), "weight": item.weight})
+        if body.compute == "cpu" and sum(d["bytes"] for d in mix) > 100000000:
+            raise HTTPException(422, "Datasets above 100 MB require GPU compute. Select RunPod GPU or a smaller sample.")
         project = session.scalar(select(Project).where(Project.name == "Training studio"))
         if not project:
             project = Project(name="Training studio")
@@ -360,7 +368,7 @@ def _train(run_id):
     with SessionLocal() as session:
         run = session.get(Run, run_id)
         cfg = run.config
-        raw = [session.get(Dataset, d["id"]).content.encode() for d in cfg["mix"]]
+        raw = [content_bytes(session.get(Dataset, d["id"])) for d in cfg["mix"]]
         if run.state != "stopping":
             run.state = "running"
         session.add(RunLog(run_id=run_id, message="Training a tiny causal transformer from scratch on CPU. A seeded ~10% content-hash holdout of whole documents is reserved for validation; duplicate documents are removed so train and validation stay disjoint."))

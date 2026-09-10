@@ -15,6 +15,7 @@ import torch
 from torch.nn import functional as F
 from native_model import TinyTransformer
 from lr_schedule import learning_rate_at
+from corpus_files import split_files
 
 
 def sha(path):
@@ -99,15 +100,18 @@ def train(remote,manifest):
     sources=[];validation=[];holdout_seen=set()
     for d in cfg['mix']:
         vol=os.environ.get('TRACK_DATASET_DIR');vp=os.path.join(vol,d['id']) if vol else None
-        if vp and os.path.exists(vp):
-            with open(vp,'rb') as f:data=f.read()
-        else:
-            data=remote.call('GET','/datasets/'+d['id']).content
-        if hashlib.sha256(data).hexdigest()!=d['sha256']:raise RuntimeError('Dataset SHA-256 mismatch')
-        # Whole-document content-hash holdout keeps train/eval disjoint and drops cross-source duplicates.
-        train_bytes,val_bytes=_holdout_split(bytes(data),cfg['seed'],holdout_seen)
-        sources.append(torch.frombuffer(bytearray(train_bytes),dtype=torch.uint8).clone())
-        validation.append(torch.frombuffer(bytearray(val_bytes),dtype=torch.uint8).clone())
+        source = Path(vp) if vp and os.path.exists(vp) else Path(d['id'] + '.source')
+        downloaded = not (vp and os.path.exists(vp))
+        if downloaded:
+            with remote.call('GET','/datasets/'+d['id'],stream=True) as response, source.open('wb') as output:
+                for chunk in response.iter_content(chunk_size=1024*1024): output.write(chunk)
+        if sha(source)!=d['sha256']:raise RuntimeError('Dataset SHA-256 mismatch')
+        train_path, val_path = Path(d['id']+'.train'), Path(d['id']+'.val')
+        remote.progress(0,message='Preparing document holdout for '+d['name'])
+        split_files(source,train_path,val_path,cfg['seed'],holdout_seen)
+        sources.append(torch.from_file(str(train_path),shared=False,size=train_path.stat().st_size,dtype=torch.uint8))
+        validation.append(torch.from_file(str(val_path),shared=False,size=val_path.stat().st_size,dtype=torch.uint8))
+        if downloaded: source.unlink()
     model=TinyTransformer(**{k:cfg[k] for k in ('width','layers','heads','context_length')}).to(device)
     count=sum(p.numel() for p in model.parameters())
     if count!=cfg['parameters']:raise RuntimeError('Model parameter count differs from recipe')

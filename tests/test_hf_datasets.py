@@ -57,6 +57,12 @@ def test_import_persists_filters_and_owner_and_is_trainable(client,monkeypatch):
     assert dataset['source']['revision']=='b'*40 and dataset['source']['rules']==payload['rules']
     content=client.get('/api/datasets/'+dataset['id']+'/content').content
     assert hashlib.sha256(content).hexdigest()==dataset['sha256']
+    assert dataset['source']['storage']=='file'
+    with SessionLocal() as db:
+        assert db.get(Dataset,dataset['id']).content==''
+    part=client.get('/api/datasets/'+dataset['id']+'/content',headers={'Range':'bytes=0-99'})
+    assert part.status_code==206 and part.content==content[:100]
+    assert client.get('/api/datasets/'+dataset['id']+'/content?preview=true').content==content[:2000000]
     from test_training import launch,finished
     run=finished(client,launch(client,mix=[{'dataset_id':dataset['id'],'weight':100}],lr_schedule='trapezoidal').json()['id'])
     assert run['state']=='finished'
@@ -91,3 +97,16 @@ def test_hub_card_cannot_redirect_import_to_external_data(monkeypatch):
                 card_data=SimpleNamespace(to_dict=lambda:{'configs':[{'data_files':[{'split':'train','path':'http://127.0.0.1/private.json'}]}]}))
     monkeypatch.setattr(hf,'HfApi',API)
     with pytest.raises(ValueError,match='external'):hf.pin(spec())
+
+
+def test_large_import_streams_without_returning_content(tmp_path):
+    body=spec(max_mb=3000)
+    assert spec(max_mb=5000).max_mb==5000
+    with pytest.raises(ValidationError):spec(max_mb=5001)
+    path=tmp_path/'corpus'
+    rows=[{'text':f'Document {i} '+('words '*100)} for i in range(20)]
+    expected,stats=hf.collect(rows,body)
+    with path.open('wb') as output:
+        content,streamed=hf.collect(rows,body,output=output)
+    assert content is None and streamed==stats
+    assert path.read_bytes()==expected.encode()

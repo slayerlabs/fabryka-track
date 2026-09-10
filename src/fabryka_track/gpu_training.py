@@ -20,6 +20,7 @@ from .accounts import require_user
 from .database import SessionLocal, session_scope
 from .models import Artifact, Dataset, GPUJob, Metric, Run, RunLog
 from .settings import settings
+from .dataset_storage import content_response
 
 router = APIRouter(prefix='/api')
 HALT = threading.Event()
@@ -96,7 +97,7 @@ def bundle(run_id):
     folder=settings.artifact_dir/run_id;folder.mkdir(parents=True,exist_ok=True)
     path=folder/'runner.zip'
     with zipfile.ZipFile(path,'w',zipfile.ZIP_DEFLATED) as z:
-        for name in ('native_model.py','runpod_worker.py','lr_schedule.py'):
+        for name in ('native_model.py','runpod_worker.py','lr_schedule.py','corpus_files.py'):
             z.writestr(name,(Path(__file__).parent/name).read_bytes())
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -135,7 +136,7 @@ def get_data(run_id,dataset_id,job=Depends(job_auth),session=Depends(session_sco
     run=session.get(Run,run_id)
     if dataset_id not in {d['id'] for d in run.config['mix']}:raise HTTPException(404,'Dataset not in this run')
     d=session.get(Dataset,dataset_id)
-    return PlainTextResponse(d.content,headers={'X-Dataset-SHA256':d.sha256})
+    return content_response(d)
 
 
 class Progress(BaseModel):

@@ -1,6 +1,9 @@
 """Bounded public Hub imports. Prepare immutable text before renting a GPU."""
 import hashlib
 import math
+import io
+import shutil
+from uuid import uuid4
 import re
 import threading
 import time
@@ -16,6 +19,8 @@ from sqlalchemy import select
 from .accounts import require_user
 from .database import SessionLocal, session_scope
 from .models import Dataset, DatasetImport
+from .dataset_storage import dataset_path
+from .settings import settings
 
 router = APIRouter(prefix='/api/hf-datasets')
 LOCK = threading.Lock()
@@ -68,7 +73,7 @@ class Rule(BaseModel):
 
 class ImportSpec(Source):
     text_column: str = Field(default='text', min_length=1, max_length=100)
-    max_mb: int = Field(default=100, ge=1, le=100)
+    max_mb: int = Field(default=100, ge=1, le=5000)
     min_chars: int = Field(default=100, ge=1, le=100000)
     max_chars: int = Field(default=100000, ge=100, le=250000)
     contains: str = Field(default='', max_length=300)
@@ -168,9 +173,9 @@ def matches(row, spec):
     return re.sub(r'\n(?:[ \t]*\n)+', '\n', text)
 
 
-def collect(rows, spec, row_limit=1000000, seconds=600, progress=None, stop_event=None):
+def collect(rows, spec, row_limit=20000000, seconds=21600, progress=None, stop_event=None, output=None):
     start = time.monotonic()
-    chunks, seen = [], set()
+    sink, seen = output if output is not None else io.BytesIO(), set()
     stats = {'scanned': 0, 'accepted': 0, 'duplicates': 0, 'bytes': 0, 'stop_reason': 'source_exhausted'}
     columns_checked = False
     for row in rows:
@@ -190,13 +195,15 @@ def collect(rows, spec, row_limit=1000000, seconds=600, progress=None, stop_even
             if spec.deduplicate and digest in seen:
                 stats['duplicates'] += 1
             else:
-                size = len(raw)+(2 if chunks else 0)
+                size = len(raw)+(2 if stats['accepted'] else 0)
                 if stats['bytes']+size > spec.max_mb*1000000:
                     stats['stop_reason'] = 'size_limit'; break
-                chunks.append(text); seen.add(digest)
+                if stats['accepted']: sink.write(b'\n\n')
+                sink.write(raw)
+                if spec.deduplicate: seen.add(digest)
                 stats['bytes'] += size; stats['accepted'] += 1
         if progress and stats['scanned'] % 250 == 0: progress(dict(stats))
-    return '\n\n'.join(chunks), stats
+    return (sink.getvalue().decode('utf-8') if output is None else None), stats
 
 
 @router.post('/preview')
@@ -237,6 +244,8 @@ def start_import(body: ImportSpec, user=Depends(require_user), session=Depends(s
 
 
 def run_import(job_id):
+    temporary = None
+    final_path = None
     try:
         with SessionLocal() as db:
             job = db.get(DatasetImport, job_id)
@@ -249,23 +258,36 @@ def run_import(job_id):
             with SessionLocal() as db:
                 job = db.get(DatasetImport, job_id); job.progress = stats; db.commit()
             last_update = time.monotonic()
-        content, stats = collect(stream(spec), spec, progress=update, stop_event=STOP)
+        folder = settings.artifact_dir / 'datasets'
+        folder.mkdir(parents=True, exist_ok=True)
+        if shutil.disk_usage(folder).free < spec.max_mb * 1000000 + 2000000000:
+            raise ValueError('Not enough storage for this import. Choose a smaller size.')
+        temporary = folder / (job_id + '.partial')
+        with temporary.open('wb') as output:
+            _, stats = collect(stream(spec), spec, progress=update, stop_event=STOP, output=output)
+        digest = hashlib.sha256()
+        with temporary.open('rb') as content_file:
+            for chunk in iter(lambda: content_file.read(1024*1024), b''): digest.update(chunk)
         with SessionLocal() as db:
             job = db.get(DatasetImport, job_id); job.progress = stats; db.commit()
         if stats['accepted'] < 2 or stats['bytes'] < 4096:
             raise ValueError('Too little matching text for training. Import at least two documents and 4 KB; relax the filters or choose another split.')
         with SessionLocal() as db:
             job = db.get(DatasetImport, job_id)
-            source = {**spec.model_dump(), 'kind': 'huggingface', 'stats': stats,
+            source = {**spec.model_dump(), 'kind': 'huggingface', 'storage': 'file', 'stats': stats,
                       'decoder': 'tiktoken:gpt2' if spec.repo == 'nvidia/Nemotron-ClimbMix' else None,
                       'sampling': 'First matching whole documents in source order; bounded sample, not representative.',
                       'normalization': 'Trim text, normalize newlines, collapse internal blank lines.'}
-            dataset = Dataset(owner_id=job.owner_id, name=f'{spec.repo} · {spec.config or "default"}/{spec.split}'[:200],
-                              content=content, byte_count=stats['bytes'], source=source,
-                              sha256=hashlib.sha256(content.encode()).hexdigest(), example=False)
+            dataset = Dataset(id=str(uuid4()), owner_id=job.owner_id, name=f'{spec.repo} · {spec.config or "default"}/{spec.split}'[:200],
+                              content='', byte_count=stats['bytes'], source=source,
+                              sha256=digest.hexdigest(), example=False)
+            final_path = dataset_path(dataset)
+            temporary.replace(final_path)
             db.add(dataset); db.flush()
             job.dataset_id = dataset.id; job.progress = stats; job.state = 'finished'; db.commit()
     except Exception as exc:
+        if temporary: temporary.unlink(missing_ok=True)
+        if final_path: final_path.unlink(missing_ok=True)
         with SessionLocal() as db:
             job = db.get(DatasetImport, job_id)
             if job:
@@ -278,6 +300,7 @@ def start_importer():
     with SessionLocal() as db:
         for job in db.scalars(select(DatasetImport).where(DatasetImport.state.in_(ACTIVE))):
             job.state = 'failed'; job.error = 'Import interrupted by a server restart. Please retry.'
+            (settings.artifact_dir / 'datasets' / (job.id + '.partial')).unlink(missing_ok=True)
         db.commit()
     POOL = ThreadPoolExecutor(max_workers=2, thread_name_prefix='hf-import')
 
