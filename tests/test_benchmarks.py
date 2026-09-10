@@ -220,3 +220,22 @@ def test_leaderboard_surfaces_automatic_benchmark(client):
     client.patch(f"/api/training/{other['id']}/visibility", json={'is_public': True})
     later = [m for size in client.get('/api/leaderboard').json()['sizes'] for m in size['models']]
     assert next(m for m in later if m['id'] == other['id'])['auto_benchmark'] is None
+
+
+def test_leaderboard_surfaces_fast_pl_ladder(client):
+    run = finished(client, launch(client).json()['id'])
+    rid = run['id']
+    client.patch(f'/api/training/{rid}/visibility', json={'is_public': True})
+    with SessionLocal() as db:
+        ev = BenchmarkEvaluation(run_id=rid, mode='full', status='finished',
+                                 tasks=['pl_lm', 'pl_multiblimp', 'pl_induction'],
+                                 results={'pl_lm': {'normalized': 0.5}, 'pl_multiblimp': {'normalized': 0.1}, 'pl_induction': {'normalized': 0.2}},
+                                 provenance={'protocol': 'fast-pl-v1'})
+        db.add(ev); db.flush()
+        r = db.get(Run, rid)
+        r.config = {**r.config, 'auto_benchmark_suite': 'fast_pl'}
+        r.metadata_ = {**r.metadata_, 'auto_benchmark_id': ev.id}
+        db.commit()
+    ab = next(m for size in client.get('/api/leaderboard').json()['sizes'] for m in size['models'] if m['id'] == rid)['auto_benchmark']
+    assert ab['label'] == 'Polish ladder' and ab['is_percent'] is False and ab['suite'] == 'fast_pl'
+    assert ab['score'] == pytest.approx(0.5 * .60 + 0.1 * .30 + 0.2 * .10)  # pl_score weighting

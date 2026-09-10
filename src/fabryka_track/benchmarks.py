@@ -83,6 +83,10 @@ def auto_benchmark_summary(session, run):
     if 'multiblimp_polish' in tasks:
         cell = results.get('multiblimp_polish') or {}
         label, score, is_percent = 'Polish MultiBLiMP', (None if cell.get('error') else cell.get('accuracy')), True
+    elif any(t.startswith('pl_') for t in tasks):
+        label, score, is_percent = 'Polish ladder', pl_score(results), False
+    elif any(t.startswith('fast_') for t in tasks):
+        label, score, is_percent = 'Fast ladder', fast_score(results), False
     elif len(tasks) == 1:
         cell = results.get(tasks[0]) or {}
         label, score, is_percent = TASKS.get(tasks[0], (tasks[0],))[0], (None if cell.get('error') else cell.get('accuracy')), True
