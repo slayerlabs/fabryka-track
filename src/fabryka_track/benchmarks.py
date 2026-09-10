@@ -22,12 +22,13 @@ from .models import Account, BenchmarkEvaluation, Run, RunLog
 
 router = APIRouter(prefix='/api')
 from .fast_ladder import COMPONENTS, PROTOCOL as FAST_PROTOCOL, fast_score
+from .fast_pl_ladder import PROTOCOL as PL_PROTOCOL, pl_score
 
 PROTOCOL = 'tinylm-en-v1-byte-sliding'
 CORE = ['sciq','arc_easy','piqa','hellaswag','blimp']
 SUITES = {'piqa':['piqa'], 'core':CORE, 'tinylm':CORE+['lambada_openai'],
           'extended':CORE+['lambada_openai','winogrande','boolq'],
-          'polish': ['multiblimp_polish'], 'fast':[k for k in COMPONENTS if k!='fast_ewok']}
+          'polish': ['multiblimp_polish'], 'fast':[k for k in COMPONENTS if k!='fast_ewok'], 'fast_pl':['pl_lm','pl_multiblimp','pl_induction']}
 TASKS = {
     'sciq': ('SciQ','allenai/sciq'), 'arc_easy': ('ARC-Easy','allenai/ai2_arc'),
     'piqa': ('PIQA','baber/piqa'), 'hellaswag': ('HellaSwag','Rowan/hellaswag'),
@@ -65,7 +66,33 @@ def serialize(row, session=None):
         position=1+session.scalar(select(func.count()).select_from(BenchmarkEvaluation).where(
             BenchmarkEvaluation.status=='queued',
             (BenchmarkEvaluation.created_at<row.created_at) | ((BenchmarkEvaluation.created_at==row.created_at)&(BenchmarkEvaluation.id<row.id))))
-    return {k:getattr(row,k) for k in ('id','run_id','status','mode','tasks','results','provenance','current_task','error','created_at','ended_at')} | {'tiny_score':tiny_score(row.results), 'protocol':row.provenance.get('protocol',PROTOCOL), 'fast_score':fast_score(row.results), 'queue_position':position}
+    return {k:getattr(row,k) for k in ('id','run_id','status','mode','tasks','results','provenance','current_task','error','created_at','ended_at')} | {'tiny_score':tiny_score(row.results), 'protocol':row.provenance.get('protocol',PROTOCOL), 'fast_score':fast_score(row.results), 'pl_score':pl_score(row.results), 'queue_position':position}
+
+
+def auto_benchmark_summary(session, run):
+    """Headline of a run's automatic benchmark for the leaderboard: suite, human label, state, and one score.
+    Single-task suites (polish, piqa) report the task accuracy; multi-task core reports the chance-normalized TinyScore."""
+    eid = (run.metadata_ or {}).get('auto_benchmark_id')
+    if not eid:
+        return None
+    ev = session.get(BenchmarkEvaluation, eid)
+    if ev is None:
+        return None
+    results = ev.results or {}
+    tasks = ev.tasks or []
+    if 'multiblimp_polish' in tasks:
+        cell = results.get('multiblimp_polish') or {}
+        label, score, is_percent = 'Polish MultiBLiMP', (None if cell.get('error') else cell.get('accuracy')), True
+    elif any(t.startswith('pl_') for t in tasks):
+        label, score, is_percent = 'Polish ladder', pl_score(results), False
+    elif any(t.startswith('fast_') for t in tasks):
+        label, score, is_percent = 'Fast ladder', fast_score(results), False
+    elif len(tasks) == 1:
+        cell = results.get(tasks[0]) or {}
+        label, score, is_percent = TASKS.get(tasks[0], (tasks[0],))[0], (None if cell.get('error') else cell.get('accuracy')), True
+    else:
+        label, score, is_percent = 'TinyScore', tiny_score(results), False
+    return {'suite': run.config.get('auto_benchmark_suite'), 'label': label, 'state': ev.status, 'score': score, 'is_percent': is_percent}
 
 
 @router.get('/benchmarks/catalog')
@@ -89,7 +116,7 @@ def history(run_id:str,user=Depends(current_user),session=Depends(session_scope)
 
 
 class EvaluationInput(BaseModel):
-    suite: Literal['core','tinylm','extended','polish','fast','piqa'] = 'tinylm'
+    suite: Literal['core','tinylm','extended','polish','fast','piqa','fast_pl'] = 'tinylm'
     mode: Literal['smoke','full'] = 'smoke'
 
 
@@ -106,7 +133,7 @@ def start(run_id:str,body:EvaluationInput,user=Depends(require_user),session=Dep
             raise HTTPException(409,'This run already has a queued or running evaluation.')
         digest=hashlib.sha256(path.read_bytes()).hexdigest()
         tasks=SUITES[body.suite]
-        protocol=FAST_PROTOCOL if body.suite=='fast' else PROTOCOL
+        protocol=PL_PROTOCOL if body.suite=='fast_pl' else FAST_PROTOCOL if body.suite=='fast' else PROTOCOL
         previous=list(session.scalars(select(BenchmarkEvaluation).where(BenchmarkEvaluation.run_id==run_id,
             BenchmarkEvaluation.mode==body.mode).order_by(BenchmarkEvaluation.created_at.desc())))
         compatible=[r for r in previous if r.provenance.get('checkpoint_sha256')==digest and
@@ -231,7 +258,7 @@ def enqueue_automatic():
             Run.metadata_['auto_benchmark_id'].as_string().is_(None)).order_by(Run.ended_at).limit(20)))
         for run in pending:
             suite = run.config.get('auto_benchmark_suite', 'piqa')
-            if suite not in ('piqa', 'core', 'polish'): continue
+            if suite not in ('piqa', 'core', 'polish', 'fast_pl'): continue
             owner = db.get(Account, run.owner_id) if run.owner_id else None
             if not owner: continue
             existing = db.scalars(select(BenchmarkEvaluation).where(
