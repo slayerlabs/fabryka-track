@@ -36,6 +36,8 @@ def create_tables():
 
         connection.execute(text("CREATE INDEX IF NOT EXISTS ix_metrics_run_key_id ON metrics (run_id, key, id)"))
         dataset_columns = {c['name'] for c in inspect(connection).get_columns('datasets')}
+        if 'source' not in dataset_columns:
+            connection.execute(text("ALTER TABLE datasets ADD COLUMN source JSON NOT NULL DEFAULT '{}'"))
         if 'byte_count' not in dataset_columns:
             connection.execute(text('ALTER TABLE datasets ADD COLUMN byte_count INTEGER'))
         byte_length = 'length(CAST(content AS BLOB))' if engine.dialect.name == 'sqlite' else 'octet_length(content)'

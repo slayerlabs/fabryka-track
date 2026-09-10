@@ -1,0 +1,29 @@
+# Public Hugging Face imports
+
+In Training studio, open **Import from Hugging Face**, paste `owner/dataset` or a dataset-page URL, inspect the subset/split, select a string column, preview filters, then import. No HF repository authorization or server HF token is used. A signed-in Track account owns the resulting dataset. Assign mix points after the job finishes.
+
+Supported filters: minimum/maximum text length, required/excluded substring, exact deduplication, and column equality, substring or numeric bounds. Conditions are ANDed; text comparisons ignore case. The current UI exposes two column conditions; the API accepts five. Missing columns produce an error; missing/non-numeric row values do not match numeric filters. Preview examines up to 200 rows. Its match rate is not a whole-dataset estimate.
+
+Imports run before GPU allocation, with at most two jobs globally and one per account. Each job scans at most one million rows / ten minutes between yielded rows and materializes at most 100 MB. Upstream network waits can extend elapsed time. First matching whole documents are kept, not a statistically representative sample. The library and run recipe retain the revision SHA, filters, normalization, counts, stop reason and text checksum. Internal blank lines are collapsed to preserve one source row per document for the byte trainer. At least two documents and 4 KB are required. Restarted jobs become failed with an explicit retry message; partial datasets are never published. Imports are owner-private even when the upstream corpus is public.
+
+The existing trainer loads materialized text into RAM. This is bounded import support, not arbitrary-scale streaming pretraining. `datasets` 4.x uses built-in format loaders; custom dataset scripts, private and gated repositories are unsupported. See [HF loading](https://huggingface.co/docs/datasets/loading) and [streaming](https://huggingface.co/docs/datasets/stream).
+
+## NVIDIA ClimbMix
+
+The preset points to the official `nvidia/Nemotron-ClimbMix`, with GPT-2 tokens decoded through `tiktoken` into a derived `text` column. Other columns remain available for filtering, including `cluster_id` and `token_count`. Counts from NVIDIA are GPT-2 tokens; Track's training budget remains UTF-8 bytes. The source is English and CC BY-NC 4.0; the import UI displays this. A small prefix is often concentrated in a few clusters and does not reproduce NVIDIA's mixture. [Official dataset card](https://huggingface.co/datasets/nvidia/Nemotron-ClimbMix)
+
+## Training and evaluation experiments
+
+[Little LM's report](https://hugovergnes.github.io/little-lm-3-8b/) motivates preparing data before paid GPU work and testing the data mixture and learning-rate schedule independently. Its claimed improvements are specific to that experiment, not measured Track gains. FP8, Muon and larger architecture changes need separate compatibility and controlled-quality tests.
+
+The selectable trapezoidal schedule warms up during the first 5% of optimizer steps, holds peak LR until 50%, then cools linearly to 5% of peak at the final step. Integer warmup length rounds upward. CPU and GPU runners share the implementation, record `train/learning_rate`, and save the schedule in their recipes. Constant LR remains the default for compatibility. Disable early stopping when testing a complete schedule; runtime limits still apply.
+
+PIQA was already included in Core/TinyLM. A PIQA-only suite now permits independent English physical-common-sense evaluation through the existing pinned lm-eval worker. Use full evaluation to compare models; smoke mode has only ten examples. Random binary choice is 50%, and chance-normalized accuracy is `(accuracy - .5)/.5`. PIQA is separate from Polish evaluation. Never include its held-out evaluation split in training. [Original PIQA paper](https://arxiv.org/abs/1911.11641)
+
+A useful controlled experiment is a 2x2 comparison: same model, seed, byte budget and held-out evaluation, varying only dataset (baseline/ClimbMix) and schedule (constant/trapezoidal). Compare held-out BPB, full PIQA and actual cost. Repeat seeds before drawing conclusions.
+
+## Automatic background evaluation
+
+New Studio runs enable a full PIQA evaluation by default; the form also offers the five-task English Core suite and Polish MultiBLiMP, or disabling automatic evaluation. Existing API clients retain opt-in behavior (`auto_benchmark`, `auto_benchmark_suite`) and old runs are unchanged. The queue reconciler waits for a successfully finished run with a saved checkpoint (and completed GPU cleanup), then links exactly one evaluation. Repeated ticks/restarts reuse that link; failed or cancelled evaluations are not retried forever. Queue saturation defers evaluation without failing training. Existing pull workers execute the job; no evaluation runs on a paid training pod. Production currently has only `simp` registered, with an active RTX 3090 worker. GB10 needs separate worker provisioning if added later.
+
+GPU runs additionally record peak allocated and reserved CUDA memory alongside effective byte throughput. Vocabulary padding is already satisfied (256 entries), and the current FFN is already non-gated with a 4x intermediate size. FP8, fused output loss, reduced-precision optimizer state and activation changes remain experiments: measure at the best fitting batch size, compare held-out quality, and use actual rental cost. No such throughput gain is claimed or enabled by this change.

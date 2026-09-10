@@ -113,11 +113,24 @@ class Dataset(Base):
     owner_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()))
     name: Mapped[str] = mapped_column(String(200))
+    source: Mapped[dict] = mapped_column(JSON, default=dict, server_default='{}')
     content: Mapped[str] = mapped_column(Text)
     byte_count: Mapped[int | None] = mapped_column(Integer, nullable=True,
         default=lambda context: len(context.get_current_parameters()["content"].encode("utf-8")))
     sha256: Mapped[str] = mapped_column(String(64), index=True)
     example: Mapped[bool] = mapped_column(default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class DatasetImport(Base):
+    __tablename__ = 'dataset_imports'
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    owner_id: Mapped[str] = mapped_column(String(36), index=True)
+    state: Mapped[str] = mapped_column(String(20), default='queued')
+    config: Mapped[dict] = mapped_column(JSON)
+    progress: Mapped[dict] = mapped_column(JSON, default=dict)
+    dataset_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
 

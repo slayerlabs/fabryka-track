@@ -14,6 +14,7 @@ import requests
 import torch
 from torch.nn import functional as F
 from native_model import TinyTransformer
+from lr_schedule import learning_rate_at
 
 
 def sha(path):
@@ -130,11 +131,14 @@ def train(remote,manifest):
         with torch.no_grad(),precision():
             losses=[F.cross_entropy(model(x).reshape(-1,256),y.reshape(-1)).float().item() for x,y in vbatches]
         return sum(losses)/len(losses)
+    torch.cuda.reset_peak_memory_stats()
     best=validate();best_step=0;best_state={k:v.detach().cpu().clone() for k,v in model.state_dict().items()}
     patience_best=best;stale=0;seen=0;step=0;state='finished';reason='step_limit';start=time.monotonic();last_report=start
     remote.progress(0,message=f'Training {count:,} parameters on {torch.cuda.get_device_name(0)}; budget {cfg["planned_training_tokens"]:,} byte tokens.')
     for step in range(1,cfg['steps']+1):
         if time.time()>deadline:state='cancelled';reason='time_limit';step-=1;break
+        lr=learning_rate_at(cfg,step)
+        for group in optimizer.param_groups:group["lr"]=lr
         model.train();optimizer.zero_grad(set_to_none=True)
         x,y=batch(sources,cfg['batch_size'],rng,length)
         with precision():loss=F.cross_entropy(model(x).reshape(-1,256),y.reshape(-1))
@@ -148,7 +152,7 @@ def train(remote,manifest):
                 best=val;best_step=step;best_state={k:v.detach().cpu().clone() for k,v in model.state_dict().items()}
             if val<patience_best-cfg.get('min_delta',.01):patience_best=val;stale=0
             else:stale+=1
-            values={'train/loss':loss.item(),'val/loss':val,'val/perplexity':math.exp(min(val,80)),
+            values={'gpu/peak_allocated_mb':torch.cuda.max_memory_allocated()/1e6,'gpu/peak_reserved_mb':torch.cuda.max_memory_reserved()/1e6,'train/learning_rate':lr,'train/loss':loss.item(),'val/loss':val,'val/perplexity':math.exp(min(val,80)),
                     'throughput/tokens_sec':seen/max(time.monotonic()-start,.001),'progress':100*step/cfg['steps'],'training/tokens_seen':seen}
             stop=remote.progress(step,values);last_report=time.monotonic()
             if stop:state='cancelled';reason='cancelled';break
@@ -156,6 +160,7 @@ def train(remote,manifest):
     torch.save({'format':'fabryka-transformer-v1','config':cfg,'state_dict':best_state,'best_step':best_step,'best_val_loss':best},'model.pt')
     result={'stop_reason':reason,'completed_steps':step,'tokens_seen':seen,'best_step':best_step,
             'best_val_loss':best,'best_val_perplexity':math.exp(min(best,80)),'checkpoint_selection':'lowest_validation_loss',
+            'peak_allocated_mb':torch.cuda.max_memory_allocated()/1e6,'peak_reserved_mb':torch.cuda.max_memory_reserved()/1e6,
             'gpu':torch.cuda.get_device_name(0),'torch':torch.__version__,'cuda':torch.version.cuda,'precision':'bf16' if use_bf16 else 'fp32'}
     remote.progress(step,message=f'Training ended: {reason}. Synchronizing checkpoint, metrics and recipe.')
     return state,result

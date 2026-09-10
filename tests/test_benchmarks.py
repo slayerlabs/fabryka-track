@@ -162,3 +162,36 @@ def test_batched_requests_match_individual_scores(tmp_path):
     for actual,expected in zip(batched,individual):
         assert actual[0]==pytest.approx(expected[0],abs=1e-5)
         assert actual[1]==expected[1]
+
+
+def test_piqa_only_queues_one_task(client, monkeypatch):
+    monkeypatch.setattr(benchmarks, 'supervise', lambda eid: None)
+    original = benchmarks.importlib.util.find_spec
+    monkeypatch.setattr(benchmarks.importlib.util, 'find_spec', lambda n: True if n == 'lm_eval' else original(n))
+    run = finished(client, launch(client).json()['id'])
+    response = client.post('/api/runs/' + run['id'] + '/benchmarks', json={'suite': 'piqa', 'mode': 'full'})
+    assert response.status_code == 202
+    assert response.json()['tasks'] == ['piqa']
+    assert benchmarks.tiny_score({'piqa': {'normalized': .1}}) is None
+
+
+def test_automatic_benchmark_only_after_completion_and_once(client, monkeypatch):
+    monkeypatch.setattr(benchmarks, 'supervise', lambda eid: None)
+    run = finished(client, launch(client, auto_benchmark=True, auto_benchmark_suite='piqa').json()['id'])
+    benchmarks.enqueue_automatic()
+    benchmarks.enqueue_automatic()
+    with SessionLocal() as db:
+        rows = list(db.scalars(select(BenchmarkEvaluation).where(BenchmarkEvaluation.run_id == run['id'])))
+        assert len(rows) == 1 and rows[0].tasks == ['piqa'] and rows[0].mode == 'full'
+        assert db.get(Run, run['id']).metadata_['auto_benchmark_id'] == rows[0].id
+        rows[0].status = 'failed'; db.commit()
+    benchmarks.enqueue_automatic()
+    with SessionLocal() as db:
+        assert db.get(Run, run['id']).state == 'finished'
+        assert len(list(db.scalars(select(BenchmarkEvaluation).where(BenchmarkEvaluation.run_id == run['id'])))) == 1
+    stopped = finished(client, launch(client, auto_benchmark=True).json()['id'])
+    with SessionLocal() as db:
+        r=db.get(Run,stopped['id']); r.state='cancelled'; db.commit()
+    benchmarks.enqueue_automatic()
+    with SessionLocal() as db:
+        assert db.scalar(select(BenchmarkEvaluation).where(BenchmarkEvaluation.run_id == stopped['id'])) is None

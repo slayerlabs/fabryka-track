@@ -18,14 +18,14 @@ from sqlalchemy import select, func
 from .accounts import require_user, current_user, owned_run
 from .database import SessionLocal, session_scope
 from .hf_publish import checkpoint_path
-from .models import BenchmarkEvaluation, Run
+from .models import Account, BenchmarkEvaluation, Run, RunLog
 
 router = APIRouter(prefix='/api')
 from .fast_ladder import COMPONENTS, PROTOCOL as FAST_PROTOCOL, fast_score
 
 PROTOCOL = 'tinylm-en-v1-byte-sliding'
 CORE = ['sciq','arc_easy','piqa','hellaswag','blimp']
-SUITES = {'core':CORE, 'tinylm':CORE+['lambada_openai'],
+SUITES = {'piqa':['piqa'], 'core':CORE, 'tinylm':CORE+['lambada_openai'],
           'extended':CORE+['lambada_openai','winogrande','boolq'],
           'polish': ['multiblimp_polish'], 'fast':[k for k in COMPONENTS if k!='fast_ewok']}
 TASKS = {
@@ -89,7 +89,7 @@ def history(run_id:str,user=Depends(current_user),session=Depends(session_scope)
 
 
 class EvaluationInput(BaseModel):
-    suite: Literal['core','tinylm','extended','polish','fast'] = 'tinylm'
+    suite: Literal['core','tinylm','extended','polish','fast','piqa'] = 'tinylm'
     mode: Literal['smoke','full'] = 'smoke'
 
 
@@ -97,7 +97,8 @@ class EvaluationInput(BaseModel):
 def start(run_id:str,body:EvaluationInput,user=Depends(require_user),session=Depends(session_scope)):
     run=owned_run(session,run_id,user)
     path=checkpoint_path(session,run)
-    if importlib.util.find_spec('lm_eval') is None:
+    from .benchmark_remote import runners
+    if importlib.util.find_spec('lm_eval') is None and not runners():
         raise HTTPException(503,'The benchmark worker is not installed on this server.')
     with lock:
         active=session.scalar(select(BenchmarkEvaluation).where(BenchmarkEvaluation.run_id==run_id, BenchmarkEvaluation.status.in_(['queued','running'])))
@@ -218,8 +219,39 @@ def recover_evaluations():
         db.commit()
 
 
+def enqueue_automatic():
+    """Durable reconciliation: enqueue once, only after verified completion.
+
+    The run marker and existing job lookup make restart/repeated ticks safe.
+    Full queues defer work; benchmark failure never changes training status.
+    """
+    with SessionLocal() as db:
+        pending = list(db.scalars(select(Run).where(Run.state == 'finished',
+            Run.config['auto_benchmark'].as_boolean() == True,
+            Run.metadata_['auto_benchmark_id'].as_string().is_(None)).order_by(Run.ended_at).limit(20)))
+        for run in pending:
+            suite = run.config.get('auto_benchmark_suite', 'piqa')
+            if suite not in ('piqa', 'core', 'polish'): continue
+            owner = db.get(Account, run.owner_id) if run.owner_id else None
+            if not owner: continue
+            existing = db.scalars(select(BenchmarkEvaluation).where(
+                BenchmarkEvaluation.run_id == run.id,
+                BenchmarkEvaluation.mode == 'full').order_by(BenchmarkEvaluation.created_at.desc())).all()
+            match = next((row for row in existing if set(row.tasks) == set(SUITES[suite])), None)
+            try:
+                eid = match.id if match else start(run.id, EvaluationInput(suite=suite, mode='full'), user=owner, session=db)['id']
+            except HTTPException as exc:
+                if exc.status_code in (409, 503): continue
+                run.metadata_ = {**run.metadata_, 'auto_benchmark_error': exc.detail}
+                db.commit(); continue
+            run.metadata_ = {**run.metadata_, 'auto_benchmark_id': eid}
+            db.add(RunLog(run_id=run.id, message=f'Automatic full {suite} benchmark linked to the background evaluation queue.'))
+            db.commit()
+
+
 def queue_tick():
     recover_evaluations()
+    enqueue_automatic()
     from .benchmark_remote import runners
     if runners():return
     with lock, SessionLocal() as db:

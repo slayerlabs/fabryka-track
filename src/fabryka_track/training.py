@@ -24,6 +24,7 @@ from .accounts import require_user, current_user, owned_run
 from .database import SessionLocal, session_scope
 from .models import Account, Artifact, Dataset, Metric, Project, Run, RunLog
 from .settings import settings
+from .lr_schedule import learning_rate_at
 
 router = APIRouter(prefix="/api")
 executor = None
@@ -63,7 +64,8 @@ def describe(d):
     byte_count = d.byte_count if d.byte_count is not None else len(d.content.encode("utf-8"))
     return {"id": d.id, "name": d.name, "bytes": byte_count,
             "size_mb": byte_count / 1_000_000, "token_count": byte_count,
-            "tokenizer": "utf8-bytes", "example": d.example, "sha256": d.sha256}
+            "tokenizer": "utf8-bytes", "example": d.example, "sha256": d.sha256,
+            "source": d.source or {}}
 
 
 @router.get("/datasets/{dataset_id}/content", response_class=PlainTextResponse)
@@ -86,19 +88,19 @@ def training_manifest(run):
         "runner": {"image": settings.runner_image},
         "model": {"name": run.config.get("model"), "size": run.config.get("model_size"),
                   "architecture": {key: run.config.get(key) for key in ("context_length", "layers", "width", "heads")}},
-        "training": {key: run.config.get(key) for key in ("steps", "batch_size", "learning_rate", "seed", "validation_split", "target_tokens", "budget_mode", "parameters", "training_context_length", "planned_training_tokens", "tokens_per_parameter", "chinchilla_target_tokens", "early_stopping", "patience", "min_delta", "available_training_bytes", "expected_max_source_reuse")},
+        "training": {key: run.config.get(key) for key in ("steps", "batch_size", "learning_rate", "lr_schedule", "seed", "validation_split", "target_tokens", "budget_mode", "parameters", "training_context_length", "planned_training_tokens", "tokens_per_parameter", "chinchilla_target_tokens", "early_stopping", "patience", "min_delta", "available_training_bytes", "expected_max_source_reuse")},
         "result": run.metadata_.get("training_result"),
         "tokenizer": {"name": "utf8-byte", "vocab_size": 256},
         "datasets": [{"id": item.get("id"), "name": item.get("name"), "sha256": item.get("sha256"),
                       "bytes": item.get("bytes"), "example": item.get("example", False), "weight": item.get("weight"), "validation": "last-10-percent",
-                      "content_url": f"/api/datasets/{item.get('id')}/content"}
+                      "content_url": f"/api/datasets/{item.get('id')}/content", "source": item.get("source", {})}
                      for item in run.config.get("mix", [])],
     }
 
 
 @router.get("/datasets")
 def datasets(session=Depends(session_scope), user=Depends(require_user)):
-    return [describe(d) for d in session.scalars(select(Dataset).options(load_only(Dataset.id, Dataset.name, Dataset.byte_count, Dataset.example, Dataset.sha256, raiseload=True)).where(or_(Dataset.example == True, Dataset.owner_id == user.id)).order_by(Dataset.created_at))]
+    return [describe(d) for d in session.scalars(select(Dataset).options(load_only(Dataset.id, Dataset.name, Dataset.byte_count, Dataset.example, Dataset.sha256, Dataset.source, raiseload=True)).where(or_(Dataset.example == True, Dataset.owner_id == user.id)).order_by(Dataset.created_at))]
 
 
 @router.post("/datasets", status_code=201)
@@ -133,6 +135,9 @@ class TrainingInput(BaseModel):
     steps: int = Field(default=100, ge=10, le=2000)
     batch_size: int = Field(default=8, ge=1, le=32)
     learning_rate: float = Field(default=0.003, ge=0.0001, le=0.1, allow_inf_nan=False)
+    lr_schedule: Literal["constant", "trapezoidal"] = "constant"
+    auto_benchmark: bool = False
+    auto_benchmark_suite: Literal['piqa', 'core', 'polish'] = 'piqa'
     seed: int = Field(default=42, ge=0, le=2**32-1)
     model_size: Literal["tiny", "small", "8m", "16m", "32m", "64m", "128m"] = "tiny"
     compute: Literal["cpu", "runpod"] = "cpu"
@@ -409,6 +414,8 @@ def _train(run_id):
             if stopping.is_set() or run.state == "stopping":
                 final_state = "interrupted" if stopping.is_set() else "cancelled"
                 break
+        lr = learning_rate_at(cfg, step)
+        for group in optimizer.param_groups: group["lr"] = lr
         model.train()
         x, y = batch(train_data, cfg["batch_size"], train_rng)
         logits = model(x)
@@ -433,7 +440,7 @@ def _train(run_id):
                 stale_checks = 0
             else:
                 stale_checks += 1
-            values = {"train/loss": loss.item(), "val/loss": val_loss, "val/perplexity": math.exp(val_loss), "throughput/tokens_sec": seen_tokens/max(time.monotonic()-start, 1e-3), "progress": step/cfg["steps"]*100, "training/tokens_seen": seen_tokens}
+            values = {"train/learning_rate": lr, "train/loss": loss.item(), "val/loss": val_loss, "val/perplexity": math.exp(val_loss), "throughput/tokens_sec": seen_tokens/max(time.monotonic()-start, 1e-3), "progress": step/cfg["steps"]*100, "training/tokens_seen": seen_tokens}
             with SessionLocal() as session:
                 for key, value in values.items():
                     session.add(Metric(run_id=run_id, key=key, step=step, value=value))

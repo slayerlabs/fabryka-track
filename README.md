@@ -411,3 +411,7 @@ BLiMP margins, Supplement and ARC-Easy likelihoods alongside the original TinySc
 EWoK requires approved Hugging Face dataset access; the combined score remains
 unavailable until all five components are measured. Use full mode for the fixed
 sample sizes; smoke mode checks execution only.
+
+### Public datasets and training experiments
+
+The Studio supports public Hugging Face imports with previews, text/column filters, bounded sampling and pinned provenance, including decoding NVIDIA ClimbMix. It also offers a trapezoidal learning-rate schedule and automatic full background evaluation after successful training. See [the import and evaluation guide](docs/huggingface-datasets.md) for limits, API behavior and reproducible comparisons.

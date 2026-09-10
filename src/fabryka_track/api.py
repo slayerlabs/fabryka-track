@@ -21,12 +21,14 @@ from .namespaces import router as namespace_router, set_attribute, append_series
 from .schemas import EventBatch, LogInput, Notes
 from .settings import settings
 from .training import router as training_router, start_worker, stop_worker
+from .hf_datasets import router as hf_datasets_router, start_importer, stop_importer
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     create_tables()
     settings.artifact_dir.mkdir(parents=True, exist_ok=True)
     start_worker()
+    start_importer()
     recover_uploads()
     recover_evaluations()
     start_benchmark_queue()
@@ -34,6 +36,7 @@ async def lifespan(_app: FastAPI):
     try:
         yield
     finally:
+        stop_importer()
         stop_benchmark_queue()
         stop_supervisor()
         stop_worker()
@@ -45,6 +48,7 @@ app = FastAPI(title="Fabryka Track", version="0.1.0", lifespan=lifespan)
 app.include_router(benchmarks_router)
 app.include_router(hf_publish_router)
 app.include_router(huggingface_router)
+app.include_router(hf_datasets_router)
 app.include_router(accounts_router)
 app.include_router(training_router)
 app.include_router(gpu_router)
@@ -127,7 +131,7 @@ def run_detail(run_id: str, session: Session = Depends(db), user=Depends(current
     for key, step, timestamp, value in metrics:
         series.setdefault(key, []).append({"step": step, "timestamp": timestamp, "value": value})
     if not owner:
-        cfg = {k: item.config.get(k) for k in ('model', 'model_size', 'steps', 'batch_size', 'learning_rate', 'seed',
+        cfg = {k: item.config.get(k) for k in ('model', 'model_size', 'steps', 'batch_size', 'learning_rate', 'lr_schedule', 'seed',
                'compute', 'context_length', 'layers', 'width', 'heads', 'parameters', 'validation_split', 'early_stopping',
                'budget_mode', 'planned_training_tokens', 'tokens_per_parameter')}
         cfg['mix'] = [{'name': d.get('name') if d.get('example') else 'Private dataset', 'weight': d.get('weight')}
@@ -277,7 +281,7 @@ def health(session: Session = Depends(db)):
 
 @app.get("/assets/{name}")
 def static_asset(name: str):
-    if name not in {"plotly-basic-3.1.0.min.js", "run-charts.js"}:
+    if name not in {"plotly-basic-3.1.0.min.js", "run-charts.js", "hf-datasets.js"}:
         raise HTTPException(404, "Asset not found")
     return FileResponse(Path(__file__).parent / "static" / name, media_type="text/javascript")
 

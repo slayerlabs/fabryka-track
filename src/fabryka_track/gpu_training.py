@@ -27,7 +27,7 @@ THREAD = None
 LOCK = threading.Lock()
 DISPATCH_LOCK = threading.Lock()
 TICK_LOCK = threading.Lock()
-METRICS = {'train/loss','val/loss','val/perplexity','throughput/tokens_sec','progress','training/tokens_seen'}
+METRICS = {'gpu/peak_allocated_mb','gpu/peak_reserved_mb','train/learning_rate','train/loss','val/loss','val/perplexity','throughput/tokens_sec','progress','training/tokens_seen'}
 FILES = {'model.pt','recipe.json','metrics.jsonl','training.log','result.json'}
 SIZES = {'8m':(256,10,8),'16m':(384,9,8),'32m':(512,10,8),'64m':(640,13,10),'128m':(768,18,12)}
 PRESETS = {}
@@ -96,7 +96,7 @@ def bundle(run_id):
     folder=settings.artifact_dir/run_id;folder.mkdir(parents=True,exist_ok=True)
     path=folder/'runner.zip'
     with zipfile.ZipFile(path,'w',zipfile.ZIP_DEFLATED) as z:
-        for name in ('native_model.py','runpod_worker.py'):
+        for name in ('native_model.py','runpod_worker.py','lr_schedule.py'):
             z.writestr(name,(Path(__file__).parent/name).read_bytes())
     return hashlib.sha256(path.read_bytes()).hexdigest()
 

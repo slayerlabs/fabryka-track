@@ -11,3 +11,8 @@ def test_document_routes(client):
         assert response.headers['cache-control'] == 'no-cache'
     for path in ['/missing-page', '/run/not-an-id', '/api/missing']:
         assert client.get(path).status_code == 404
+
+
+def test_public_dataset_import_asset_is_served(client):
+    assert client.get("/assets/hf-datasets.js").status_code == 200
+    assert '/assets/hf-datasets.js' in client.get("/new").text
