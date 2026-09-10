@@ -235,6 +235,7 @@ def leaderboard(sort: str = "val_loss", order: str = "asc", session=Depends(sess
     if order not in {"asc", "desc"}:
         raise HTTPException(422, "Order must be asc or desc.")
     models = []
+    from .benchmarks import auto_benchmark_summary
     for run in session.scalars(select(Run).where(Run.state == "finished", Run.is_public == True)):
         if run.metadata_.get("engine") != "tiny-transformer":
             continue
@@ -251,6 +252,7 @@ def leaderboard(sort: str = "val_loss", order: str = "asc", session=Depends(sess
                        "perplexity": latest.get("val/perplexity"), "train_loss": latest.get("train/loss"),
                        "throughput": latest.get("throughput/tokens_sec"), "steps": result.get("completed_steps", run.config.get("steps")),
                        "model_size": run.config.get("model_size"), "parameters": run.config.get("parameters"),
+                       "auto_benchmark": auto_benchmark_summary(session, run),
                        "mix": [{"name": d.get("name") if d.get("example") else "Private dataset", "weight": d.get("weight")} for d in run.config.get("mix", [])]})
     key = {"val_loss": "val_loss", "perplexity": "perplexity", "throughput": "throughput", "started_at": "started_at"}[sort]
     # Different model sizes are not comparable on raw loss/perplexity; rank within each size.
