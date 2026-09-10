@@ -22,7 +22,7 @@ from .models import Account, BenchmarkEvaluation, Run, RunLog
 
 router = APIRouter(prefix='/api')
 from .fast_ladder import COMPONENTS, PROTOCOL as FAST_PROTOCOL, fast_score
-from .fast_pl_ladder import pl_score
+from .fast_pl_ladder import PROTOCOL as PL_PROTOCOL, pl_score
 
 PROTOCOL = 'tinylm-en-v1-byte-sliding'
 CORE = ['sciq','arc_easy','piqa','hellaswag','blimp']
@@ -133,7 +133,7 @@ def start(run_id:str,body:EvaluationInput,user=Depends(require_user),session=Dep
             raise HTTPException(409,'This run already has a queued or running evaluation.')
         digest=hashlib.sha256(path.read_bytes()).hexdigest()
         tasks=SUITES[body.suite]
-        protocol=FAST_PROTOCOL if body.suite=='fast' else PROTOCOL
+        protocol=PL_PROTOCOL if body.suite=='fast_pl' else FAST_PROTOCOL if body.suite=='fast' else PROTOCOL
         previous=list(session.scalars(select(BenchmarkEvaluation).where(BenchmarkEvaluation.run_id==run_id,
             BenchmarkEvaluation.mode==body.mode).order_by(BenchmarkEvaluation.created_at.desc())))
         compatible=[r for r in previous if r.provenance.get('checkpoint_sha256')==digest and
