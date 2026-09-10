@@ -87,6 +87,11 @@ def run(eid, job=None, reporter=None):
         if name in results and not results[name].get('error'):continue
         save(current_task=name)
         try:
+            if name.startswith('pl_'):
+                from .fast_pl_ladder import evaluate as evaluate_pl
+                results[name]=evaluate_pl(name,model,mode)
+                save(results=results,provenance=provenance)
+                continue
             if name.startswith('fast_'):
                 from .fast_ladder import evaluate
                 results[name]=evaluate(name,model,mode)
