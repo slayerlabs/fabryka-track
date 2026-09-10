@@ -74,7 +74,7 @@ test('benchmark panel selectors remain IDs after document navigation migration',
 
 test('fast ladder shows unavailable EWoK without presenting a combined score',()=>{
   const context=vm.createContext({esc:String,fmt:v=>v==null?'—':String(v)});
-  vm.runInContext(between('      function fastLadderResults(e)', '      async function benchmarkDashboard')+'\nglobalThis.render=fastLadderResults;',context);
+  vm.runInContext(between('      function metricHelp(', '      async function trainingGuide()')+between('      function fastLadderResults(e)', '      async function benchmarkDashboard')+'\nglobalThis.render=fastLadderResults;',context);
   const output=context.render({protocol:'fast-en-v1',mode:'full',fast_score:null,results:{fast_lm:{bpb:7,nll:4.85,samples:1000000},fast_blimp:{accuracy:.6,mean_margin_nats:.2,samples:10}}});
   assert.match(output,/FastScore EN: —/);assert.match(output,/HF access required/);assert.match(output,/BPB 7/);assert.match(output,/Accuracy 60\.0%/);
 });
@@ -88,7 +88,7 @@ test('benchmark dashboard renders history with Fast Ladder in its real lexical s
   const context=vm.createContext({$,generation:1,benchmarkTimer:null,app:{innerHTML:''},esc:String,fmt:v=>v??'—',
     api:async path=>{assert.ok(path in responses,path);return responses[path];},clearTimeout:()=>{},setTimeout:()=>1,
     document:{querySelectorAll:()=>[]}});
-  vm.runInContext(between('      function fastLadderResults(e)', '      let leaderboardRevision')+'\nglobalThis.render=benchmarkDashboard;',context);
+  vm.runInContext(between('      function metricHelp(', '      async function trainingGuide()')+between('      function fastLadderResults(e)', '      let leaderboardRevision')+'\nglobalThis.render=benchmarkDashboard;',context);
   await context.render();
   assert.match($('#benchmark-history').innerHTML,/Accuracy 60\.0%/);
   assert.match($('#benchmark-history').innerHTML,/FastScore EN: —/);
