@@ -33,6 +33,7 @@ def prepare(client, run, name='export-test'):
     result=client.post('/api/training/'+run['id']+'/huggingface',json={'repo_name':name,'private':True,'confirm':True})
     assert result.status_code==200,result.text
     params=parse_qs(urlparse(result.json()['url']).query)
+    assert params['orgIds'] == ['6a2d1122dd2a510a8513fe63']
     assert 'contribute-repos' in params['scope'][0]
     assert 'write-repos' not in params['scope'][0]
     return params['state'][0]
@@ -45,6 +46,7 @@ def callback(client,state):
 def mock_hub(monkeypatch, remote, conflict=False, corrupt=False):
     class Hub:
         def __init__(self,token): assert token=='transient-upload-token'
+        def whoami(self): return {'orgs': [{'name': 'SlayerLab', 'roleInOrg': 'contributor'}]}
         def create_repo(self,**kw):
             assert kw=={'repo_id':'SlayerLab/export-test','repo_type':'model','private':True,'exist_ok':False}
             if conflict: raise HfHubHTTPError('conflict',response=httpx.Response(409,request=httpx.Request('POST','https://huggingface.co/api/repos/create')))
@@ -144,3 +146,15 @@ def test_published_run_has_public_read_only_details(client):
     assert 'private-note-marker' not in detail.text
     assert 'sha256' not in detail.text and 'hostname' not in detail.text
     assert client.get('/api/training/'+run['id']+'/manifest').status_code==401
+
+
+@pytest.mark.parametrize('orgs', [[], [{'name': 'SlayerLab', 'roleInOrg': 'read'}]])
+def test_publish_rejects_missing_org_write_access_before_export(client, monkeypatch, orgs):
+    run = linked_run(client)
+    remote = {}
+    mock_hub(monkeypatch, remote)
+    monkeypatch.setattr(publish.HfApi, 'whoami', lambda self: {'orgs': orgs})
+    assert callback(client, prepare(client, run)).status_code == 400
+    state = client.get('/api/training/' + run['id'] + '/huggingface').json()['publication']
+    assert state['status'] == 'failed'
+    assert 'contributor' in state['error'] and not remote

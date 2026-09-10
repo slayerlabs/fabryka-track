@@ -1,0 +1,11 @@
+# Provider failures: diagnosis and recovery
+
+RunPod allocation HTTP 500 does not prove GPU exhaustion. The supervisor reconciles by deterministic pod name before retrying to avoid duplicate billable pods. Keep the configured hourly cap, GPU allowlist and one-hour allocation deadline unless an operator explicitly changes them. A successful retry clears the error and records allocation in the run log.
+
+Inspect `journalctl -u fabryka-track` for `runpod_request_failed`: method, path, run name (on create), requested GPU types/cloud, duration, HTTP status, provider request ID and bounded redacted response body. Request payloads, authorization headers and environment credentials are not logged. Public run logs contain application-controlled summaries only. `gpu_control_retry` records unexpected controller exception types with run IDs. Do not manually create another pod while reconciliation is pending.
+
+Publishing requests SlayerLab explicitly with OAuth `orgIds` (organization ID `6a2d1122dd2a510a8513fe63`, verified against the HF organization API). After verifying the linked HF identity, Track checks membership using the transient grant before building/uploading the export. Contributor, write and admin roles can proceed; missing/read-only roles receive instructions without starting an export. Actual repository creation remains the authoritative permission check.
+
+`hf_publish_preflight_denied`, `hf_publish_preflight_failed` and `hf_publish_failed` distinguish role checks, provider failures, repository creation, file upload and downloaded-file verification. Provider responses are bounded and redacted, including the transient OAuth token. No OAuth token is retained for unattended retries. Users must authorize again to retry; operators must not publish with a different user's credentials. A publishing failure does not invalidate or remove the trained checkpoint.
+
+Incident on 2026-09-10: Paul's d7e9fe9b run completed on RTX A5000 after three allocation attempts, then HF denied repository creation. Tomkes 68de8fb0 run encountered seven HTTP 500 responses and obtained a pod on attempt eight. Earlier response bodies were not retained, so the vendor's underlying cause cannot be reconstructed.

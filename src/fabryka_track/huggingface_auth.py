@@ -53,7 +53,7 @@ def start(body: StartInput, request: Request, response: Response,
     return {"url": url}
 
 
-def begin_oauth(request, response, session, account_id, scopes):
+def begin_oauth(request, response, session, account_id, scopes, org_ids=None):
     state, browser, verifier = (secrets.token_urlsafe(32) for _ in range(3))
     challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b'=').decode()
     session.execute(delete(OAuthAttempt).where(OAuthAttempt.expires_at < datetime.now(timezone.utc)))
@@ -66,7 +66,7 @@ def begin_oauth(request, response, session, account_id, scopes):
     url = 'https://huggingface.co/oauth/authorize?' + urlencode({
         "client_id": client_id(), "redirect_uri": redirect_uri(), "response_type": "code",
         "scope": scopes, "state": state, "code_challenge": challenge,
-        "code_challenge_method": "S256"})
+        "code_challenge_method": "S256", **({"orgIds": org_ids} if org_ids else {})})
     return url, digest(state)
 
 

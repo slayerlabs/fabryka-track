@@ -1,10 +1,16 @@
 """RunPod control plane. Tokens are scoped to one run; provider keys never leave Track."""
+import logging
+from .provider_diagnostics import response_details
+
+logger = logging.getLogger(__name__)
+
 import hashlib
 import io
 import json
 import math
 import secrets
 import threading
+import time
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
@@ -85,10 +91,17 @@ def status(session, run):
 
 def provider(method,path,**kwargs):
     # Never expose exception request headers or provider bodies to the public API.
+    started = time.monotonic()
     with httpx.Client(timeout=45) as client:
         r=client.request(method,'https://rest.runpod.io/v1'+path,
                          headers={'Authorization':'Bearer '+settings.runpod_api_key},**kwargs)
         if method=='DELETE' and r.status_code==404:return None
+        if r.is_error:
+            payload = kwargs.get('json') or {}
+            logger.warning("runpod_request_failed method=%s path=%s run=%s gpu_types=%s cloud=%s elapsed_ms=%s details=%s",
+                           method, path, payload.get('name'), payload.get('gpuTypeIds'),
+                           payload.get('cloudType'), round((time.monotonic()-started)*1000), response_details(r, [settings.runpod_api_key,
+                           *payload.get('env', {}).values()]))
         r.raise_for_status()
         return r.json() if r.content else None
 
@@ -245,6 +258,7 @@ def tick():
             try:
                 advance(run_id)
             except Exception as exc:
+                logger.warning("gpu_control_retry run=%s exception=%s", run_id, type(exc).__name__)
                 with SessionLocal() as session:
                     j=session.get(GPUJob,run_id)
                     if j:
@@ -311,6 +325,8 @@ def advance(run_id):
             # Callback may already have updated the row while provider answered.
             session.expire_all();j=session.get(GPUJob,run_id)
             j.pod_id=pod['id'];j.error=None
+            logger.info('gpu_allocated run=%s pod=%s attempt=%s', run_id, j.pod_id, j.dispatch_attempts)
+            session.add(RunLog(run_id=run_id,message=f'GPU pod allocated after {j.dispatch_attempts} attempt(s). Waiting for worker startup.'))
             r=session.get(Run,run_id);r.metadata_={**r.metadata_,'pod_id':j.pod_id,'hourly_usd':pod.get('adjustedCostPerHr',pod.get('costPerHr'))}
             session.commit()
             return
@@ -328,7 +344,7 @@ def advance(run_id):
                     if now()<utc(j.allocation_deadline):
                         delay=min(30*2**min(max(j.dispatch_attempts-1,0),4),300)+secrets.randbelow(16)
                         j.state='queued';j.next_retry_at=now()+timedelta(seconds=delay)
-                        j.error=f'Waiting for GPU availability; retrying in {delay}s. Allocation attempt {j.dispatch_attempts+1}.'
+                        j.error=f'GPU allocation has not succeeded; retrying in {delay}s. Allocation attempt {j.dispatch_attempts+1}. Check earlier run logs for the provider error.'
                         session.add(RunLog(run_id=run_id,message='Provider confirmed no pod exists. '+j.error))
                     else:
                         j.state='failed';j.error='GPU allocation wait limit reached. No pod was allocated.'

@@ -1,4 +1,9 @@
 """Owner-authorized, one-run exports into SlayerLab using a transient OAuth token."""
+import logging
+from .provider_diagnostics import response_details
+
+logger = logging.getLogger(__name__)
+
 import hashlib
 import inspect
 import json
@@ -104,7 +109,8 @@ def prepare(run_id: str, body: PublishInput, request: Request, response: Respons
             publication = HFPublication(run_id=run.id, owner_id=user.id, repo_id=repo_id, private=body.private)
             session.add(publication)
         url, state_hash = begin_oauth(request, response, session, user.id,
-                                     'openid profile contribute-repos read-memberships')
+                                     'openid profile contribute-repos read-memberships',
+                                     org_ids='6a2d1122dd2a510a8513fe63')
         publication.oauth_state = state_hash
         session.commit()
     return {'url': url}
@@ -120,6 +126,22 @@ def authorized_upload(publication, request, code, verifier, session, background_
         checkpoint_path(session, owned_run(session, publication.run_id, session.get(Account, publication.owner_id)))
     except Exception:
         publication.status, publication.error = 'failed', 'Authorize with the HF account connected to your Track account, then try again.'
+        session.commit()
+        return failure(request, publication.error)
+    try:
+        info = HfApi(token=token).whoami()
+        org = next((o for o in info.get('orgs', []) if o.get('name', '').lower() == ORG.lower()), None)
+        if not org or org.get('roleInOrg') not in ('contributor', 'write', 'admin'):
+            publication.status = 'failed'
+            publication.error = 'Publishing requires a SlayerLab contributor, write or admin role. Ask a SlayerLab admin to grant access, then authorize SlayerLab and retry. Your trained checkpoint is safe.'
+            session.commit()
+            logger.warning("hf_publish_preflight_denied run=%s reason=organization_role", publication.run_id)
+            return failure(request, publication.error)
+    except Exception as exc:
+        response = getattr(exc, "response", None)
+        logger.warning("hf_publish_preflight_failed run=%s exception=%s details=%s", publication.run_id, type(exc).__name__,
+                       response_details(response, [token]) if response is not None else "no_response")
+        publication.status, publication.error = 'failed', 'Could not verify SlayerLab publishing access. Reauthorize and retry. Your trained checkpoint is safe.'
         session.commit()
         return failure(request, publication.error)
     publication.status, publication.error = 'uploading', None
@@ -222,6 +244,7 @@ No model or dataset license is asserted by this automated export.
 
 
 def upload(run_id, token):
+    stage = 'prepare_export'
     try:
         with SessionLocal() as session:
             publication = session.get(HFPublication, run_id)
@@ -238,12 +261,15 @@ def upload(run_id, token):
                 hashes = build_export(run, path, folder)
                 api = HfApi(token=token)
                 if not created:
+                    stage = 'create_repository'
                     api.create_repo(repo_id=repo_id, repo_type='model', private=private, exist_ok=False)
                     publication.repo_created = True
                     session.commit()
+                stage = 'upload_files'
                 commit = api.upload_folder(repo_id=repo_id, repo_type='model', folder_path=str(folder),
                                            commit_message='Publish Fabryka Track checkpoint')
                 # Completion means the actual committed bytes have been downloaded and checked.
+                stage = 'verify_files'
                 for filename, expected in hashes.items():
                     downloaded = hf_hub_download(repo_id=repo_id, filename=filename, revision=commit.oid,
                                                   token=token, local_dir=str(Path(temp) / 'verify'))
@@ -252,11 +278,14 @@ def upload(run_id, token):
                 publication.status, publication.commit, publication.error = 'finished', commit.oid, None
                 session.commit()
     except Exception as exc:
+        response = getattr(exc, 'response', None)
+        logger.warning("hf_publish_failed run=%s stage=%s exception=%s details=%s", run_id, stage, type(exc).__name__,
+                       response_details(response, [token]) if response is not None else 'no_response')
         message = 'Upload or file verification failed. Reauthorize to retry.'
         if isinstance(exc, HfHubHTTPError):
             code = exc.response.status_code if exc.response is not None else None
             if code in (401, 403):
-                message = 'HF denied access. Authorize SlayerLab and use an HF account allowed to create models in that organization.'
+                message = f'Hugging Face denied access during {stage.replace("_", " ")} (HTTP {code}). Grant Track access to SlayerLab and ensure your HF account has contributor, write or admin permission. Reauthorize to retry. Your trained checkpoint is safe.'
             elif code == 409:
                 message = 'This repository already exists. Choose a new name; Track will not overwrite an existing model.'
         with SessionLocal() as session:
