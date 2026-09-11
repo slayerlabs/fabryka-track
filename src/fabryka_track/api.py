@@ -294,6 +294,13 @@ def goal_list_page():
                         headers={"Cache-Control": "no-cache"})
 
 
+@app.get("/goals/250m-english-base-model.md", include_in_schema=False)
+def training_goal_document():
+    return FileResponse(Path(__file__).parent / "static" / "goal-250m.md",
+                        media_type="text/plain; charset=utf-8",
+                        headers={"Cache-Control": "no-cache"})
+
+
 @app.get("/goal", include_in_schema=False)
 def goal_rfc_page():
     return RedirectResponse("https://github.com/slayerlabs/rfcs/pull/5", status_code=307,
