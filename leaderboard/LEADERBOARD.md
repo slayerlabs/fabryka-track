@@ -5,9 +5,8 @@
 > 📦 **Artefakty trwałe:** wszystkie wyniki, dane held-out, statystyki i skrypty w `results/` (patrz `results/RESULTS.md`). Reprodukowalne z bajtów.
 
 ## Dwie osie (dwa różne pytania)
-
 1. **BPB (bits-per-byte) — PRIMARY, ranking dowolnego modelu.** Ile bitów model potrzebuje na TEN SAM surowy bajt TEGO SAMEGO tekstu → tokenizer skraca się w mianowniku (mianownik = BAJTY, nie tokeny). Jedna skala dla każdego vocab (32000/32768/12288/bajty). **To odblokowuje porównanie losowych modeli.** Niżej = lepiej. Standard (Paloma/BLT).
-2. **d3-składnia forced-choice acc — CONFIRMING.** Celowany sygnał morfoskładni na rdzeniu 148 par. Dyskretny i szumny na małych modelach (Signal&Noise 2508.13144: BPB/perplexity biją accuracy na sygnał/szum dla małych) → oś potwierdzająca, nie primary.
+2. **d3-składnia forced-choice — CONFIRMING.** Celowany sygnał morfoskładni na rdzeniu **273 par (v3)**. Metryka ciągła (mean margin) > dyskretna (accuracy) na S/N (Signal&Noise 2508.13144) → oś potwierdzająca, nie primary. Benchmark: `../benchmarks/d3-skladnia-v3/`.
 
 **BPB rankuje „kto najlepiej MODELUJE polski". Przyczynę (trening A > B) rozstrzyga tylko komórka kontrolowana (same-tok + same-size). Między tokenizerami: badge:confound, nie atrybucja.**
 
@@ -26,13 +25,13 @@
 
 ## Ranking BPB (primary — dowolne modele, jedna skala)
 
-| # | model | params | tokenizer_vocab | **BPB** ↓ | d3 acc (148) | 95%CI (acc) | controlled | provenance |
+| # | model | params | tokenizer_vocab | **BPB** ↓ | d3 acc (rdzeń v3, 273) | 95%CI (acc) | controlled | provenance |
 |---|---|---|---|---|---|---|---|---|
-| 1 | GoLLeM-110M-v3 | 110M | 32000 | **0.988** [0.957, 1.019] | 0.574 | [0.493, 0.655] | cell(110M,32000) | bpb_scorer + rfc @ Probierz |
-| 2 | Slayer-110M-PL | 110M | 32000 | **1.002** [0.970, 1.035] | 0.527 | [0.446, 0.608] | cell(110M,32000) | bpb_scorer + rfc @ Probierz |
-| 3 | GoLLeM-110M-v2 | 110M | 32000 | **1.020** [0.990, 1.051] | 0.507 | [0.426, 0.588] | cell(110M,32000) | bpb_scorer + rfc @ Probierz |
-| 4 | GoLLeM-45M-PL | 45M | 32568 | **1.159** [1.133, 1.186] | 0.689 | [0.615, 0.764] | `confound:tokenizer` `confound:size` | bpb_scorer + rfc @ Probierz |
-| 5 | Polock (pollock-mini-lm-125m) | 125M | 12285 | **2.279** [2.250, 2.309] | 0.365 | [0.291, 0.439] | `confound:tokenizer` (model angielski) | bpb_scorer + rfc @ Probierz |
+| 1 | GoLLeM-110M-v3 | 110M | 32000 | **0.988** [0.957, 1.019] | 0.542 | [0.484, 0.604] | cell(110M,32000) | bpb_scorer + rfc @ Probierz |
+| 2 | Slayer-110M-PL | 110M | 32000 | **1.002** [0.970, 1.035] | 0.535 | [0.476, 0.593] | cell(110M,32000) | bpb_scorer + rfc @ Probierz |
+| 3 | GoLLeM-110M-v2 | 110M | 32000 | **1.020** [0.990, 1.051] | 0.516 | [0.458, 0.575] | cell(110M,32000) | bpb_scorer + rfc @ Probierz |
+| 4 | GoLLeM-45M-PL | 45M | 32568 | **1.159** [1.133, 1.186] | 0.692 | [0.637, 0.747] | `confound:tokenizer` `confound:size` | bpb_scorer + rfc @ Probierz |
+| 5 | Polock (pollock-mini-lm-125m) | 125M | 12285 | **2.279** [2.250, 2.309] | 0.407 | [0.348, 0.469] | `confound:tokenizer` (model angielski) | bpb_scorer + rfc @ Probierz |
 
 ## Odczyt (ważne — dwie osie się ROZJEŻDŻAJĄ)
 
@@ -56,35 +55,35 @@
 
 **Uwaga metodologiczna (ważna):** test = paired-delta, NIE nakładanie się marginalnych słupków CI. Marginalne CI modeli się nakładają (stąd wcześniejsze „nieodróżnialne"), ale różnice per-doc są silnie skorelowane (te same dokumenty) → CI różnicy jest wąskie i rozłączne z 0. **MDE** przy n=300: wykrywalna różnica ~0.003 BPB; luka 0.02 BPB wymaga tylko ~9 dokumentów. BPB jest wysoko-mocowa — acc przy n=148 tej komórki NIE rozróżniała.
 
-## Dodatkowa metryka — acc per rodzina zjawiska (d3 rdzeń v2, diagnostyczne)
+## Dodatkowa metryka — acc per rodzina zjawiska (d3 rdzeń v3, 273, diagnostyczne)
 
-Profil kompetencji: gdzie model łapie gramatykę. **Diagnostyczne, NIE testowane istotnościowo** — n per rodzina małe (15–42), przedziały szerokie. Cross-tokenizer = confound (jak wyżej); w komórce (110M,32000) porównanie profili jest uczciwsze.
+Profil kompetencji: gdzie model łapie gramatykę. **Diagnostyczne, NIE testowane istotnościowo** — n per rodzina 15–90, przedziały szerokie dla cienkich. Cross-tokenizer = confound; w komórce (110M,32000) porównanie profili jest uczciwsze.
 
-| model | case-prep (21) | case-verb (42) | case-inne (22) | agr-adj (30) | past-rodzaj (18) | aspekt (15) |
+| model | case-prep (52) | case-verb (90) | case-inne (42) | agr-adj (56) | past-rodzaj (18) | aspekt (15) |
 |---|---|---|---|---|---|---|
-| GoLLeM-45M-PL | 0.52 | 0.83 | 0.59 | 0.87 | 0.61 | 0.40 |
-| GoLLeM-110M-v3 | 0.57 | 0.86 | 0.32 | 0.63 | 0.44 | 0.20 |
-| GoLLeM-110M-v2 | 0.38 | 0.81 | 0.41 | 0.53 | 0.22 | 0.27 |
-| Slayer-110M | 0.33 | 0.76 | 0.41 | 0.67 | 0.22 | 0.40 |
-| Polock-125M | 0.43 | 0.38 | 0.55 | 0.43 | 0.22 | 0.00 |
+| GoLLeM-45M-PL | 0.56 | 0.84 | 0.55 | 0.79 | 0.61 | 0.40 |
+| GoLLeM-110M-v3 | 0.40 | 0.80 | 0.26 | 0.59 | 0.44 | 0.20 |
+| GoLLeM-110M-v2 | 0.33 | 0.77 | 0.33 | 0.59 | 0.22 | 0.27 |
+| Slayer-110M | 0.33 | 0.77 | 0.33 | 0.64 | 0.22 | 0.40 |
+| Polock-125M | 0.44 | 0.42 | 0.45 | 0.48 | 0.22 | 0.00 |
 
-Odczyt (opisowo): **rząd przypadka po czasownikach (case-verb) opanowany przez wszystkie modele PL** (0.76–0.86), Polock (angielski) tam pada (0.38). **Aspekt najtrudniejszy dla wszystkich** (0.0–0.40) — nikt go realnie nie ma. Polock (angielski) słaby wszędzie, aspekt 0.00. To profil „co model umie", nie ranking.
+Odczyt (opisowo): **rząd przypadka po czasownikach (case-verb, n=90) opanowany przez wszystkie modele PL** (0.77–0.84), Polock (angielski) tam pada (0.42). **Aspekt najtrudniejszy dla wszystkich** (0.0–0.40). Polock (angielski) słaby wszędzie, aspekt 0.00. To profil „co model umie", nie ranking.
 
 ## d3 — metryka CIĄGŁA (mean margin) — większa moc niż accuracy
 
-Zamiast progować δ-logprob na 0/1 (accuracy), uśredniamy byte-norm **margin** = (logP(dobre) − logP(zle)) / bajt na rdzeniu 148. Ciągła > dyskretna na S/N (ten sam powód co BPB > acc), ta sama para, **większa moc, zero nowej infry**.
+Zamiast progować δ-logprob na 0/1 (accuracy), uśredniamy byte-norm **margin** = (logP(dobre) − logP(zle)) / bajt na rdzeniu v3 (273). Ciągła > dyskretna na S/N (ten sam powód co BPB > acc), ta sama para, **większa moc, zero nowej infry**.
 
-| model | mean margin (rdzeń 148) | 95% CI | acc (dyskretna) |
+| model | mean margin (rdzeń v3, 273) | 95% CI | acc (dyskretna) |
 |---|---|---|---|
-| GoLLeM-45M-PL | 0.080 | [0.046, 0.111] | 0.689 |
-| GoLLeM-110M-v3 | 0.036 | [−0.000, 0.072] | 0.574 |
-| GoLLeM-110M-v2 | 0.015 | [−0.021, 0.052] | 0.507 |
-| Slayer-110M | −0.001 | [−0.046, 0.042] | 0.527 |
-| Polock-125M | −0.094 | [−0.132, −0.058] | 0.365 |
+| GoLLeM-45M-PL | 0.090 | [0.062, 0.120] | 0.692 |
+| GoLLeM-110M-v3 | 0.018 | [−0.008, 0.044] | 0.542 |
+| GoLLeM-110M-v2 | 0.002 | [−0.025, 0.029] | 0.516 |
+| Slayer-110M | −0.002 | [−0.031, 0.028] | 0.535 |
+| Polock-125M | −0.060 | [−0.091, −0.031] | 0.407 |
 
-**Paired-delta w komórce (110M, 32000):** v3 vs v2 = +0.021 [0.008, 0.033] → istotna (v3 > v2); v3 vs Slayer = +0.037 [0.013, 0.061] → istotna (v3 > Slayer); Slayer vs v2 = −0.016 [−0.041, 0.008] → nieodróżnialne.
+**Paired-delta w komórce (110M, 32000):** v3 vs v2 = +0.016 [0.006, 0.025] → istotna (v3 > v2); v3 vs Slayer = +0.020 [0.002, 0.038] → istotna (v3 > Slayer); Slayer vs v2 = −0.004 [−0.021, 0.012] → nieodróżnialne.
 
-**Kluczowe:** metryka ciągła rozróżnia to, czego accuracy przy n=148 NIE rozróżniała — **v3 najlepszy na osi d3, ZGODNIE z BPB** (v3 też najniższy BPB). Dwie niezależne osie zgadzają się na v3 (dalej `caveat:single-seed` — checkpoint, nie recepta). Polock margin ujemny = preferuje BŁĘDNE zdanie (angielski, potwierdza).
+**Kluczowe:** metryka ciągła rozróżnia to, czego accuracy NIE rozróżnia — **v3 najlepszy na osi d3, ZGODNIE z BPB**. Wynik ROBUSTNY: te same istotne pary (v3>v2, v3>Slayer) wyszły na rdzeniu v2 (148) I v3 (273) — trzy niezależne sygnały (BPB, margin-v2, margin-v3) zgadzają się na v3 (dalej `caveat:single-seed` — checkpoint, nie recepta). Polock margin ujemny = preferuje BŁĘDNE (angielski).
 
 ## Kontrole metryki BPB
 
