@@ -4,7 +4,7 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Goals · Fabryka Track</title>
 <style>
-:root{color-scheme:light;--ink:#25352c;--muted:#647368;--line:#bac6bc}*{box-sizing:border-box}body{margin:0;background:#f8f9f5;color:var(--ink);font:14px/1.7 ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace}main{max-width:1000px;margin:48px auto;padding:0 28px 60px}a{color:inherit;text-underline-offset:4px}a:hover{background:#e5ece3}a:focus-visible,button:focus-visible{outline:2px solid #315c46;outline-offset:4px}header{margin-bottom:42px}pre{font:inherit;white-space:pre-wrap;margin:0}nav{display:flex;flex-wrap:wrap;gap:8px 22px;margin-top:20px;color:var(--muted)}h1,h2{font:inherit;font-weight:700;margin:0}h1{font-size:20px}h2{margin-bottom:18px}.rule{overflow:hidden;white-space:nowrap;color:var(--line);user-select:none;margin:12px 0 22px}.goal{display:grid;grid-template-columns:110px 1fr;gap:10px 20px;margin:0 0 28px}.tag{color:#45674c}.title{font-weight:700}.meta{color:var(--muted)}p{margin:7px 0 12px}.tree{margin:16px 0 18px}.tree div{display:flex;gap:12px}.branch{white-space:pre;color:var(--muted)}section{margin-bottom:40px}.links{display:flex;flex-wrap:wrap;gap:8px 20px}.note{color:var(--muted)}button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;text-decoration:underline;text-underline-offset:4px}.record{padding:12px 0;border-bottom:1px dashed var(--line);overflow-wrap:anywhere}.record .summary{white-space:pre-wrap}.error{color:#9a3b2c}footer{font-size:12px;color:var(--muted)}[hidden]{display:none!important}@media(max-width:600px){main{margin-top:24px;padding:0 18px 36px}body{font-size:12px}.goal{grid-template-columns:1fr;gap:6px}header{margin-bottom:30px}h1{font-size:18px}}
+:root{color-scheme:light;--ink:#25352c;--muted:#647368;--line:#bac6bc}*{box-sizing:border-box}body{margin:0;background:#f8f9f5;color:var(--ink);font:14px/1.7 ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace}main{max-width:1000px;margin:48px auto;padding:0 28px 60px}a{color:inherit;text-underline-offset:4px}a:hover{background:#e5ece3}a:focus-visible,button:focus-visible{outline:2px solid #315c46;outline-offset:4px}header{margin-bottom:42px}pre{font:inherit;white-space:pre-wrap;margin:0}nav{display:flex;flex-wrap:wrap;gap:8px 22px;margin-top:20px;color:var(--muted)}h1,h2{font:inherit;font-weight:700;margin:0}h1{font-size:20px}h2{margin-bottom:18px}.rule{overflow:hidden;white-space:nowrap;color:var(--line);user-select:none;margin:12px 0 22px}.goal{display:grid;grid-template-columns:145px 1fr;gap:10px 20px;margin:0 0 28px}.tag{color:#45674c}.title{font-weight:700}.meta{color:var(--muted)}p{margin:7px 0 12px}.tree{margin:16px 0 18px}.tree div{display:flex;gap:12px}.branch{white-space:pre;color:var(--muted)}section{margin-bottom:40px}.links{display:flex;flex-wrap:wrap;gap:8px 20px}.note{color:var(--muted)}button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;text-decoration:underline;text-underline-offset:4px}.record{padding:12px 0;border-bottom:1px dashed var(--line);overflow-wrap:anywhere}.record .summary{white-space:pre-wrap}.error{color:#9a3b2c}footer{font-size:12px;color:var(--muted)}[hidden]{display:none!important}@media(max-width:600px){main{margin-top:24px;padding:0 18px 36px}body{font-size:12px}.goal{grid-template-columns:1fr;gap:6px}header{margin-bottom:30px}h1{font-size:18px}}
 </style>
 </head>
 <body><main>
@@ -12,62 +12,58 @@
 <pre aria-label="Fabryka Track">+-----------------+
 | FABRYKA / TRACK |
 +-----------------+</pre>
-<nav aria-label="Main"><a href="/" aria-current="page">[goals]</a><a href="/status">[status]</a><a href="/runs">[runs]</a><a href="/new">[training studio]</a><a href="/login" id="account">[sign in]</a></nav>
+<nav aria-label="Main"><a href="/" aria-current="page">[goals]</a><a href="https://github.com/slayerlabs/rfcs">[RFC repository]</a><a href="/runs">[runs]</a><a href="/new">[training studio]</a></nav>
 </header>
-<h1>GOALS</h1>
-<p class="note">What we want to achieve. Specs, progress, evidence.</p>
+<h1>GOALS / RFCs</h1>
+<p class="note">One RFC, one goal. Read the proposal, discuss it, deliver the outcome.</p>
+<pre class="note">5 RFCs | 2 pilot drafts | 3 in review</pre>
 <div class="rule" aria-hidden="true">===============================================================================================</div>
-<section aria-labelledby="research-heading">
-<h2 id="research-heading">01 / RESEARCH</h2>
-<article class="goal">
-<div class="tag">[PROPOSED]<br><span class="meta">RFC-005</span></div>
-<div>
-<a class="title" href="https://github.com/slayerlabs/rfcs/pull/5">Train a 250M English base model</a>
-<p class="note">A controlled research program for capability at a fixed parameter budget.</p>
-<div class="tree" aria-label="Proposed research stages">
-<div><span class="branch">+--</span><span>10-20 proxy runs: 125M x 2-5B tokens</span></div>
-<div><span class="branch">+--</span><span>Select data, tokenizer, architecture and optimizer</span></div>
-<div><span class="branch">+--</span><span>Main run: 100B tokens; checkpoints at 25B / 50B</span></div>
-<div><span class="branch">+--</span><span>Optional extension: 200B tokens</span></div>
-<div><span class="branch">`--</span><span>Confirm the result with independent seeds</span></div>
-</div>
-<p class="meta">Status: research proposal. Execution progress is not connected here.</p>
-<div class="links"><a href="https://github.com/slayerlabs/rfcs/pull/5">[read RFC / discuss]</a><a href="https://github.com/slayerlabs/rfcs">[all RFCs]</a></div>
-</div>
+<section aria-label="RFC goals">
+<article class="goal" data-rfc="001">
+<div class="tag">[PILOT DRAFT]<br><span class="meta">RFC-001</span></div>
+<div><h2 style="margin-bottom:8px"><a class="title" href="https://github.com/slayerlabs/rfcs/blob/main/RFC-001-Slayer-Labs-workflow.md">Make project work visible and reviewable</a></h2>
+<p class="meta">Spec: Project work in Slayer Labs</p>
+<p>Move tasks to GitHub Projects and Issues with owners, review criteria, evidence and a clear completion decision.</p>
+<p class="note">Revision merged; the RFC still proposes a pilot.</p>
+<div class="links"><a href="https://github.com/slayerlabs/rfcs/blob/main/RFC-001-Slayer-Labs-workflow.md">[read RFC]</a><a href="https://github.com/slayerlabs/rfcs/pull/1">[discussion #1]</a></div></div>
 </article>
-</section>
 <div class="rule" aria-hidden="true">-----------------------------------------------------------------------------------------------</div>
-<section aria-labelledby="recorded-heading">
-<div class="links"><h2 id="recorded-heading">02 / YOUR RECORDED GOALS</h2><button id="refresh" hidden>[refresh]</button></div>
-<p id="state" class="note" role="status">Checking your Track session...</p>
-<div id="records"></div>
+<article class="goal" data-rfc="002">
+<div class="tag">[PILOT DRAFT]<br><span class="meta">RFC-002</span></div>
+<div><h2 style="margin-bottom:8px"><a class="title" href="https://github.com/slayerlabs/rfcs/blob/main/RFC-002-Slayer-Labs-datasets.md">Track datasets from submission to release</a></h2>
+<p class="meta">Spec: Dataset lifecycle in Slayer Labs</p>
+<p>Record immutable dataset versions, checks, DS and legal review decisions, and the exact contents of each release.</p>
+<p class="note">Revision merged; the RFC still proposes a pilot.</p>
+<div class="links"><a href="https://github.com/slayerlabs/rfcs/blob/main/RFC-002-Slayer-Labs-datasets.md">[read RFC]</a><a href="https://github.com/slayerlabs/rfcs/pull/2">[discussion #2]</a></div></div>
+</article>
+<div class="rule" aria-hidden="true">-----------------------------------------------------------------------------------------------</div>
+<article class="goal" data-rfc="003">
+<div class="tag">[IN REVIEW]<br><span class="meta">RFC-003</span></div>
+<div><h2 style="margin-bottom:8px"><a class="title" href="https://github.com/slayerlabs/rfcs/pull/3">Build a reproducible corpus pipeline</a></h2>
+<p class="meta">Spec: Corpus build pipeline (data plane)</p>
+<p>Produce a corpus from a declared configuration, with filtering, deduplication, PII processing, provenance and an independent release gate.</p>
+<p class="note">Open proposal.</p>
+<div class="links"><a href="https://github.com/slayerlabs/rfcs/pull/3">[read RFC]</a><a href="https://github.com/slayerlabs/rfcs/pull/3">[discussion #3]</a></div></div>
+</article>
+<div class="rule" aria-hidden="true">-----------------------------------------------------------------------------------------------</div>
+<article class="goal" data-rfc="004">
+<div class="tag">[IN REVIEW]<br><span class="meta">RFC-004</span></div>
+<div><h2 style="margin-bottom:8px"><a class="title" href="https://github.com/slayerlabs/rfcs/pull/4">Define contribution, review and release</a></h2>
+<p class="meta">Spec: Contribution and release</p>
+<p>Define source intake, acceptance, publication, withdrawal and erasure, with clear reviewer and publisher responsibilities.</p>
+<p class="note">Open proposal; would supersede RFC-002 once accepted.</p>
+<div class="links"><a href="https://github.com/slayerlabs/rfcs/pull/4">[read RFC]</a><a href="https://github.com/slayerlabs/rfcs/pull/4">[discussion #4]</a></div></div>
+</article>
+<div class="rule" aria-hidden="true">-----------------------------------------------------------------------------------------------</div>
+<article class="goal" data-rfc="005">
+<div class="tag">[IN REVIEW]<br><span class="meta">RFC-005</span></div>
+<div><h2 style="margin-bottom:8px"><a class="title" href="https://github.com/slayerlabs/rfcs/pull/5">Train a 250M English base model</a></h2>
+<p class="meta">Spec: 250M English base-model research program</p>
+<p>Select the recipe through 10-20 proxy runs. Target 100B tokens, with 25B/50B checkpoints, an optional 200B extension and confirmation seeds.</p>
+<p class="note">Open research proposal.</p>
+<div class="links"><a href="https://github.com/slayerlabs/rfcs/pull/5">[read RFC]</a><a href="https://github.com/slayerlabs/rfcs/pull/5">[discussion #5]</a></div></div>
+</article>
+<div class="rule" aria-hidden="true">-----------------------------------------------------------------------------------------------</div>
 </section>
-<div class="rule" aria-hidden="true">===============================================================================================</div>
-<footer>Track records goals and evidence. Your agent runtime executes the work.<br>Research specifications are public. Recorded account goals stay private.</footer>
-</main>
-<script>
-(() => {
- const $=s=>document.querySelector(s);
- const states={queued:'[QUEUED]',running:'[RUNNING]',blocked:'[BLOCKED]',stopping:'[STOPPING]',completed:'[DONE]',failed:'[FAILED]',cancelled:'[CANCELLED]'};
- async function get(path){const r=await fetch('/api'+path,{cache:'no-store'});if(!r.ok)throw new Error('Could not load your goals. Please refresh or sign in again.');return r.json();}
- function el(tag,text,cls){const e=document.createElement(tag);e.textContent=text;if(cls)e.className=cls;return e;}
- async function refresh(){
-  $('#refresh').disabled=true;
-  try{
-   const auth=await get('/auth/me');$('#records').replaceChildren();
-   if(!auth.user){$('#account').textContent='[sign in]';$('#account').href='/login';$('#refresh').hidden=true;$('#state').replaceChildren(el('span','Sign in to see your private recorded goals. '));const a=el('a','[sign in]');a.href='/login';$('#state').append(a);return;}
-   $('#account').textContent='['+auth.user.username+']';$('#account').href='/account';$('#refresh').hidden=false;
-   const data=await get('/goals');
-   $('#state').className='note';$('#state').textContent=data.goals.length?data.goals.length+' recorded goal(s) shown (latest 50). Updated '+new Date().toLocaleTimeString()+'.':'No recorded goals yet. The research proposal above is a specification, not a running task.';
-   for(const g of data.goals){
-    const row=el('article','','record');const a=el('a',(states[g.state]||'[UNKNOWN]')+' '+g.objective);a.href='/status?goal='+encodeURIComponent(g.id);row.append(a);
-    if(g.summary)row.append(el('p',g.summary,'summary note'));
-    const links=el('div','','links');const status=el('a','[status / history]');status.href=a.href;const run=el('a','[Track run]');run.href='/run/'+encodeURIComponent(g.run_id);links.append(status,run);row.append(links);$('#records').append(row);
-   }
-  }catch(e){$('#state').textContent=e.message;$('#state').className='error';$('#refresh').hidden=false;}
-  finally{$('#refresh').disabled=false;}
- }
- $('#refresh').addEventListener('click',refresh);refresh();
-})();
-</script>
-</body></html>
+<footer>Source: <a href="https://github.com/slayerlabs/rfcs">slayerlabs/rfcs</a>. Snapshot checked 2026-09-12.<br>Labels describe RFC review status, not implementation progress.<br>GitHub is the source of truth for specifications and discussions.</footer>
+</main></body></html>
