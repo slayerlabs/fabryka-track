@@ -1,0 +1,20 @@
+[Unit]
+Description=Fabryka Track remote goal engine
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=track-agent
+WorkingDirectory=/srv/agent-workspace
+Environment=TRACK_URL=https://track.fabryka.ai
+Environment=TRACK_ENGINE_TOKEN_FILE=/srv/track-engine/credential
+ExecStart=/srv/track-engine/.venv/bin/fabryka-goal-engine --workspace /srv/agent-workspace --state-dir /srv/track-engine/state --runtime external --command-json '["/srv/agent/.venv/bin/python","/srv/agent/adapter.py"]'
+Restart=on-failure
+RestartSec=10
+KillMode=control-group
+TimeoutStopSec=15
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

@@ -22,6 +22,7 @@ from .schemas import EventBatch, LogInput, Notes
 from .settings import settings
 from .training import router as training_router, start_worker, stop_worker
 from .hf_datasets import router as hf_datasets_router, start_importer, stop_importer
+from .goals import router as goals_router
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
@@ -53,6 +54,7 @@ app.include_router(accounts_router)
 app.include_router(training_router)
 app.include_router(gpu_router)
 app.include_router(namespace_router)
+app.include_router(goals_router)
 from .generation import router as generation_router
 app.include_router(generation_router)
 from .benchmark_remote import router as benchmark_remote_router
@@ -281,9 +283,16 @@ def health(session: Session = Depends(db)):
 
 @app.get("/assets/{name}")
 def static_asset(name: str):
-    if name not in {"plotly-basic-3.1.0.min.js", "run-charts.js", "hf-datasets.js"}:
+    if name not in {"plotly-basic-3.1.0.min.js", "run-charts.js", "hf-datasets.js", "goals.js"}:
         raise HTTPException(404, "Asset not found")
     return FileResponse(Path(__file__).parent / "static" / name, media_type="text/javascript")
+
+
+@app.get("/goal", response_class=HTMLResponse)
+@app.get("/status", response_class=HTMLResponse)
+def goal_page():
+    return HTMLResponse((Path(__file__).parent / "static" / "goals.html").read_text(),
+                        headers={"Cache-Control": "no-cache"})
 
 
 @app.get("/{path:path}", response_class=HTMLResponse)

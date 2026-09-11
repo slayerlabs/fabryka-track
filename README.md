@@ -415,3 +415,7 @@ sample sizes; smoke mode checks execution only.
 ### Public datasets and training experiments
 
 The Studio supports public Hugging Face imports with previews, text/column filters, bounded sampling and pinned provenance, including decoding NVIDIA ClimbMix. It also offers a trapezoidal learning-rate schedule and automatic full background evaluation after successful training. See [the import and evaluation guide](docs/huggingface-datasets.md) for limits, API behavior and reproducible comparisons.
+
+### Remote goal engine
+
+Use `/goal` to submit one active goal and `/status` to follow progress, answer blockers, or stop work. Track owns the durable goal history; an agent runtime on a separate machine claims work through the scoped engine API. See [the engine setup and adapter protocol](docs/goal-engine.md).

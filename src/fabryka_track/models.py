@@ -196,3 +196,42 @@ class BenchmarkEvaluation(Base):
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class AgentGoal(Base):
+    __tablename__ = "agent_goals"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    owner_id: Mapped[str] = mapped_column(String(36), ForeignKey("accounts.id"), index=True)
+    # NULL for terminal goals; UNIQUE is the cross-process single-goal constraint.
+    active_owner: Mapped[str | None] = mapped_column(String(36), unique=True, nullable=True)
+    objective: Mapped[str] = mapped_column(Text)
+    state: Mapped[str] = mapped_column(String(20), default="queued")
+    summary: Mapped[str] = mapped_column(Text, default="Waiting for an engine.")
+    run_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), ForeignKey("runs.id"))
+    linked_runs: Mapped[list] = mapped_column(JSON, default=list)
+    worker_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    lease_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class GoalEvent(Base):
+    __tablename__ = "goal_events"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    goal_id: Mapped[str] = mapped_column(String(36), ForeignKey("agent_goals.id"), index=True)
+    event_key: Mapped[str] = mapped_column(String(100))
+    kind: Mapped[str] = mapped_column(String(30))
+    message: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    __table_args__ = (Index("uq_goal_event_key", "goal_id", "event_key", unique=True),)
+
+
+class GoalEngine(Base):
+    __tablename__ = "goal_engines"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    owner_id: Mapped[str] = mapped_column(String(36), ForeignKey("accounts.id"), unique=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    name: Mapped[str] = mapped_column(String(100), default="Goal engine")
+    heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    runtime: Mapped[str] = mapped_column(String(100), default="")
