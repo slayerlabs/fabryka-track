@@ -56,6 +56,20 @@
 
 **Uwaga metodologiczna (ważna):** test = paired-delta, NIE nakładanie się marginalnych słupków CI. Marginalne CI modeli się nakładają (stąd wcześniejsze „nieodróżnialne"), ale różnice per-doc są silnie skorelowane (te same dokumenty) → CI różnicy jest wąskie i rozłączne z 0. **MDE** przy n=300: wykrywalna różnica ~0.003 BPB; luka 0.02 BPB wymaga tylko ~9 dokumentów. BPB jest wysoko-mocowa — acc przy n=148 tej komórki NIE rozróżniała.
 
+## Dodatkowa metryka — acc per rodzina zjawiska (d3 rdzeń v2, diagnostyczne)
+
+Profil kompetencji: gdzie model łapie gramatykę. **Diagnostyczne, NIE testowane istotnościowo** — n per rodzina małe (15–42), przedziały szerokie. Cross-tokenizer = confound (jak wyżej); w komórce (110M,32000) porównanie profili jest uczciwsze.
+
+| model | case-prep (21) | case-verb (42) | case-inne (22) | agr-adj (30) | past-rodzaj (18) | aspekt (15) |
+|---|---|---|---|---|---|---|
+| GoLLeM-45M-PL | 0.52 | 0.83 | 0.59 | 0.87 | 0.61 | 0.40 |
+| GoLLeM-110M-v3 | 0.57 | 0.86 | 0.32 | 0.63 | 0.44 | 0.20 |
+| GoLLeM-110M-v2 | 0.38 | 0.81 | 0.41 | 0.53 | 0.22 | 0.27 |
+| Slayer-110M | 0.33 | 0.76 | 0.41 | 0.67 | 0.22 | 0.40 |
+| Polock-125M | 0.43 | 0.38 | 0.55 | 0.43 | 0.22 | 0.00 |
+
+Odczyt (opisowo): **rząd przypadka po czasownikach (case-verb) opanowany przez wszystkie modele PL** (0.76–0.86), Polock (angielski) tam pada (0.38). **Aspekt najtrudniejszy dla wszystkich** (0.0–0.40) — nikt go realnie nie ma. Polock (angielski) słaby wszędzie, aspekt 0.00. To profil „co model umie", nie ranking.
+
 ## Kontrole metryki BPB
 
 - **Round-trip/coverage tokenizera (SPRAWDZONE ✓):** dla każdego z 5 modeli encode→decode == oryginał na 100% docs, 0 UNK/1000 tok. Cross-tokenizer BPB nie ma ślepego pola z UNK → **Polock 2.279 to prawdziwe słabe modelowanie PL, nie kara-UNK z vocab 12285.**
