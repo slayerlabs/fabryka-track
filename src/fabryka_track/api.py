@@ -6,7 +6,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from fastapi import Depends, FastAPI, File, HTTPException, Query, UploadFile, Request, Form
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.responses import RedirectResponse, FileResponse, HTMLResponse, JSONResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -288,10 +288,10 @@ def static_asset(name: str):
     return FileResponse(Path(__file__).parent / "static" / name, media_type="text/javascript")
 
 
-@app.get("/goal", response_class=HTMLResponse)
+@app.get("/goal", include_in_schema=False)
 def goal_rfc_page():
-    return HTMLResponse((Path(__file__).parent / "static" / "goal-rfc.html").read_text(),
-                        headers={"Cache-Control": "no-cache"})
+    return RedirectResponse("https://github.com/slayerlabs/rfcs/pull/5", status_code=307,
+                            headers={"Cache-Control": "no-store"})
 
 
 @app.get("/status", response_class=HTMLResponse)

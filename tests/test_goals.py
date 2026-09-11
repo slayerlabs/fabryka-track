@@ -105,12 +105,10 @@ def test_concurrent_creates_have_one_active_goal(client):
 
 
 def test_goals_pages_and_asset(client):
-    for path in ['/goal','/status']:
-        r=client.get(path)
-        assert r.status_code==200 and '<html lang="en">' in r.text
-        if path == '/goal':
-            assert 'RFC: TRACK REMOTE GOAL ENGINE' in r.text
-            assert '<form' not in r.text
-        else:
-            assert '/assets/goals.js' in r.text
+    r=client.get('/goal', follow_redirects=False)
+    assert r.status_code==307
+    assert r.headers['location']=='https://github.com/slayerlabs/rfcs/pull/5'
+    r=client.get('/status')
+    assert r.status_code==200 and '<html lang="en">' in r.text
+    assert '/assets/goals.js' in r.text
     assert client.get('/assets/goals.js').status_code==200
