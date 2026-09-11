@@ -54,11 +54,15 @@
 
 **Uwaga metodologiczna (ważna):** test = paired-delta, NIE nakładanie się marginalnych słupków CI. Marginalne CI modeli się nakładają (stąd wcześniejsze „nieodróżnialne"), ale różnice per-doc są silnie skorelowane (te same dokumenty) → CI różnicy jest wąskie i rozłączne z 0. **MDE** przy n=300: wykrywalna różnica ~0.003 BPB; luka 0.02 BPB wymaga tylko ~9 dokumentów. BPB jest wysoko-mocowa — acc przy n=148 tej komórki NIE rozróżniała.
 
-## Bramki BPB (żeby metryka była nośna)
+## Kontrole metryki BPB
 
-- **Gate 1 — round-trip/coverage tokenizera (SPRAWDZONE ✓):** dla każdego z 5 modeli encode→decode == oryginał na 100% docs, 0 UNK/1000 tok. Cross-tokenizer BPB nie ma ślepego pola z UNK → **Polock 2.279 to prawdziwe słabe modelowanie PL, nie kara-UNK z vocab 12285.**
-- **Gate 2 — dekontaminacja PER MODEL (GRANICA):** BPB mierzy generalizację tylko jeśli held-out NIE był w treningu DANEGO modelu. Nasze (GoLLeM/Slayer) — held-out zdekontaminowany wzgl. NASZYCH danych. **Modele zewnętrzne/losowe: nie znamy ich treningu → BPB może być zawyżone-dobre przez wyciek.** Twarda granica „odblokowania losowych modeli": model trenowany na naszym held-oucie „wygra za darmo". Wpis zewnętrzny MUSI deklarować dekontaminację, inaczej badge `unverified:leak`.
-- **Gate 3 — ≥3 seedy treningowe dla wyroku o RECEPCIE (OTWARTY):** paired-bootstrap łapie niepewność próbki, NIE seeda treningowego. Uporządkowanie pojedynczych checkpointów w komórce (`caveat:single-seed`) jest OK, ale „receptura/trening X > Y" wymaga ≥3 seedów treningowych na wariant (rozdziela recepturę od szumu-runu). Do tego czasu wnioski trzymamy na poziomie checkpointów, nie recept.
+- **Round-trip/coverage tokenizera (SPRAWDZONE ✓):** dla każdego z 5 modeli encode→decode == oryginał na 100% docs, 0 UNK/1000 tok. Cross-tokenizer BPB nie ma ślepego pola z UNK → **Polock 2.279 to prawdziwe słabe modelowanie PL, nie kara-UNK z vocab 12285.**
+- **Dekontaminacja PER MODEL (GRANICA):** BPB mierzy generalizację tylko jeśli held-out NIE był w treningu DANEGO modelu. Nasze (GoLLeM/Slayer) — held-out zdekontaminowany wzgl. NASZYCH danych. **Modele zewnętrzne/losowe: nie znamy ich treningu → BPB może być zawyżone-dobre przez wyciek.** Wpis zewnętrzny MUSI deklarować dekontaminację, inaczej badge `unverified:leak`.
+
+## Bramki statystyczne (numeracja jak w nitce metodologicznej)
+
+- **Gate 1 — ≥3 seedy treningowe (OTWARTY):** wyrok o RECEPCIE wymaga ≥3 seedów treningowych na wariant. paired-bootstrap łapie niepewność próbki held-out, NIE seeda treningowego → do czasu seedów cell-ordering pozostaje na poziomie checkpointów (`caveat:single-seed`), nie recept.
+- **Gate 3 — istotność item-level, paired-bootstrap (ZAMKNIĘTY ✓):** komórka (110M,32000) rozstrzygnięta v3<Slayer<v2 (per-doc paired-delta rozłączne z 0). MDE ~0.003 przy n=300; luka 0.02 = ~9 docs.
 
 ## TODO
 
@@ -67,7 +71,7 @@
 - [ ] **MDE-power per komórka** — ile bajtów/par na wykrycie luki X (żeby „nieodróżnialne" = „za mało mocy").
 - [ ] Zwiększyć rdzeń d3 do ~400–600 par (moc dla osi confirming).
 - [ ] Niezależny byte-verify liczb.
-- [ ] **Gate 3: ≥3 seedy treningowe** na wariant — żeby cell-ordering podnieść z poziomu checkpointu do poziomu recepty.
+- [ ] **Gate 1: ≥3 seedy treningowe** na wariant — żeby cell-ordering podnieść z poziomu checkpointu do poziomu recepty.
 
 ## Jak dodać wpis
 
