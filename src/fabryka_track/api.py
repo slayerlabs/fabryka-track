@@ -289,6 +289,11 @@ def static_asset(name: str):
 
 
 @app.get("/goal", response_class=HTMLResponse)
+def goal_rfc_page():
+    return HTMLResponse((Path(__file__).parent / "static" / "goal-rfc.html").read_text(),
+                        headers={"Cache-Control": "no-cache"})
+
+
 @app.get("/status", response_class=HTMLResponse)
 def goal_page():
     return HTMLResponse((Path(__file__).parent / "static" / "goals.html").read_text(),
