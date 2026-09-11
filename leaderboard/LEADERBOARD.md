@@ -34,10 +34,16 @@
 
 ## Odczyt (ważne — dwie osie się ROZJEŻDŻAJĄ)
 
-- **BPB (kto lepiej modeluje polski):** trzy 110M < 45M < Polock. Większy model = niższy BPB = lepiej modeluje polski. **To potwierdza intuicję „większy lepszy"** i odpowiada na „czy da się porównać losowe modele" — TAK, BPB to jedna skala.
-- **d3 grammar acc:** tu 45M wypadł najwyżej (0.689), a 110M w paśmie zgadywania. To NIE zaprzecza BPB — to inny sygnał: 45M gorzej modeluje polski OGÓLNIE (wyższy BPB), ale na tych konkretnych kontrastach gramatycznych trafia lepiej (możliwy efekt jego tokenizera 32768 albo szum przy n=148).
-- **Wniosek:** wcześniejsze „45M lepszy" opierało się na szumnej osi acc. BPB (właściwa metryka LM) mówi: **110M > 45M**. Intuicja Arka trafna.
-- Komórka `(110M, 32000)` = {v3, Slayer, v2}: różnice BPB małe (0.988–1.020), CI na BPB do policzenia (paired-bootstrap per-item) — do rozstrzygnięcia czy istotne.
+- BPB: trzy 110M (0.988–1.020) < 45M (1.159) < Polock (2.279). Skala sensowna (Polock=angielski → najgorszy).
+- **KOREKTA (dzięki uwadze o cross-cell): ranking BPB między modelami o RÓŻNYCH tokenizerach jest wciąż CROSS-CELL.** 45M (32568) vs 110M (32000) różnią się tokenizer+dane+trening naraz. Więc BPB „110M < 45M" NIE znaczy „110M lepszy rozmiarem/treningiem" — to `badge:confound`, tak samo jak wcześniej „45M best", tylko druga metryka. Nie zamieniamy jednego cross-cell claimu na drugi.
+- **Co przeżywa uczciwie:** dwie tok-fair metryki (acc, BPB) rozjeżdżają się KIERUNKIEM → żaden czysty ranking cross-cell nie przeżywa; „45M najlepszy" był nierobustny (szum, Signal&Noise). Twardy A>B TYLKO w komórce kontrolowanej.
+- **Jedyna czysta komórka:** (110M, 32000) = {v3 0.988, Slayer 1.002, v2 1.020} — różnice ~3%, najpewniej w CI; czeka na paired-bootstrap CI (oś metodologiczna).
+- BPB odblokowuje jedno: porównanie DOWOLNYCH modeli na jednej skali „kto modeluje polski" (liczba fair) — ale to ranking modelowania języka, NIE atrybucja przyczyny.
+
+## Bramki BPB (żeby metryka była nośna)
+
+- **Gate 1 — round-trip/coverage tokenizera (SPRAWDZONE ✓):** dla każdego z 5 modeli encode→decode == oryginał na 100% docs, 0 UNK/1000 tok. Cross-tokenizer BPB nie ma ślepego pola z UNK → **Polock 2.279 to prawdziwe słabe modelowanie PL, nie kara-UNK z vocab 12285.**
+- **Gate 2 — dekontaminacja PER MODEL (GRANICA):** BPB mierzy generalizację tylko jeśli held-out NIE był w treningu DANEGO modelu. Nasze (GoLLeM/Slayer) — held-out zdekontaminowany wzgl. NASZYCH danych. **Modele zewnętrzne/losowe: nie znamy ich treningu → BPB może być zawyżone-dobre przez wyciek.** Twarda granica „odblokowania losowych modeli": model trenowany na naszym held-oucie „wygra za darmo". Wpis zewnętrzny MUSI deklarować dekontaminację, inaczej badge `unverified:leak`.
 
 ## TODO
 
