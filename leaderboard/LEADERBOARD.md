@@ -95,6 +95,17 @@ Zamiast progować δ-logprob na 0/1 (accuracy), uśredniamy byte-norm **margin**
 - **Gate 1 — ≥3 seedy treningowe (OTWARTY):** wyrok o RECEPCIE wymaga ≥3 seedów treningowych na wariant. paired-bootstrap łapie niepewność próbki held-out, NIE seeda treningowego → do czasu seedów cell-ordering pozostaje na poziomie checkpointów (`caveat:single-seed`), nie recept.
 - **Gate 3 — istotność item-level, paired-bootstrap (ZAMKNIĘTY ✓):** komórka (110M,32000) rozstrzygnięta v3<Slayer<v2 (per-doc paired-delta rozłączne z 0). MDE ~0.003 przy n=300; luka 0.02 = ~9 docs.
 
+## Zakres stosowalności (saturacja, nie sztywny rozmiar)
+
+Benchmark d3 różnicuje modele tylko w OKNIE między podłogą a sufitem na rdzeniu. Bound zależy od **saturacji**, nie od samej liczby parametrów (dobrze wytrenowany mały model może nasycić rdzeń; słabo wytrenowany duży — nie).
+
+- **Sufit (górna granica) — oś d3 acc:** gdy model opanuje podstawową morfoskładnię, `acc_core` dobija do ~1.0 i benchmark przestaje różnicować. Reguła robocza: **d3 jest użyteczne dopóki `acc_core < ~0.9`.** Powyżej → wygeneruj trudniejszy rdzeń (dłuższe zależności, rzadsze konstrukcje).
+- **Podłoga (dolna granica):** bardzo słaby/nietrenowany model = chance albo anty-chance (jak Polock 0.41 / margin ujemny) — też nie różnicuje sensownie.
+- **Obecne modele fabryki są W OKNIE:** 110M na 0.52–0.54, 45M na 0.69 — daleko od sufitu. Dla 8M–~kilkuset-M d3 jest w dobrym miejscu. Duże modele (np. ~1.5B) prawdopodobnie blisko sufitu → dla nich d3 słabo różnicuje.
+- **BPB nie ma tego sufitu:** kompresja PL poprawia się ze skalą/treningiem bez nasycenia w użytecznym zakresie → BPB rozciąga porównywalność w górę (primary), d3 jest osią celowaną na reżim mały/średni (confirming).
+
+**Krótko:** d3 = benchmark reżimu małych/średnich modeli (do saturacji rdzenia); BPB = szeroki zakres. Granicę raportujemy przez `acc_core` (saturacja), nie przez sztywny próg parametrów.
+
 ## TODO
 
 - [ ] Loader modeli byte-fabryki (arch. BDH, vocab 256) — żeby ranking BPB objął realne modele fabryki (ta sama skala z definicji).
