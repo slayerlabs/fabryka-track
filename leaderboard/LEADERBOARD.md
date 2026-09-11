@@ -70,6 +70,22 @@ Profil kompetencji: gdzie model łapie gramatykę. **Diagnostyczne, NIE testowan
 
 Odczyt (opisowo): **rząd przypadka po czasownikach (case-verb) opanowany przez wszystkie modele PL** (0.76–0.86), Polock (angielski) tam pada (0.38). **Aspekt najtrudniejszy dla wszystkich** (0.0–0.40) — nikt go realnie nie ma. Polock (angielski) słaby wszędzie, aspekt 0.00. To profil „co model umie", nie ranking.
 
+## d3 — metryka CIĄGŁA (mean margin) — większa moc niż accuracy
+
+Zamiast progować δ-logprob na 0/1 (accuracy), uśredniamy byte-norm **margin** = (logP(dobre) − logP(zle)) / bajt na rdzeniu 148. Ciągła > dyskretna na S/N (ten sam powód co BPB > acc), ta sama para, **większa moc, zero nowej infry**.
+
+| model | mean margin (rdzeń 148) | 95% CI | acc (dyskretna) |
+|---|---|---|---|
+| GoLLeM-45M-PL | 0.080 | [0.046, 0.111] | 0.689 |
+| GoLLeM-110M-v3 | 0.036 | [−0.000, 0.072] | 0.574 |
+| GoLLeM-110M-v2 | 0.015 | [−0.021, 0.052] | 0.507 |
+| Slayer-110M | −0.001 | [−0.046, 0.042] | 0.527 |
+| Polock-125M | −0.094 | [−0.132, −0.058] | 0.365 |
+
+**Paired-delta w komórce (110M, 32000):** v3 vs v2 = +0.021 [0.008, 0.033] → istotna (v3 > v2); v3 vs Slayer = +0.037 [0.013, 0.061] → istotna (v3 > Slayer); Slayer vs v2 = −0.016 [−0.041, 0.008] → nieodróżnialne.
+
+**Kluczowe:** metryka ciągła rozróżnia to, czego accuracy przy n=148 NIE rozróżniała — **v3 najlepszy na osi d3, ZGODNIE z BPB** (v3 też najniższy BPB). Dwie niezależne osie zgadzają się na v3 (dalej `caveat:single-seed` — checkpoint, nie recepta). Polock margin ujemny = preferuje BŁĘDNE zdanie (angielski, potwierdza).
+
 ## Kontrole metryki BPB
 
 - **Round-trip/coverage tokenizera (SPRAWDZONE ✓):** dla każdego z 5 modeli encode→decode == oryginał na 100% docs, 0 UNK/1000 tok. Cross-tokenizer BPB nie ma ślepego pola z UNK → **Polock 2.279 to prawdziwe słabe modelowanie PL, nie kara-UNK z vocab 12285.**
