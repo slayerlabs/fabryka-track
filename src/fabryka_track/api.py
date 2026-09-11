@@ -288,6 +288,12 @@ def static_asset(name: str):
     return FileResponse(Path(__file__).parent / "static" / name, media_type="text/javascript")
 
 
+@app.get("/", response_class=HTMLResponse, include_in_schema=False)
+def goal_list_page():
+    return HTMLResponse((Path(__file__).parent / "static" / "goal-list.html").read_text(),
+                        headers={"Cache-Control": "no-cache"})
+
+
 @app.get("/goal", include_in_schema=False)
 def goal_rfc_page():
     return RedirectResponse("https://github.com/slayerlabs/rfcs/pull/5", status_code=307,
