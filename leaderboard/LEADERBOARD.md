@@ -2,6 +2,8 @@
 
 > ⚠️ **Wewnętrzny, eksperymentalny.** Testowanie metryk i modeli, NIE oficjalny/produktowy ranking (ten żyje osobno na track.fabryka.ai). Benchmark d3-składnia publiczny → spala się po ujawnieniu.
 
+> 📦 **Artefakty trwałe:** wszystkie wyniki, dane held-out, statystyki i skrypty w `results/` (patrz `results/RESULTS.md`). Reprodukowalne z bajtów.
+
 ## Dwie osie (dwa różne pytania)
 
 1. **BPB (bits-per-byte) — PRIMARY, ranking dowolnego modelu.** Ile bitów model potrzebuje na TEN SAM surowy bajt TEGO SAMEGO tekstu → tokenizer skraca się w mianowniku (mianownik = BAJTY, nie tokeny). Jedna skala dla każdego vocab (32000/32768/12288/bajty). **To odblokowuje porównanie losowych modeli.** Niżej = lepiej. Standard (Paloma/BLT).
