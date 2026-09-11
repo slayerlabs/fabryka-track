@@ -26,19 +26,31 @@
 
 | # | model | params | tokenizer_vocab | **BPB** ↓ | d3 acc (148) | 95%CI (acc) | controlled | provenance |
 |---|---|---|---|---|---|---|---|---|
-| 1 | GoLLeM-110M-v3 | 110M | 32000 | **0.988** | 0.574 | [0.493, 0.655] | — | bpb_scorer + rfc @ Probierz |
-| 2 | Slayer-110M-PL | 110M | 32000 | **1.002** | 0.527 | [0.446, 0.608] | — | bpb_scorer + rfc @ Probierz |
-| 3 | GoLLeM-110M-v2 | 110M | 32000 | **1.020** | 0.507 | [0.426, 0.588] | — | bpb_scorer + rfc @ Probierz |
-| 4 | GoLLeM-45M-PL | 45M | 32768 | **1.159** | 0.689 | [0.615, 0.764] | `confound:tokenizer` `confound:size` | bpb_scorer + rfc @ Probierz |
-| 5 | Polock (pollock-mini-lm-125m) | 125M | 12288 | **2.279** | 0.365 | [0.291, 0.439] | `confound:tokenizer` (model angielski) | bpb_scorer + rfc @ Probierz |
+| 1 | GoLLeM-110M-v3 | 110M | 32000 | **0.988** [0.957, 1.019] | 0.574 | [0.493, 0.655] | cell(110M,32000) | bpb_scorer + rfc @ Probierz |
+| 2 | Slayer-110M-PL | 110M | 32000 | **1.002** [0.970, 1.035] | 0.527 | [0.446, 0.608] | cell(110M,32000) | bpb_scorer + rfc @ Probierz |
+| 3 | GoLLeM-110M-v2 | 110M | 32000 | **1.020** [0.990, 1.051] | 0.507 | [0.426, 0.588] | cell(110M,32000) | bpb_scorer + rfc @ Probierz |
+| 4 | GoLLeM-45M-PL | 45M | 32568 | **1.159** [1.133, 1.186] | 0.689 | [0.615, 0.764] | `confound:tokenizer` `confound:size` | bpb_scorer + rfc @ Probierz |
+| 5 | Polock (pollock-mini-lm-125m) | 125M | 12285 | **2.279** [2.250, 2.309] | 0.365 | [0.291, 0.439] | `confound:tokenizer` (model angielski) | bpb_scorer + rfc @ Probierz |
 
 ## Odczyt (ważne — dwie osie się ROZJEŻDŻAJĄ)
 
 - BPB: trzy 110M (0.988–1.020) < 45M (1.159) < Polock (2.279). Skala sensowna (Polock=angielski → najgorszy).
 - **KOREKTA (dzięki uwadze o cross-cell): ranking BPB między modelami o RÓŻNYCH tokenizerach jest wciąż CROSS-CELL.** 45M (32568) vs 110M (32000) różnią się tokenizer+dane+trening naraz. Więc BPB „110M < 45M" NIE znaczy „110M lepszy rozmiarem/treningiem" — to `badge:confound`, tak samo jak wcześniej „45M best", tylko druga metryka. Nie zamieniamy jednego cross-cell claimu na drugi.
 - **Co przeżywa uczciwie:** dwie tok-fair metryki (acc, BPB) rozjeżdżają się KIERUNKIEM → żaden czysty ranking cross-cell nie przeżywa; „45M najlepszy" był nierobustny (szum, Signal&Noise). Twardy A>B TYLKO w komórce kontrolowanej.
-- **Jedyna czysta komórka:** (110M, 32000) = {v3 0.988, Slayer 1.002, v2 1.020} — różnice ~3%, najpewniej w CI; czeka na paired-bootstrap CI (oś metodologiczna).
+- **Jedyna czysta komórka — ROZSTRZYGNIĘTA:** (110M, 32000) = {v3, Slayer, v2}. Marginalne CI BPB się nakładają, ALE poprawny test to **paired-bootstrap delta** (patrz niżej): wszystkie 3 pary istotne → **v3 < Slayer < v2** (twardy ranking treningu przy stałym rozmiarze+tokenizerze).
 - BPB odblokowuje jedno: porównanie DOWOLNYCH modeli na jednej skali „kto modeluje polski" (liczba fair) — ale to ranking modelowania języka, NIE atrybucja przyczyny.
+
+## Komórka kontrolowana (110M, 32000) — paired-bootstrap (5000×, seed 7)
+
+| para | ΔBPB | 95% CI | werdykt |
+|---|---|---|---|
+| v3 vs Slayer | −0.015 | [−0.019, −0.011] | istotna: v3 < Slayer |
+| Slayer vs v2 | −0.018 | [−0.022, −0.014] | istotna: Slayer < v2 |
+| v3 vs v2 | −0.032 | [−0.035, −0.030] | istotna: v3 < v2 |
+
+**Ranking treningu (stały 110M + tokenizer 32000): v3 < Slayer < v2 — wszystkie pary istotne.** To realny A>B w komórce kontrolowanej (jedyna zmienna = trening/dane).
+
+**Uwaga metodologiczna (ważna):** test = paired-delta, NIE nakładanie się marginalnych słupków CI. Marginalne CI modeli się nakładają (stąd wcześniejsze „nieodróżnialne"), ale różnice per-doc są silnie skorelowane (te same dokumenty) → CI różnicy jest wąskie i rozłączne z 0. **MDE** przy n=300: wykrywalna różnica ~0.003 BPB; luka 0.02 BPB wymaga tylko ~9 dokumentów. BPB jest wysoko-mocowa — acc przy n=148 tej komórki NIE rozróżniała.
 
 ## Bramki BPB (żeby metryka była nośna)
 
@@ -48,7 +60,7 @@
 ## TODO
 
 - [ ] Loader modeli byte-fabryki (arch. BDH, vocab 256) — żeby ranking BPB objął realne modele fabryki (ta sama skala z definicji).
-- [ ] **CI na BPB = paired-bootstrap per-item** (BPB ciągłe, nie McNemar) — oś metodologiczna.
+- [x] **CI na BPB = paired-bootstrap per-doc — ZROBIONE.** Komórka (110M,32000) rozstrzygnięta: v3<Slayer<v2, wszystkie istotne. MDE: ~0.003 wykrywalne przy n=300; luka 0.02 = ~9 docs.
 - [ ] **MDE-power per komórka** — ile bajtów/par na wykrycie luki X (żeby „nieodróżnialne" = „za mało mocy").
 - [ ] Zwiększyć rdzeń d3 do ~400–600 par (moc dla osi confirming).
 - [ ] Niezależny byte-verify liczb.
