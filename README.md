@@ -418,4 +418,4 @@ The Studio supports public Hugging Face imports with previews, text/column filte
 
 ### Remote goal engine
 
-Use `/goal` to submit one active goal and `/status` to follow progress, answer blockers, or stop work. Track owns the durable goal history; an agent runtime on a separate machine claims work through the scoped engine API. See [the engine setup and adapter protocol](docs/goal-engine.md).
+Read the ASCII design RFC at `/goal` before connecting a runtime. The existing `/status` prototype can show progress, answer blockers, and stop work. Track owns the durable goal history; an agent runtime on a separate machine claims work through the scoped engine API. See [the engine setup and adapter protocol](docs/goal-engine.md).
