@@ -37,7 +37,7 @@
 - BPB: trzy 110M (0.988–1.020) < 45M (1.159) < Polock (2.279). Skala sensowna (Polock=angielski → najgorszy).
 - **KOREKTA (dzięki uwadze o cross-cell): ranking BPB między modelami o RÓŻNYCH tokenizerach jest wciąż CROSS-CELL.** 45M (32568) vs 110M (32000) różnią się tokenizer+dane+trening naraz. Więc BPB „110M < 45M" NIE znaczy „110M lepszy rozmiarem/treningiem" — to `badge:confound`, tak samo jak wcześniej „45M best", tylko druga metryka. Nie zamieniamy jednego cross-cell claimu na drugi.
 - **Co przeżywa uczciwie:** dwie tok-fair metryki (acc, BPB) rozjeżdżają się KIERUNKIEM → żaden czysty ranking cross-cell nie przeżywa; „45M najlepszy" był nierobustny (szum, Signal&Noise). Twardy A>B TYLKO w komórce kontrolowanej.
-- **Jedyna czysta komórka — ROZSTRZYGNIĘTA:** (110M, 32000) = {v3, Slayer, v2}. Marginalne CI BPB się nakładają, ALE poprawny test to **paired-bootstrap delta** (patrz niżej): wszystkie 3 pary istotne → **v3 < Slayer < v2** (twardy ranking treningu przy stałym rozmiarze+tokenizerze).
+- **Jedyna czysta komórka — ROZSTRZYGNIĘTA (na poziomie checkpointów):** (110M, 32000) = {v3, Slayer, v2}. Marginalne CI BPB się nakładają, ALE poprawny test to **paired-bootstrap delta** (patrz niżej): wszystkie 3 pary istotne → **v3 < Slayer < v2**. To uporządkowanie TYCH checkpointów, `caveat:single-seed` — NIE jeszcze wyrok o recepcie (patrz niżej).
 - BPB odblokowuje jedno: porównanie DOWOLNYCH modeli na jednej skali „kto modeluje polski" (liczba fair) — ale to ranking modelowania języka, NIE atrybucja przyczyny.
 
 ## Komórka kontrolowana (110M, 32000) — paired-bootstrap (5000×, seed 7)
@@ -48,7 +48,9 @@
 | Slayer vs v2 | −0.018 | [−0.022, −0.014] | istotna: Slayer < v2 |
 | v3 vs v2 | −0.032 | [−0.035, −0.030] | istotna: v3 < v2 |
 
-**Ranking treningu (stały 110M + tokenizer 32000): v3 < Slayer < v2 — wszystkie pary istotne.** To realny A>B w komórce kontrolowanej (jedyna zmienna = trening/dane).
+**Ranking CHECKPOINTÓW (stały 110M + tokenizer 32000): v3 < Slayer < v2 — wszystkie pary istotne.** `caveat:single-seed`.
+
+**GRANICA (czego ten CI NIE obejmuje):** paired-bootstrap resampluje DOKUMENTY → łapie niepewność PRÓBKI held-out, NIE niepewność TRENINGU. v2/v3/Slayer to po JEDNYM runie (n=1 seed treningowy). Więc „v3 < Slayer < v2" jest prawdziwe o TYCH checkpointach na TYM held-oucie, ale luka 0.015–0.032 BPB między pojedynczymi runami może być szumem seeda treningowego, nie różnicą recepty. **„Trening/receptura X lepsza" dopiero po ≥3 seedach treningowych** (Gate: ≥3 seedy — tu OTWARTY). Istotne ≠ recepta-lepsza; istotne ≠ duże (0.015 BPB ≈ 1.5%, realny porządek, ale mały — nie „nasz najlepszy trening").
 
 **Uwaga metodologiczna (ważna):** test = paired-delta, NIE nakładanie się marginalnych słupków CI. Marginalne CI modeli się nakładają (stąd wcześniejsze „nieodróżnialne"), ale różnice per-doc są silnie skorelowane (te same dokumenty) → CI różnicy jest wąskie i rozłączne z 0. **MDE** przy n=300: wykrywalna różnica ~0.003 BPB; luka 0.02 BPB wymaga tylko ~9 dokumentów. BPB jest wysoko-mocowa — acc przy n=148 tej komórki NIE rozróżniała.
 
@@ -56,6 +58,7 @@
 
 - **Gate 1 — round-trip/coverage tokenizera (SPRAWDZONE ✓):** dla każdego z 5 modeli encode→decode == oryginał na 100% docs, 0 UNK/1000 tok. Cross-tokenizer BPB nie ma ślepego pola z UNK → **Polock 2.279 to prawdziwe słabe modelowanie PL, nie kara-UNK z vocab 12285.**
 - **Gate 2 — dekontaminacja PER MODEL (GRANICA):** BPB mierzy generalizację tylko jeśli held-out NIE był w treningu DANEGO modelu. Nasze (GoLLeM/Slayer) — held-out zdekontaminowany wzgl. NASZYCH danych. **Modele zewnętrzne/losowe: nie znamy ich treningu → BPB może być zawyżone-dobre przez wyciek.** Twarda granica „odblokowania losowych modeli": model trenowany na naszym held-oucie „wygra za darmo". Wpis zewnętrzny MUSI deklarować dekontaminację, inaczej badge `unverified:leak`.
+- **Gate 3 — ≥3 seedy treningowe dla wyroku o RECEPCIE (OTWARTY):** paired-bootstrap łapie niepewność próbki, NIE seeda treningowego. Uporządkowanie pojedynczych checkpointów w komórce (`caveat:single-seed`) jest OK, ale „receptura/trening X > Y" wymaga ≥3 seedów treningowych na wariant (rozdziela recepturę od szumu-runu). Do tego czasu wnioski trzymamy na poziomie checkpointów, nie recept.
 
 ## TODO
 
@@ -64,6 +67,7 @@
 - [ ] **MDE-power per komórka** — ile bajtów/par na wykrycie luki X (żeby „nieodróżnialne" = „za mało mocy").
 - [ ] Zwiększyć rdzeń d3 do ~400–600 par (moc dla osi confirming).
 - [ ] Niezależny byte-verify liczb.
+- [ ] **Gate 3: ≥3 seedy treningowe** na wariant — żeby cell-ordering podnieść z poziomu checkpointu do poziomu recepty.
 
 ## Jak dodać wpis
 
