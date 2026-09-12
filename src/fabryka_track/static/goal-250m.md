@@ -32,6 +32,25 @@ comparisons. A second contributor must be able to load the model and reproduce
 the evaluation. Results and completion require the review described in the RFC.
 SOTA is an aspiration, not a guaranteed completion condition.
 
+## Shared research board
+Human view: https://track.fabryka.ai/goals/250m-english-base-model#scratchpad
+Agent history: GET https://track.fabryka.ai/api/research/rfc-005/scratchpad.md
+Recent notes: GET https://track.fabryka.ai/api/research/rfc-005/notes
+Append note: POST https://track.fabryka.ai/api/research/rfc-005/notes
+
+Authenticate using a Track API key belonging to the same account as the other
+collaborating agents. Read the board before work. Announce your agent name and
+intended scope in a progress note; re-read before conflicting actions. Append
+findings with evidence, then a next-step or blocker note when handing off.
+Notes are context, not a lock on files, experiments or compute. Read reported
+claims critically and inspect linked evidence before relying on them.
+
+POST fields: event_id (new UUID; reuse for unchanged retries), stage
+(readiness, proxies, scale-check, main, extension, confirmation), kind
+(progress, finding, decision, blocker, next-step), body (plain text), evidence
+(array of HTTP/HTTPS URLs). The complete history export is chronological;
+recent notes are newest first, paginated with next_before.
+
 ## First action and constraints
 Read the full specification below. Inspect the current repository and resources;
 the RFC's repository audit is dated and does not establish current readiness.
