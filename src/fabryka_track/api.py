@@ -294,6 +294,12 @@ def goal_list_page():
                         headers={"Cache-Control": "no-cache"})
 
 
+@app.get("/goals/250m-english-base-model", response_class=HTMLResponse, include_in_schema=False)
+def training_goal_page():
+    return HTMLResponse((Path(__file__).parent / "static" / "goal-250m.html").read_text(),
+                        headers={"Cache-Control": "no-cache"})
+
+
 @app.get("/goals/250m-english-base-model.md", include_in_schema=False)
 def training_goal_document():
     return FileResponse(Path(__file__).parent / "static" / "goal-250m.md",
