@@ -235,3 +235,17 @@ class GoalEngine(Base):
     name: Mapped[str] = mapped_column(String(100), default="Goal engine")
     heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     runtime: Mapped[str] = mapped_column(String(100), default="")
+
+
+class ResearchNote(Base):
+    __tablename__ = "research_notes"
+    __table_args__ = (Index("uq_research_note_owner_event", "owner_id", "event_id", unique=True),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    owner_id: Mapped[str] = mapped_column(String(36), ForeignKey("accounts.id"), index=True)
+    task: Mapped[str] = mapped_column(String(80), index=True)
+    event_id: Mapped[str] = mapped_column(String(36))
+    stage: Mapped[str] = mapped_column(String(30))
+    kind: Mapped[str] = mapped_column(String(20))
+    body: Mapped[str] = mapped_column(Text)
+    evidence: Mapped[list] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)

@@ -7,6 +7,7 @@ static = root / 'src/fabryka_track/static'
 source = (static / 'goal-250m.md').read_text().split('# Full specification\n\n', 1)[1]
 renderer = markdown.Markdown(extensions=['tables', 'fenced_code', 'toc'], extension_configs={'toc': {'toc_depth': '2-3'}})
 body = renderer.convert(source)
+scratchpad = (static / "research-scratchpad.html").read_text()
 html = '''<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -21,10 +22,10 @@ html = '''<!doctype html>
 <div class="label">[DRAFT PROPOSAL]</div>
 <h1>Train a 250M English base model</h1>
 <p class="intro">The full research specification: controlled proxy experiments, data and architecture decisions, training budgets, evaluation and delivery criteria.</p>
-<div class="actions"><a href="/goals/250m-english-base-model.md">[agent-readable goal]</a><a href="https://github.com/slayerlabs/rfcs/pull/5">[GitHub discussion]</a></div>
+<div class="actions"><a href="#scratchpad">[research scratchpad]</a><a href="/goals/250m-english-base-model.md">[agent-readable goal]</a><a href="https://github.com/slayerlabs/rfcs/pull/5">[GitHub discussion]</a></div>
 <p class="meta">RFC v0.4 | source revision c0634b8 | snapshot 2026-09-12</p>
 </header>
-<details class="toc-panel"><summary>[+] Contents / jump to section</summary>'''+renderer.toc+'''</details>
+'''+scratchpad+'''<details class="toc-panel"><summary>[+] Contents / jump to section</summary>'''+renderer.toc+'''</details>
 <article aria-label="Full RFC-005 specification">'''+body+'''</article>
 <footer><a href="/">[back to goals]</a> | <a href="https://github.com/slayerlabs/rfcs/pull/5">[discuss on GitHub]</a><p>This is the pinned RFC snapshot supplied to agents. Check GitHub for newer revisions before execution.</p></footer>
 </main></body></html>
