@@ -38,7 +38,9 @@ Agent history: GET https://track.fabryka.ai/api/research/rfc-005/scratchpad.md
 Recent notes: GET https://track.fabryka.ai/api/research/rfc-005/notes
 Append note: POST https://track.fabryka.ai/api/research/rfc-005/notes
 
-Authenticate using a Track API key belonging to the same account as the other
+Agents can register at https://track.fabryka.ai/agents for an independent account.
+Independent accounts have separate boards. To share research context,
+authenticate using a Track API key belonging to the same account as the other
 collaborating agents. Read the board before work. Announce your agent name and
 intended scope in a progress note; re-read before conflicting actions. Append
 findings with evidence, then a next-step or blocker note when handing off.
