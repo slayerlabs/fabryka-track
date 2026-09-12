@@ -7,9 +7,9 @@ from fastapi.responses import PlainTextResponse, JSONResponse
 from pydantic import BaseModel, Field, HttpUrl
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
-from .accounts import require_user
+from .agents import research_actor
 from .database import session_scope
-from .models import ResearchNote
+from .models import ResearchNote, ResearchAuthor
 
 router = APIRouter(prefix="/api/research/rfc-005")
 TASK = "rfc-005"
@@ -23,8 +23,9 @@ class NoteInput(BaseModel):
     evidence: list[HttpUrl] = Field(default_factory=list, max_length=10)
 
 
-def serialize(note):
-    return {"id": note.id, "event_id": note.event_id, "task": note.task,
+def serialize(note, session):
+    author=session.get(ResearchAuthor,note.id)
+    return {"author": {"id":author.agent_id,"name":author.name} if author else None, "id": note.id, "event_id": note.event_id, "task": note.task,
             "stage": note.stage, "kind": note.kind, "body": note.body,
             "evidence": note.evidence, "created_at": note.created_at.replace(tzinfo=timezone.utc).isoformat()}
 
@@ -35,7 +36,7 @@ def existing(session, user, event):
 
 
 @router.post("/notes")
-def append(body: NoteInput, user=Depends(require_user), session=Depends(session_scope)):
+def append(body: NoteInput, user=Depends(research_actor), session=Depends(session_scope)):
     values = {"task": TASK, "stage": body.stage, "kind": body.kind, "body": body.body.strip(),
               "evidence": [str(url) for url in body.evidence]}
     if not values["body"]:
@@ -45,6 +46,9 @@ def append(body: NoteInput, user=Depends(require_user), session=Depends(session_
         note = ResearchNote(owner_id=user.id, event_id=str(body.event_id), **values)
         session.add(note)
         try:
+            session.flush()
+            if user.agent_id:
+                session.add(ResearchAuthor(note_id=note.id,agent_id=user.agent_id,name=user.agent_name))
             session.commit()
         except IntegrityError:
             session.rollback()
@@ -53,27 +57,27 @@ def append(body: NoteInput, user=Depends(require_user), session=Depends(session_
                 raise
     if any(getattr(note, key) != value for key, value in values.items()):
         raise HTTPException(409, "This event ID already belongs to another note. Use a new event ID.")
-    return serialize(note)
+    return serialize(note, session)
 
 
 @router.get("/notes")
-def listing(before: int | None = Query(None, ge=1), user=Depends(require_user), session=Depends(session_scope)):
+def listing(before: int | None = Query(None, ge=1), user=Depends(research_actor), session=Depends(session_scope)):
     query = select(ResearchNote).where(ResearchNote.owner_id == user.id, ResearchNote.task == TASK)
     if before is not None:
         query = query.where(ResearchNote.id < before)
     rows = session.scalars(query.order_by(ResearchNote.id.desc()).limit(51)).all()
-    return JSONResponse({"notes": [serialize(n) for n in rows[:50]],
+    return JSONResponse({"notes": [serialize(n, session) for n in rows[:50]],
             "next_before": rows[49].id if len(rows) > 50 else None}, headers={"Cache-Control": "no-store"})
 
 
 @router.get("/scratchpad.md", response_class=PlainTextResponse)
-def export(user=Depends(require_user), session=Depends(session_scope)):
+def export(user=Depends(research_actor), session=Depends(session_scope)):
     notes = session.scalars(select(ResearchNote).where(ResearchNote.owner_id == user.id,
         ResearchNote.task == TASK).order_by(ResearchNote.id)).all()
     lines = ["# RFC-005 research scratchpad", "", "Task: Train a 250M English base model",
              "Specification: https://track.fabryka.ai/goals/250m-english-base-model.md", ""]
     for note in notes:
-        lines += [f"## {serialize(note)['created_at']} | {note.stage} | {note.kind}", "", note.body, ""]
+        lines += [f"## {serialize(note, session)['created_at']} | {note.stage} | {note.kind} | {serialize(note, session)['author']['name'] if serialize(note, session)['author'] else 'Workspace owner'}", "", note.body, ""]
         lines += [f"- Evidence: {url}" for url in note.evidence]
         lines.append("")
     if not notes:

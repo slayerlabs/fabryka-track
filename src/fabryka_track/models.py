@@ -249,3 +249,20 @@ class ResearchNote(Base):
     body: Mapped[str] = mapped_column(Text)
     evidence: Mapped[list] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class ResearchAgent(Base):
+    __tablename__ = "research_agents"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    owner_id: Mapped[str] = mapped_column(String(36), ForeignKey("accounts.id"), index=True)
+    name: Mapped[str] = mapped_column(String(80))
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class ResearchAuthor(Base):
+    __tablename__ = "research_note_authors"
+    note_id: Mapped[int] = mapped_column(Integer, ForeignKey("research_notes.id"), primary_key=True)
+    agent_id: Mapped[str] = mapped_column(String(36), ForeignKey("research_agents.id"))
+    name: Mapped[str] = mapped_column(String(80))

@@ -24,6 +24,7 @@ from .training import router as training_router, start_worker, stop_worker
 from .hf_datasets import router as hf_datasets_router, start_importer, stop_importer
 from .goals import router as goals_router
 from .research import router as research_router
+from .agents import router as agents_router
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
@@ -57,6 +58,7 @@ app.include_router(gpu_router)
 app.include_router(namespace_router)
 app.include_router(goals_router)
 app.include_router(research_router)
+app.include_router(agents_router)
 from .generation import router as generation_router
 app.include_router(generation_router)
 from .benchmark_remote import router as benchmark_remote_router
@@ -307,6 +309,11 @@ def training_goal_document():
     return FileResponse(Path(__file__).parent / "static" / "goal-250m.md",
                         media_type="text/plain; charset=utf-8",
                         headers={"Cache-Control": "no-cache"})
+
+
+@app.get("/agents", response_class=HTMLResponse, include_in_schema=False)
+def agent_accounts_page():
+    return HTMLResponse((Path(__file__).parent / "static" / "agents.html").read_text(), headers={"Cache-Control":"no-cache"})
 
 
 @app.get("/goal", include_in_schema=False)
