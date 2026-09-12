@@ -283,9 +283,9 @@ def health(session: Session = Depends(db)):
 
 @app.get("/assets/{name}")
 def static_asset(name: str):
-    if name not in {"plotly-basic-3.1.0.min.js", "run-charts.js", "hf-datasets.js", "goals.js"}:
+    if name not in {"plotly-basic-3.1.0.min.js", "run-charts.js", "hf-datasets.js", "goals.js", "ascii.css"}:
         raise HTTPException(404, "Asset not found")
-    return FileResponse(Path(__file__).parent / "static" / name, media_type="text/javascript")
+    return FileResponse(Path(__file__).parent / "static" / name, media_type="text/css" if name.endswith(".css") else "text/javascript")
 
 
 @app.get("/", response_class=HTMLResponse, include_in_schema=False)

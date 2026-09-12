@@ -32,7 +32,7 @@ window.TrackCharts = (() => {
       traces.push({...base,y,name:escape(label(s.name)),uid:key});
     }
     const hasData=traces.some(t=>t.x.length);
-    const bg='#ffffff',grid='#edf0f2',font=getComputedStyle(el).fontFamily;
+    const bg='#f8f9f5',grid='#d6dfd4',font=getComputedStyle(el).fontFamily;
     const layout={height:el.classList.contains('plot-expanded')?Math.max(300,innerHeight*.9-170):285,margin:{l:52,r:20,t:20,b:42},autosize:true,
       paper_bgcolor:bg,plot_bgcolor:bg,font:{family:font,size:11,color:'#9298a1'},hovermode:'x',dragmode:settings.drag,
       uirevision:settings.axis+':'+settings.scale+':'+settings.reset,showlegend:false,

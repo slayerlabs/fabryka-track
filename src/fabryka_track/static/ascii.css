@@ -1,0 +1,50 @@
+/* Shared Track presentation. Native controls and data visualizations stay functional. */
+:root{color-scheme:light;--bg:#f8f9f5;--paper:#f8f9f5;--ink:#25352c;--muted:#647368;--line:#b8c4b9;--accent:#315c46;--green:#315c46;--blue:#3f617a;--mono:ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace}
+body{background:var(--bg);color:var(--ink);font:14px/1.65 var(--mono)}
+*,*::before,*::after{border-radius:0!important}
+body,input,textarea,select,button,pre,code,h1,h2,h3,h4,.dataset-cover b,.book-reader pre{font-family:var(--mono)!important}
+a{text-underline-offset:4px}a:hover{color:var(--accent)}
+a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
+header:has(.brand){height:auto;min-height:110px;max-width:1160px;margin:0 auto;padding:26px 30px 22px;gap:24px;align-items:center;flex-wrap:wrap;background:transparent;border-bottom:1px dashed var(--line)}
+.brand{font:700 14px/1.4 var(--mono);letter-spacing:0;text-transform:uppercase;white-space:pre;text-decoration:none}
+.brand span{display:none}
+header:has(.brand) nav{gap:10px 20px;flex-wrap:wrap}
+header:has(.brand) nav a{font:12px/1.6 var(--mono);padding:4px 0;border:0;text-decoration:underline;color:var(--muted)}
+header:has(.brand) nav a::before{content:'['}header:has(.brand) nav a::after{content:']'}
+header:has(.brand) nav a.active,header:has(.brand) nav a[aria-current]{color:var(--ink);font-weight:700}
+main{padding-top:36px}h1{font-size:clamp(22px,3vw,32px);font-weight:700;line-height:1.3;letter-spacing:-.5px}h2{font-size:19px;font-weight:700;letter-spacing:0}h3{font-size:14px;letter-spacing:0}
+.eyebrow{font-size:11px;letter-spacing:1px;color:var(--muted)}.eyebrow::before{content:'// '}
+.panel,.card,.character,.guide-card,.chart,.run-item,.upload,.metric-card,.book-reader,.benchmark-table-wrap,.benchmark-details{background:var(--paper);border:1px solid var(--line);box-shadow:none!important}
+.panel,.card{border-style:dashed;padding:24px}
+.panel>h2:first-child::before,.card>h2:first-child::before{content:'+ ';color:var(--muted)}
+.steps,.divider,.dataset,.timeline li{border-color:var(--line);border-style:dashed}
+.steps{border-width:0 0 1px}.divider{border-width:1px 0 0}.dataset{border-width:1px 0 0}.timeline li{border-width:0 0 0 1px}
+.step b{display:inline;background:transparent;border:0;width:auto;height:auto}.step b::before{content:'['}.step b::after{content:']'}.step.active b{background:transparent;color:var(--accent)}
+.step{font-size:13px}.step.active{font-weight:700}
+input:not([type=checkbox]):not([type=radio]):not([type=range]),select,textarea{background:#fcfdf9;color:var(--ink);border:1px solid var(--line);box-shadow:none;max-width:100%}
+input[type=range],input[type=checkbox],input[type=radio]{accent-color:var(--accent)}
+.primary,.button,#submit-goal,#resume-form button{background:var(--ink);color:var(--bg);border:1px solid var(--ink);box-shadow:none;font-weight:600}
+.secondary{background:transparent;color:var(--ink);border:1px solid var(--line);box-shadow:none}
+.primary:hover,.button:hover{background:var(--accent);color:var(--bg)}.secondary:hover{background:#e8eee5;border-color:var(--ink)}
+.badge,.tag{background:transparent;font-size:12px;color:var(--accent);padding:2px 0}.badge::before{content:'['}.badge::after{content:']'}
+.badge.warning{background:transparent;color:#795000}.error{border:1px dashed #9a3b2c;background:#fcf2ea;color:#8c382b}
+.point-shelf{border-bottom:1px dashed var(--line)}.point-book,.dataset-cover{background-image:none!important;box-shadow:none!important;border:1px solid var(--line)}
+.point-book{background:transparent;color:var(--ink);height:48px}.dataset-cover{background:transparent;color:var(--ink)}.dataset-cover b{color:var(--ink);font-size:20px}
+.book-reader pre,#quick-sample pre{background:#eef2e9;font-size:13px}
+.run-view .charts,.comparison-board{background:transparent}.chart{background:var(--paper)}
+.plot-settings,.plot-tooltip,.plot-expanded,.plot-series,.metric-picker,.namespace-leaf button{box-shadow:none;background:var(--paper);border:1px solid var(--line);color:var(--ink)}
+.plot-expanded{box-shadow:0 0 0 100vmax #25352c70}.plot-actions button:hover{background:#e8eee5}
+.plot-series{background:transparent}.plot-swatch{height:8px;width:8px}
+.plot-settings-title,.chart h3,.metric-explorer h2{color:var(--ink)}
+.plot-canvas .main-svg{background:transparent!important}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.5px}td,th{border-bottom:1px dashed var(--line)}
+footer{border-top:1px dashed var(--line);padding-top:18px;color:var(--muted);font-family:var(--mono)}
+#studio-next:not(:empty){box-shadow:none!important;border-top:1px dashed var(--line)}
+@media(max-width:760px){body{font-size:12px}header:has(.brand){padding:20px 18px;gap:18px}header:has(.brand) nav{gap:8px 15px}.panel,.card{padding:18px}h1{font-size:23px}h2{font-size:17px}.steps{flex-wrap:wrap;gap:12px}.layout>*{min-width:0}.row{flex-wrap:wrap}.primary,.secondary{font-size:12px}.plot-expanded{inset:2vh 2vw}.brand{font-size:12px}}
+@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+
+.dataset-cover small{color:var(--muted)}
+.run-view .metric,.metric,.interactive-chart,.compare-sidebar,.compare-main{background:var(--paper);border-color:var(--line);box-shadow:none}
+.run-view .metric strong,.run-view .metric small{color:var(--ink)}
+[data-run-tab]{background:transparent;color:var(--muted);border:0;border-bottom:1px dashed var(--line);padding:10px}
+[data-run-tab][aria-selected=true]{color:var(--ink);border-bottom:2px solid var(--ink);font-weight:700}
