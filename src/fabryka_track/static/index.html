@@ -1587,7 +1587,12 @@
             r.logs.map((l) => `[${l.level}] ${l.message}`).join("\n") ||
             "No logs yet.";
           $("#run-actions").innerHTML =
-            `${!readOnly && local && active ? '<button class="secondary" id="stop">Stop training</button>' : ""}${!readOnly && local && r.state === "finished" ? `<button class="secondary" id="publish">${r.is_public ? "Remove from leaderboard" : "Publish score to leaderboard"}</button>` : ""}${r.artifacts.map((a) => `<button class="primary" data-artifact="${a.id}">↓ Download ${esc(a.name)}</button>`).join(" ")}`;
+            `${!readOnly && local && active ? '<button class="secondary" id="stop">Stop training</button>' : ""}${!readOnly && local && r.state === "finished" ? `<button class="secondary" id="publish">${r.is_public ? "Remove from leaderboard" : "Publish score to leaderboard"}</button><button class="primary" id="hf-upload-trigger" type="button">Upload to Hugging Face →</button>` : ""}${r.artifacts.map((a) => `<button class="primary" data-artifact="${a.id}">↓ Download ${esc(a.name)}</button>`).join(" ")}`;
+          if ($("#hf-upload-trigger")) $("#hf-upload-trigger").onclick = () => {
+            const panel = $("#hf-export");
+            panel?.scrollIntoView({behavior: "smooth", block: "start"});
+            panel?.querySelector("input[name=repo_name]")?.focus();
+          };
           if ($("#publish")) $("#publish").onclick = async () => {
             try { $("#publish").disabled = true; await api("/training/" + id + "/visibility", {method:"PATCH", headers:{"Content-Type":"application/json"}, body:JSON.stringify({is_public:!r.is_public})}); await refresh(); } catch(e) { error(e); if ($("#publish")) $("#publish").disabled=false; }
           };

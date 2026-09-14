@@ -72,6 +72,12 @@ test('benchmark panel selectors remain IDs after document navigation migration',
   assert.match(html,/\$\('#benchmarks'\)/);
 });
 
+test('finished run actions expose the Hugging Face upload control',()=>{
+  assert.match(html,/id="hf-upload-trigger"/);
+  assert.match(html,/Upload to Hugging Face/);
+  assert.match(html,/panel\?\.scrollIntoView/);
+});
+
 test('fast ladder shows unavailable EWoK without presenting a combined score',()=>{
   const context=vm.createContext({esc:String,fmt:v=>v==null?'—':String(v)});
   vm.runInContext(between('      function metricHelp(', '      async function trainingGuide()')+between('      function fastLadderResults(e)', '      async function benchmarkDashboard')+'\nglobalThis.render=fastLadderResults;',context);
