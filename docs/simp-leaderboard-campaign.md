@@ -35,6 +35,37 @@ most 15% and at least 10,000 MiB free. Failed GPU probes block claims. An existi
 training job is never stopped. This admission check is not GPU preemption: a new
 training process started after a benchmark claim can still share the GPU.
 
+For explicitly chosen concurrent training and evaluation, keep the admission
+check enabled and set `TRACK_BENCHMARK_MAX_UTILIZATION=100`,
+`TRACK_BENCHMARK_MIN_FREE_MB=4096`, and `TRACK_BENCHMARK_MEMORY_LIMIT_MB=2048`.
+The last setting caps each evaluation child's PyTorch caching allocator at
+2 GiB; driver/context allocations are additional. The existing OOM handling
+reduces evaluation batches. The existing simp policy stays idle-only unless
+the utilization override is set. Measure the
+effect on training throughput before enabling concurrent operation: spare VRAM
+does not imply spare compute. GPU peak allocation/reservation and the configured
+cap are recorded in evaluation provenance.
+
+### Measured sharing cost on 2026-09-15
+
+A short RTX 3090 probe ran the native 128M architecture with random weights
+through the production continuation scorer on sampled HellaSwag inputs. This
+was a capacity measurement, not a checkpoint quality evaluation. Training
+throughput was measured from token deltas and wall-clock update arrivals:
+
+| Phase | Training tokens/s | Maximum GPU memory used | Minimum GPU memory free |
+| --- | ---: | ---: | ---: |
+| Training baseline | 21,723 | 15,909 MiB | 8,216 MiB |
+| Concurrent scoring | 10,219 | 17,898 MiB | 6,227 MiB |
+| After scoring exited | 21,714 | 15,909 MiB | 8,216 MiB |
+
+The probe used a 2,048 MiB allocator cap and reached 1,676 MiB reserved by
+PyTorch. There were five observed training updates per phase; scoring took
+100 seconds, with 60-second baseline and recovery windows. Memory fit, but
+training throughput fell by about 53% for this workload and recovered after
+the probe. Other checkpoint sizes and task mixes may have different effects.
+The campaign remains configured to wait for an idle GPU.
+
 `jobs/status.json` records waiting-for-GPU, waiting-for-job or running state
 without credentials. Database results are saved after each task. A failed job
 retains completed tasks; the owner can resume it using the `leaderboard` suite.

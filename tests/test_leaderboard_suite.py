@@ -54,6 +54,33 @@ def test_idle_guard_blocks_busy_low_memory_and_unreadable_gpu(monkeypatch):
     assert not gpu_ready()
 
 
+def test_shared_gpu_guard_still_requires_free_memory(monkeypatch):
+    import subprocess
+    monkeypatch.setenv('TRACK_BENCHMARK_REQUIRE_IDLE','1')
+    monkeypatch.setenv('TRACK_BENCHMARK_MAX_UTILIZATION','100')
+    monkeypatch.setenv('TRACK_BENCHMARK_MIN_FREE_MB','4096')
+    monkeypatch.setattr(subprocess,'check_output',lambda *a,**kw:'100, 8216')
+    assert gpu_ready()
+    monkeypatch.setattr(subprocess,'check_output',lambda *a,**kw:'100, 2000')
+    assert not gpu_ready()
+
+
+def test_worker_allocator_limit_and_invalid_budget(monkeypatch):
+    from fabryka_track.benchmark_worker import configure_cuda_budget
+    import torch
+    calls=[]
+    monkeypatch.setattr(torch.cuda,'get_device_properties',lambda device:SimpleNamespace(total_memory=24*1024**3))
+    monkeypatch.setattr(torch.cuda,'set_per_process_memory_fraction',lambda fraction,device:calls.append((fraction,device)))
+    monkeypatch.setenv('TRACK_BENCHMARK_MEMORY_LIMIT_MB','2048')
+    assert configure_cuda_budget('cuda:0')=={'cuda_allocator_limit_mb':2048}
+    assert calls==[(1/12,'cuda:0')]
+    assert configure_cuda_budget('cpu')=={}
+    monkeypatch.setenv('TRACK_BENCHMARK_MEMORY_LIMIT_MB','0')
+    with pytest.raises(ValueError):configure_cuda_budget('cuda:0')
+    monkeypatch.setenv('TRACK_BENCHMARK_MEMORY_LIMIT_MB','32768')
+    with pytest.raises(ValueError):configure_cuda_budget('cuda:0')
+
+
 def test_campaign_is_idempotent_targets_simp_and_respects_visibility(client):
     from test_benchmarks import finished,launch
     from fabryka_track.benchmark_campaign import plan,enqueue

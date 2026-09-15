@@ -2,6 +2,7 @@
 import hashlib
 import json
 import math
+import os
 import sys
 import time
 from datetime import datetime, timezone
@@ -20,6 +21,17 @@ from .database import SessionLocal
 from .hf_publish import checkpoint_path
 from .models import BenchmarkEvaluation, Run
 from .leaderboard_suite import DATA, evaluate as evaluate_continuations, index_result
+
+
+def configure_cuda_budget(device):
+    """Optional per-child PyTorch allocation cap; CUDA context memory is extra."""
+    value=os.environ.get('TRACK_BENCHMARK_MEMORY_LIMIT_MB')
+    if not device.startswith('cuda') or value is None:return {}
+    limit=int(value)
+    total=torch.cuda.get_device_properties(device).total_memory
+    if not 0<limit*1024**2<=total:raise ValueError('Invalid benchmark CUDA memory limit')
+    torch.cuda.set_per_process_memory_fraction(limit*1024**2/total,device=device)
+    return {'cuda_allocator_limit_mb':limit}
 
 
 def persist(eid, **values):
@@ -71,9 +83,12 @@ def run(eid, job=None, reporter=None):
     length=min(cfg['context_length'],min(int(d['bytes']*.9)-1 for d in cfg['mix']))
     tokens=best_step*cfg['batch_size']*length if best_step is not None else None
     device=job.get('device','cpu')
+    for key in ('cuda_allocator_limit_mb','cuda_peak_allocated_mb','cuda_peak_reserved_mb'):
+        provenance.pop(key,None)
     if device.startswith('cuda'):
         torch.backends.cuda.matmul.allow_tf32=False
         torch.backends.cudnn.allow_tf32=False
+        provenance.update(configure_cuda_budget(device))
     provenance.update(harness_version=version('lm-eval'),torch_version=torch.__version__,
         checkpoint_step=best_step,training_tokens=tokens,token_unit='utf8_bytes',
         context_length=cfg['context_length'],parameters=cfg['parameters'],
@@ -151,7 +166,10 @@ def run(eid, job=None, reporter=None):
             print(name,type(exc).__name__,str(exc),file=sys.stderr)
         provenance.update(context_limited_requests=job['provenance'].get('context_limited_requests',0)+model.truncated_requests,total_requests=job['provenance'].get('total_requests',0)+model.total_requests)
         save(results=results,provenance=provenance)
-    save(status='failed' if failures else 'finished',current_task=None,
+    if device.startswith('cuda'):
+        provenance.update(cuda_peak_allocated_mb=torch.cuda.max_memory_allocated(device)/1024**2,
+                          cuda_peak_reserved_mb=torch.cuda.max_memory_reserved(device)/1024**2)
+    save(status='failed' if failures else 'finished',current_task=None,provenance=provenance,
             error='Failed tasks: '+', '.join(failures) if failures else None,
             ended_at=datetime.now(timezone.utc))
 

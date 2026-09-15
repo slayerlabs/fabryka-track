@@ -15,7 +15,8 @@ def gpu_ready():
         output=subprocess.check_output(['nvidia-smi','-i',os.environ.get('TRACK_BENCHMARK_GPU_INDEX','0'),
             '--query-gpu=utilization.gpu,memory.free','--format=csv,noheader,nounits'],text=True,timeout=10)
         utilization,free=[int(value.strip()) for value in output.strip().split(',')]
-        return utilization<=15 and free>=int(os.environ.get('TRACK_BENCHMARK_MIN_FREE_MB','10000'))
+        maximum=int(os.environ.get('TRACK_BENCHMARK_MAX_UTILIZATION','15'))
+        return 0<=maximum<=100 and utilization<=maximum and free>=int(os.environ.get('TRACK_BENCHMARK_MIN_FREE_MB','10000'))
     except (OSError,ValueError,subprocess.SubprocessError):return False
 
 
