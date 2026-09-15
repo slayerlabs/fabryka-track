@@ -38,11 +38,13 @@ def claim(runner=Depends(worker),session=Depends(session_scope)):
     with lock:
         active=list(session.scalars(select(BenchmarkEvaluation).where(BenchmarkEvaluation.status=='running')))
         if any(r.provenance.get('runner')==runner for r in active):return {'job':None}
-        row=session.scalar(select(BenchmarkEvaluation).where(BenchmarkEvaluation.status=='queued').order_by(BenchmarkEvaluation.created_at,BenchmarkEvaluation.id))
+        queued=session.scalars(select(BenchmarkEvaluation).where(BenchmarkEvaluation.status=='queued').order_by(BenchmarkEvaluation.created_at,BenchmarkEvaluation.id))
+        row=next((row for row in queued if row.provenance.get('target_runner') in (None,runner)),None)
         if not row:return {'job':None}
         checkpoint_path(session,session.get(Run,row.run_id))
         row.status='running';row.ended_at=None;row.error=None
-        row.provenance={**row.provenance,'runner':runner,'lease':str(uuid4()),'heartbeat':time.time()}
+        row.provenance={**row.provenance,'runner':runner,'lease':str(uuid4()),'heartbeat':time.time(),
+                        'execution_started_at':datetime.now(timezone.utc).isoformat()}
         session.commit()
         return {'job':{'id':row.id,'tasks':row.tasks,'mode':row.mode,'results':row.results,'provenance':row.provenance,'lease':row.provenance['lease']}}
 

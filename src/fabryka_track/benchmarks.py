@@ -23,18 +23,25 @@ from .models import Account, BenchmarkEvaluation, Run, RunLog
 router = APIRouter(prefix='/api')
 from .fast_ladder import COMPONENTS, PROTOCOL as FAST_PROTOCOL, fast_score
 from .fast_pl_ladder import PROTOCOL as PL_PROTOCOL, pl_score
+from .leaderboard_suite import TASKS as LEADERBOARD_TASKS, PROTOCOL as LEADERBOARD_PROTOCOL, REVISIONS
 
 PROTOCOL = 'tinylm-en-v1-byte-sliding'
 CORE = ['sciq','arc_easy','piqa','hellaswag','blimp']
 SUITES = {'piqa':['piqa'], 'core':CORE, 'tinylm':CORE+['lambada_openai'],
           'extended':CORE+['lambada_openai','winogrande','boolq'],
-          'polish': ['multiblimp_polish'], 'fast':[k for k in COMPONENTS if k!='fast_ewok'], 'fast_pl':['pl_lm','pl_multiblimp','pl_induction']}
+          'polish': ['multiblimp_polish'], 'fast':[k for k in COMPONENTS if k!='fast_ewok'], 'fast_pl':['pl_lm','pl_multiblimp','pl_induction'],
+          'leaderboard':LEADERBOARD_TASKS}
 TASKS = {
     'sciq': ('SciQ','allenai/sciq'), 'arc_easy': ('ARC-Easy','allenai/ai2_arc'),
     'piqa': ('PIQA','baber/piqa'), 'hellaswag': ('HellaSwag','Rowan/hellaswag'),
     'blimp': ('BLiMP','nyu-mll/blimp'), 'lambada_openai': ('LAMBADA','EleutherAI/lambada_openai'),
     'winogrande': ('WinoGrande','allenai/winogrande'), 'boolq': ('BoolQ','aps/super_glue'),
     'multiblimp_polish': ('MultiBLiMP · Polish','jumelet/multiblimp'),
+    'arc_challenge': ('ARC Challenge','allenai/ai2_arc'),
+    'arithmark2': ('ArithMark 2','AxiomicLabs/ArithMark-2.0'),
+    'arithmark3': ('ArithMark 3','AxiomicLabs/Arithmark-3.0'),
+    'bananamind_base_1_1': ('BananaMind Base Bench 1.1','BananaMind/BananaMind-Base-Bench-1.1'),
+    'int_index': ('INT Index',''),
 }
 TIERS = [
     {'id':'tokenizer','gate':'Tokenizer gate','metric':'Polish fertility, UTF-8 roundtrip, bits-per-byte','useful_from':'before 1M'},
@@ -98,7 +105,7 @@ def auto_benchmark_summary(session, run):
 @router.get('/benchmarks/catalog')
 def catalog():
     return {'protocol':PROTOCOL, 'available':importlib.util.find_spec('lm_eval') is not None,
-            'tasks':[{'id':k,'name':v[0],'url':'https://huggingface.co/datasets/'+v[1]} for k,v in TASKS.items()],
+            'tasks':[{'id':k,'name':v[0],'url':('https://huggingface.co/datasets/'+v[1] if v[1] else 'https://huggingface.co/spaces/AxiomicLabs/Open_SLM_Leaderboard')} for k,v in TASKS.items()],
             'core':CORE,'suites':SUITES,'tiers':TIERS,'fast_ladder':COMPONENTS}
 
 
@@ -116,7 +123,7 @@ def history(run_id:str,user=Depends(current_user),session=Depends(session_scope)
 
 
 class EvaluationInput(BaseModel):
-    suite: Literal['core','tinylm','extended','polish','fast','piqa','fast_pl'] = 'tinylm'
+    suite: Literal['core','tinylm','extended','polish','fast','piqa','fast_pl','leaderboard'] = 'tinylm'
     mode: Literal['smoke','full'] = 'smoke'
 
 
@@ -133,7 +140,7 @@ def start(run_id:str,body:EvaluationInput,user=Depends(require_user),session=Dep
             raise HTTPException(409,'This run already has a queued or running evaluation.')
         digest=hashlib.sha256(path.read_bytes()).hexdigest()
         tasks=SUITES[body.suite]
-        protocol=PL_PROTOCOL if body.suite=='fast_pl' else FAST_PROTOCOL if body.suite=='fast' else PROTOCOL
+        protocol=LEADERBOARD_PROTOCOL if body.suite=='leaderboard' else PL_PROTOCOL if body.suite=='fast_pl' else FAST_PROTOCOL if body.suite=='fast' else PROTOCOL
         previous=list(session.scalars(select(BenchmarkEvaluation).where(BenchmarkEvaluation.run_id==run_id,
             BenchmarkEvaluation.mode==body.mode).order_by(BenchmarkEvaluation.created_at.desc())))
         compatible=[r for r in previous if r.provenance.get('checkpoint_sha256')==digest and
@@ -157,6 +164,7 @@ def start(run_id:str,body:EvaluationInput,user=Depends(require_user),session=Dep
             provenance={k:v for k,v in (source.provenance.items() if source else []) if k not in ('runner','lease','heartbeat','worker_pid')}
             provenance.update(checkpoint_sha256=digest,protocol=protocol,fewshot=0,seed=42,
                               limit_per_subtask=10 if body.mode=='smoke' else None,reused_tasks=list(completed))
+            if body.suite=='leaderboard':provenance['dataset_revisions']=dict(REVISIONS)
             if source:provenance['reused_from_evaluation']=source.id
             row=BenchmarkEvaluation(run_id=run.id,mode=body.mode,tasks=tasks,results=completed,provenance=provenance,
                                     status='finished' if len(completed)==len(tasks) else 'queued',

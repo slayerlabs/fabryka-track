@@ -29,6 +29,7 @@
       <h1>Published benchmark results</h1>
       <p class="muted">Recorded evaluations of saved checkpoints from public Track runs. Inspect the scores, the metric used and the evidence behind each result.</p>
       <div class="actions"><a class="primary" href="#results">Explore results ↓</a><a class="secondary" href="/benchmarks">Evaluate your model →</a></div>
+      <p class="muted" id="campaign-status" role="status" hidden></p>
     </section>
     <div id="load-status" role="status" aria-live="polite">Loading published results…</div>
     <div id="loaded" hidden>
@@ -39,12 +40,17 @@
         <label><span>Evaluation scope</span><select id="mode-filter"><option value="full">Full evaluations</option><option value="smoke">Smoke tests · diagnostics</option></select></label>
       </section>
       <p id="smoke-notice" class="smoke-notice" hidden>Smoke tests use small samples to check that evaluation runs. They are not a model-quality ranking.</p>
+      <section class="panel" id="full-leaderboard" hidden aria-labelledby="full-leaderboard-title">
+        <h2 id="full-leaderboard-title">Full-suite leaderboard</h2>
+        <p class="muted">Completed checkpoints in the largest matching evaluation setup, ranked by INT Index. All component scores are required.</p>
+        <div class="table-scroll" id="leaderboard-table"></div>
+      </section>
       <section class="panel" id="comparison" aria-labelledby="comparison-title">
         <div class="eyebrow">Compare a recorded metric</div><h2 id="comparison-title">Checkpoint comparison</h2>
         <p class="muted">Compare one benchmark and one metric at a time. Results with different recorded evaluation setups are kept in separate groups.</p>
         <div class="chart-controls">
           <label><span>Benchmark</span><select id="benchmark-filter"></select></label>
-          <label><span>Metric</span><select id="metric-filter"><option value="acc_norm">Length-normalized accuracy · acc_norm</option><option value="accuracy">Accuracy · acc</option><option value="bpb">Bits per UTF-8 byte · lower is better</option></select></label>
+          <label><span>Metric</span><select id="metric-filter"><option value="acc_norm">Length-normalized accuracy · acc_norm</option><option value="accuracy">Accuracy · acc</option><option value="index">INT Index</option><option value="elo">Fixed-item Overall Elo</option><option value="bpb">Bits per UTF-8 byte · lower is better</option></select></label>
         </div>
         <label id="cohort-label" hidden><span>Recorded evaluation setup</span><select id="cohort-filter"></select></label>
         <div id="comparison-chart" aria-live="polite"></div>
@@ -59,7 +65,9 @@
         <li><strong>Accuracy and acc_norm are different.</strong> Accuracy chooses the continuation with the highest total score. Length-normalized accuracy adjusts for continuation length. A percentage from one metric cannot stand in for the other.</li>
         <li><strong>Full applies to the selected task.</strong> A full PIQA result does not mean every benchmark was evaluated. Missing scores are not estimated. Smoke tests are listed separately.</li>
         <li><strong>Reports describe an exact checkpoint.</strong> Use the saved step, SHA-256, dataset revisions, sample count and harness version when comparing results. These are recorded Track evaluations, not independent certifications.</li>
-        <li><strong>There is no combined rank across different benchmarks.</strong> Accuracy, bits per byte, aggregate indices and Elo have different definitions. This page does not invent an INT Index or Elo from other scores.</li>
+        <li><strong>INT Index requires all five component scores.</strong> The Open SLM formula uses chance-normalized HellaSwag, mean ARC Easy/Challenge, PIQA and ArithMark 3, with weights 1, 1, 1 and 0.65. BananaMind 1.1 Elo uses that benchmark's fixed item ratings and weights.</li>
+        <li><strong>ArithMark 3 has an option-position limitation.</strong> In the pinned 1,000-item release, correct numeric answers are always one of the two middle values. INT retains the published formula's nominal 25% chance floor. Read it alongside the individual scores.</li>
+        <li><strong>Native models predict UTF-8 bytes.</strong> Track scores every answer byte with up to 512 bytes of context. Tokenizer and context differences matter when comparing with model-card results from other systems.</li>
       </ul>
       <p class="muted">Charts are drawn from the numeric records shown here. New completed evaluations of public runs appear automatically. Making a run private removes its reports from this page.</p>
     </section>

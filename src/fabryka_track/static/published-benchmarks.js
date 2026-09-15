@@ -4,7 +4,7 @@
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const finite = value => typeof value === 'number' && Number.isFinite(value);
   const format = measurement => finite(measurement.value)
-    ? (measurement.unit === 'percent' ? (measurement.value * 100).toFixed(2) + '%' : measurement.value.toFixed(3)) : '—';
+    ? (measurement.unit === 'percent' ? (measurement.value * 100).toFixed(2) + '%' : measurement.unit === 'elo' ? Math.round(measurement.value)+' Elo' : measurement.unit === 'index' ? measurement.value.toFixed(2) : measurement.value.toFixed(3)) : '—';
   const canonical = value => JSON.stringify(value && typeof value === 'object' && !Array.isArray(value)
     ? Object.fromEntries(Object.keys(value).sort().map(key => [key, JSON.parse(canonical(value[key]))])) : value);
   function cohortKey(report, measurement) {
@@ -83,18 +83,23 @@
       $('#comparison-chart').innerHTML = `<p class="muted">${available ? 'These results lack some of the provenance needed to group a comparison. Their recorded values remain in the tables below.' : 'No recorded results for this benchmark and metric in the selected models. Choose another metric or benchmark.'}</p>`;
       return;
     }
-    const visible = selected.slice(0,12), first = visible[0], max = first.measurement.unit === 'percent' ? 1 : Math.max(1, Math.ceil(Math.max(...visible.map(x => x.measurement.value))));
-    $('#comparison-chart').innerHTML = `<p class="chart-protocol">${esc(first.report.evidence.protocol)} · ${number(first.measurement.samples)} ${esc(first.measurement.sample_unit || 'examples')} · ${first.report.evidence.fewshot}-shot · ${first.measurement.higher_is_better ? 'higher' : 'lower'} is better · scale 0–${first.measurement.unit === 'percent' ? '100%' : max}</p>
-      ${visible.map(({report:r,measurement:m}) => `<div class="chart-row"><div class="chart-name"><a href="${esc(r.run_url)}">${esc(r.run_name)}</a><small>${esc(r.owner)} · ${esc(r.model_size || '')} · step ${number(r.checkpoint.checkpoint_step)}</small></div><div class="bar-track" aria-hidden="true"><div class="bar-fill" style="width:${Math.max(0,Math.min(100,m.value/max*100))}%"></div></div><span class="chart-value">${format(m)}</span></div>`).join('')}
+    const visible = selected.slice(0,12), first = visible[0], min=Math.min(0,Math.floor(Math.min(...visible.map(x=>x.measurement.value)))), max = first.measurement.unit === 'percent' ? 1 : Math.max(1, Math.ceil(Math.max(...visible.map(x => x.measurement.value))));
+    $('#comparison-chart').innerHTML = `<p class="chart-protocol">${esc(first.report.evidence.protocol)} · ${number(first.measurement.samples)} ${esc(first.measurement.sample_unit || 'examples')} · ${first.report.evidence.fewshot}-shot · ${first.measurement.higher_is_better ? 'higher' : 'lower'} is better · scale ${min}–${first.measurement.unit === 'percent' ? '100%' : max}</p>
+      ${visible.map(({report:r,measurement:m}) => `<div class="chart-row"><div class="chart-name"><a href="${esc(r.run_url)}">${esc(r.run_name)}</a><small>${esc(r.owner)} · ${esc(r.model_size || '')} · step ${number(r.checkpoint.checkpoint_step)}</small></div><div class="bar-track" aria-hidden="true"><div class="bar-fill" style="margin-left:${(Math.min(0,m.value)-min)/(max-min)*100}%;width:${Math.abs(m.value)/(max-min)*100}%"></div></div><span class="chart-value">${format(m)}</span></div>`).join('')}
       <p class="chart-note">${selected.length > 12 ? 'Top 12 of '+selected.length : selected.length} checkpoints in this recorded setup. The latest result per checkpoint is used. Other setups and results without complete comparison evidence remain in the reports below.</p>`;
   }
   function render() {
     const matching = filtered(), checkpoints = new Set(matching.map(r => r.checkpoint.checkpoint_sha256 || r.run_id)), tasks = new Set(matching.flatMap(r => r.measurements.map(m => m.task)));
+    const ranked=$('#mode-filter').value==='full' ? comparisonGroups(matching,'int_index','index')[0]?.[1] || [] : [];
+    $('#full-leaderboard').hidden=!ranked.length;
+    const columns=[['INT Index','int_index','index'],['ARC Easy','arc_easy','acc_norm'],['ARC Challenge','arc_challenge','acc_norm'],['PIQA','piqa','acc_norm'],['HellaSwag','hellaswag','acc_norm'],['ArithMark 3','arithmark3','acc_norm'],['ArithMark 2','arithmark2','accuracy'],['BananaMind 1.1','bananamind_base_1_1','elo']];
+    $('#leaderboard-table').innerHTML=ranked.length ? `<table><thead><tr><th>Rank</th><th>Model</th>${columns.map(c=>`<th>${esc(c[0])}</th>`).join('')}</tr></thead><tbody>${ranked.map(({report:r},i)=>`<tr><td>${i+1}</td><td><a href="${esc(r.run_url)}">${esc(r.run_name)}</a><br><small>${esc(r.model_size)} · ${esc(r.owner)}</small></td>${columns.map(([,task,metric])=>`<td>${format(r.measurements.find(m=>m.task===task && m.metric===metric)||{})}</td>`).join('')}</tr>`).join('')}</tbody></table>` : '';
     $('#stats').innerHTML = [[matching.length,$('#mode-filter').value === 'full' ? 'full evaluations' : 'smoke evaluations'],[checkpoints.size,'saved checkpoints'],[tasks.size,'benchmark tasks with results']].map(([value,label]) => `<div class="stat"><strong>${value}</strong><small>${label}</small></div>`).join('');
     $('#smoke-notice').hidden = $('#mode-filter').value !== 'smoke';
     const previous = $('#benchmark-filter').value, names = new Map(matching.flatMap(r => r.measurements.map(m => [m.task,m.benchmark])));
     $('#benchmark-filter').innerHTML = [...names].sort((a,b) => a[1].localeCompare(b[1])).map(([key,label]) => `<option value="${esc(key)}">${esc(label)}</option>`).join('');
     if (names.has(previous)) $('#benchmark-filter').value = previous;
+    else if (names.has('int_index')) $('#benchmark-filter').value = 'int_index';
     else if (names.has('piqa')) $('#benchmark-filter').value = 'piqa';
     page = Math.min(page,Math.max(0,Math.ceil(matching.length/perPage)-1));
     $('#reports').innerHTML = matching.slice(page*perPage,(page+1)*perPage).map(reportHTML).join('') || '<div class="panel empty"><h3>No matching published results</h3><p class="muted">Try another model or evaluation scope. Completed evaluations appear here when their run is public.</p><a href="/benchmarks">Open the evaluation studio →</a></div>';
@@ -133,5 +138,15 @@
   $('#metric-filter').onchange = $('#cohort-filter').onchange = renderChart;
   $('#previous').onclick = () => {page--;render();$('#results').scrollIntoView();};
   $('#next').onclick = () => {page++;render();$('#results').scrollIntoView();};
+  async function campaignStatus() {
+    try {
+      const response=await fetch('/api/benchmark-results/campaign-status',{cache:'no-store'});
+      if (!response.ok) return;
+      const data=await response.json(), element=$('#campaign-status');
+      element.hidden=!data.total;
+      if (data.total) element.textContent=`Full benchmark campaign: ${data.states.finished} / ${data.total} checkpoints complete · ${data.states.running} running · ${data.states.queued} queued${data.states.failed ? ' · '+data.states.failed+' failed' : ''}. Jobs use our existing GPU when it is available.`;
+    } catch (_) { /* The completed result reports remain independently available. */ }
+  }
+  campaignStatus();setInterval(campaignStatus,30000);
   load();
 })();

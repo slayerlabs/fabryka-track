@@ -60,3 +60,16 @@ def test_retry_reuses_completed_tasks_and_does_not_repeat_finished_suite(client,
         row=db.get(BenchmarkEvaluation,extended['id']);row.status='cancelled';db.commit()
     full=client.post(url,json={'suite':'core','mode':'full'}).json()
     assert full['results']=={} and full['mode']=='full'
+
+
+def test_campaign_can_only_be_claimed_by_target_runner(client,monkeypatch):
+    monkeypatch.setattr(settings,'benchmark_runner_tokens',json.dumps({'simp':'s'*40,'other':'o'*40}))
+    run=finished(client,launch(client).json()['id'])
+    with SessionLocal() as db:
+        row=BenchmarkEvaluation(run_id=run['id'],mode='full',tasks=['piqa'],status='queued',
+            provenance={'checkpoint_sha256':'a'*64,'target_runner':'simp'})
+        db.add(row);db.commit();eid=row.id
+    prefix='/api/benchmark-runner/claim'
+    assert client.post(prefix,headers={'Authorization':'Bearer '+'o'*40}).json()['job'] is None
+    job=client.post(prefix,headers={'Authorization':'Bearer '+'s'*40}).json()['job']
+    assert job['id']==eid and job['provenance']['execution_started_at']

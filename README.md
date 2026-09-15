@@ -175,6 +175,8 @@ Public checkpoint evaluation tables and comparisons are available at
 `/benchmark-results`, without sign-in. They update from completed evaluations of
 public runs and retain exact metric names, checkpoint evidence and a separate smoke
 view. See [published benchmark results](docs/published-benchmark-results.md).
+For the full pinned suite and an existing-GPU batch, see the
+[simp leaderboard campaign](docs/simp-leaderboard-campaign.md).
 
 Set `FABRYKA_API_URL=https://track.fabryka.ai` and `FABRYKA_API_KEY` in the SDK
 process environment. HTTP API clients send `Authorization: Bearer <key>`.
