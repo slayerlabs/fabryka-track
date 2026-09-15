@@ -1,13 +1,14 @@
-"""Bounded, owner-authorized checkpoint sampling in an isolated process."""
+"""Bounded checkpoint sampling for owners and signed-in public-run viewers."""
 import json
 import subprocess
 import sys
 import threading
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from .accounts import owned_run, require_user
+from .accounts import require_user
 from .database import session_scope
 from .hf_publish import checkpoint_path
+from .models import Run
 
 router = APIRouter(prefix='/api/runs')
 _slot = threading.Lock()
@@ -21,7 +22,12 @@ class GenerationInput(BaseModel):
 
 @router.post('/{run_id}/generate')
 def generate(run_id: str, body: GenerationInput, user=Depends(require_user), session=Depends(session_scope)):
-    path = checkpoint_path(session, owned_run(session, run_id, user))
+    run = session.get(Run, run_id)
+    if not run or not (run.owner_id == user.id or (run.is_public and run.state == 'finished')):
+        raise HTTPException(404, 'Run not found')
+    if run.state != 'finished' or run.metadata_.get('engine') != 'tiny-transformer':
+        raise HTTPException(409, 'Generation requires a finished studio run with a saved checkpoint.')
+    path = checkpoint_path(session, run)
     if not _slot.acquire(blocking=False):
         raise HTTPException(429, 'Another sample is being generated. Try again shortly.')
     try:
