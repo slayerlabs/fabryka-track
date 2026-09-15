@@ -5,6 +5,8 @@
   const finite = value => typeof value === 'number' && Number.isFinite(value);
   const format = measurement => finite(measurement.value)
     ? (measurement.unit === 'percent' ? (measurement.value * 100).toFixed(2) + '%' : measurement.unit === 'elo' ? Math.round(measurement.value)+' Elo' : measurement.unit === 'index' ? measurement.value.toFixed(2) : measurement.value.toFixed(3)) : '—';
+  const plMargin = measurement => finite(measurement && measurement.value) ? (measurement.value - 0.5) * 2 : null;
+  const plMarginText = measurement => { const v = plMargin(measurement); return v === null ? '—' : (v >= 0 ? '+' : '') + v.toFixed(3); };
   const canonical = value => JSON.stringify(value && typeof value === 'object' && !Array.isArray(value)
     ? Object.fromEntries(Object.keys(value).sort().map(key => [key, JSON.parse(canonical(value[key]))])) : value);
   function cohortKey(report, measurement) {
@@ -33,7 +35,7 @@
       (a.measurement.value - b.measurement.value) || a.report.run_name.localeCompare(b.report.run_name));
     return [...groups.entries()].sort((a,b) => b[1].length - a[1].length);
   }
-  if (typeof module !== 'undefined' && module.exports) module.exports = {format, cohortKey, comparisonGroups, esc};
+  if (typeof module !== 'undefined' && module.exports) module.exports = {format, cohortKey, comparisonGroups, esc, plMargin};
   if (typeof document === 'undefined') return;
   const $ = selector => document.querySelector(selector);
   let reports = [], page = 0, revision = 0;
@@ -94,6 +96,10 @@
     $('#full-leaderboard').hidden=!ranked.length;
     const columns=[['INT Index','int_index','index'],['ARC Easy','arc_easy','acc_norm'],['ARC Challenge','arc_challenge','acc_norm'],['PIQA','piqa','acc_norm'],['HellaSwag','hellaswag','acc_norm'],['ArithMark 3','arithmark3','acc_norm'],['ArithMark 2','arithmark2','accuracy'],['BananaMind 1.1','bananamind_base_1_1','elo']];
     $('#leaderboard-table').innerHTML=ranked.length ? `<table><thead><tr><th>Rank</th><th>Model</th>${columns.map(c=>`<th>${esc(c[0])}</th>`).join('')}</tr></thead><tbody>${ranked.map(({report:r},i)=>`<tr><td>${i+1}</td><td><a href="${esc(r.run_url)}">${esc(r.run_name)}</a><br><small>${esc(r.model_size)} · ${esc(r.owner)}</small></td>${columns.map(([,task,metric])=>`<td>${format(r.measurements.find(m=>m.task===task && m.metric===metric)||{})}</td>`).join('')}</tr>`).join('')}</tbody></table>` : '';
+    const rankedPL = $('#mode-filter').value==='full' ? comparisonGroups(matching,'multiblimp_polish','accuracy')[0]?.[1] || [] : [];
+    $('#pl-leaderboard').hidden=!rankedPL.length;
+    const plCols=[['pl_induction · diag','pl_induction','accuracy'],['pl_lm BPB ⚠ · diag','pl_lm','bpb'],['pl_multiblimp · diag','pl_multiblimp','accuracy']];
+    $('#pl-leaderboard-table').innerHTML=rankedPL.length ? `<table><thead><tr><th>Rank</th><th>Model</th><th>MultiBLiMP-PL margin</th>${plCols.map(c=>`<th>${esc(c[0])}</th>`).join('')}</tr></thead><tbody>${rankedPL.map(({report:r},i)=>`<tr><td>${i+1}</td><td><a href="${esc(r.run_url)}">${esc(r.run_name)}</a><br><small>${esc(r.model_size)} · ${esc(r.owner)}</small></td><td>${esc(plMarginText(r.measurements.find(m=>m.task==='multiblimp_polish' && m.metric==='accuracy')||{}))}</td>${plCols.map(([,task,metric])=>`<td>${format(r.measurements.find(m=>m.task===task && m.metric===metric)||{})}</td>`).join('')}</tr>`).join('')}</tbody></table>` : '';
     $('#stats').innerHTML = [[matching.length,$('#mode-filter').value === 'full' ? 'full evaluations' : 'smoke evaluations'],[checkpoints.size,'saved checkpoints'],[tasks.size,'benchmark tasks with results']].map(([value,label]) => `<div class="stat"><strong>${value}</strong><small>${label}</small></div>`).join('');
     $('#smoke-notice').hidden = $('#mode-filter').value !== 'smoke';
     const previous = $('#benchmark-filter').value, names = new Map(matching.flatMap(r => r.measurements.map(m => [m.task,m.benchmark])));
