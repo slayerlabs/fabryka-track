@@ -171,6 +171,11 @@ notes, logs and editing remain owner-only. See [checkpoint sampling](docs/run-wo
 for request limits, cached decoding and partial output behavior.
 The SDK cannot overwrite studio metrics or checkpoints.
 
+Public checkpoint evaluation tables and comparisons are available at
+`/benchmark-results`, without sign-in. They update from completed evaluations of
+public runs and retain exact metric names, checkpoint evidence and a separate smoke
+view. See [published benchmark results](docs/published-benchmark-results.md).
+
 Set `FABRYKA_API_URL=https://track.fabryka.ai` and `FABRYKA_API_KEY` in the SDK
 process environment. HTTP API clients send `Authorization: Bearer <key>`.
 API keys can be rotated or revoked in Account, and are shown only when generated.
