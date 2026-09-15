@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { comparisonGroups, plMargin, langBadge, TASK_LANG } = require('../src/fabryka_track/static/published-benchmarks.js');
+const { comparisonGroups, plMargin, plDiverges, langBadge, TASK_LANG } = require('../src/fabryka_track/static/published-benchmarks.js');
 
 function plReport(name, acc) {
   return {
@@ -45,4 +45,13 @@ test('langBadge renders a labelled badge for known tasks and nothing for unknown
   assert.match(langBadge('piqa'), /EN/);
   assert.match(langBadge('int_index'), /NEU/);
   assert.equal(langBadge('mystery_task'), '');
+});
+
+test('plDiverges enforces the cross-check: flags only when rank margin and pl_induction disagree in direction', () => {
+  const acc = v => ({ value: v });
+  assert.equal(plDiverges(acc(0.72), acc(0.40)), true);   // rank above chance, cross-check below -> flag
+  assert.equal(plDiverges(acc(0.45), acc(0.60)), true);   // rank below chance, cross-check above -> flag
+  assert.equal(plDiverges(acc(0.72), acc(0.63)), false);  // both above chance -> no flag
+  assert.equal(plDiverges(acc(0.40), acc(0.45)), false);  // both below chance -> no flag
+  assert.equal(plDiverges(acc(0.72), {}), false);         // missing cross-check -> no flag (not decoration, but no false alarm)
 });
