@@ -5,6 +5,12 @@
   const finite = value => typeof value === 'number' && Number.isFinite(value);
   const format = measurement => finite(measurement.value)
     ? (measurement.unit === 'percent' ? (measurement.value * 100).toFixed(2) + '%' : measurement.unit === 'elo' ? Math.round(measurement.value)+' Elo' : measurement.unit === 'index' ? measurement.value.toFixed(2) : measurement.value.toFixed(3)) : '—';
+  const plMargin = measurement => finite(measurement && measurement.value) ? (measurement.value - 0.5) * 2 : null;
+  const plMarginText = measurement => { const v = plMargin(measurement); return v === null ? '—' : (v >= 0 ? '+' : '') + v.toFixed(3); };
+  const TASK_LANG = {multiblimp_polish:'pl',pl_lm:'pl',pl_multiblimp:'pl',pl_induction:'pl',sciq:'en',arc_easy:'en',arc_challenge:'en',piqa:'en',hellaswag:'en',blimp:'en',lambada_openai:'en',winogrande:'en',boolq:'en',fast_lm:'en',fast_blimp:'en',fast_supplement:'en',fast_arc:'en',fast_ewok:'en',bananamind_base_1_1:'en',arithmark2:'neutral',arithmark3:'neutral',int_index:'neutral'};
+  const LANG_META = {pl:['PL','Polish','#1d4ed8'],en:['EN','English','#6b7280'],neutral:['NEU','Language-neutral (math / index)','#0f766e']};
+  const langBadge = task => { const l = TASK_LANG[task]; if (!l) return ''; const [label,title,bg] = LANG_META[l]; return `<span class="lang-badge" title="${title}" style="background:${bg};color:#fff;font-size:11px;padding:1px 6px;border-radius:10px;margin-left:6px;vertical-align:middle">${label}</span>`; };
+  const announce = message => { const el = typeof document !== 'undefined' && document.querySelector('#control-status'); if (el) el.textContent = message; };
   const canonical = value => JSON.stringify(value && typeof value === 'object' && !Array.isArray(value)
     ? Object.fromEntries(Object.keys(value).sort().map(key => [key, JSON.parse(canonical(value[key]))])) : value);
   function cohortKey(report, measurement) {
@@ -33,7 +39,7 @@
       (a.measurement.value - b.measurement.value) || a.report.run_name.localeCompare(b.report.run_name));
     return [...groups.entries()].sort((a,b) => b[1].length - a[1].length);
   }
-  if (typeof module !== 'undefined' && module.exports) module.exports = {format, cohortKey, comparisonGroups, esc};
+  if (typeof module !== 'undefined' && module.exports) module.exports = {format, cohortKey, comparisonGroups, esc, plMargin, langBadge, TASK_LANG};
   if (typeof document === 'undefined') return;
   const $ = selector => document.querySelector(selector);
   let reports = [], page = 0, revision = 0;
@@ -54,7 +60,7 @@
       <small>Checkpoint step ${number(cp.checkpoint_step)} · evaluated ${date(r.ended_at || r.created_at)}</small>
       </div><span class="report-tag">${r.mode === 'full' ? 'Full evaluation' : 'Smoke test · diagnostic'}</span></div>
       <div class="table-scroll"><table><caption class="muted" style="text-align:left;padding-bottom:10px">Recorded checkpoint results</caption><thead><tr><th>Benchmark</th><th>Result</th><th>Metric</th><th>Samples</th></tr></thead><tbody>
-      ${r.measurements.map(m => `<tr><td>${esc(m.benchmark)}</td><td>${format(m)}</td><td class="metric-label">${esc(m.metric_label)}</td><td>${number(m.samples)}${m.sample_unit !== 'examples' ? ' '+esc(m.sample_unit) : ''}</td></tr>`).join('') || '<tr><td colspan="4">No supported numeric metrics were recorded.</td></tr>'}
+      ${r.measurements.map(m => `<tr><td>${esc(m.benchmark)}${langBadge(m.task)}</td><td>${format(m)}</td><td class="metric-label">${esc(m.metric_label)}</td><td>${number(m.samples)}${m.sample_unit !== 'examples' ? ' '+esc(m.sample_unit) : ''}</td></tr>`).join('') || '<tr><td colspan="4">No supported numeric metrics were recorded.</td></tr>'}
       </tbody></table></div><details class="evidence"><summary>Checkpoint & evaluation evidence</summary>
       <dl><dt>Checkpoint SHA-256</dt><dd>${esc(cp.checkpoint_sha256 || 'Not recorded')}</dd><dt>Training tokens</dt><dd>${number(cp.training_tokens)} ${esc(cp.token_unit || '')}</dd><dt>Context length</dt><dd>${number(cp.context_length)} ${esc(cp.token_unit || 'tokens')}</dd><dt>Harness</dt><dd>${esc(p.harness_version || 'Not recorded')}</dd><dt>Few-shot / seed</dt><dd>${number(p.fewshot)} / ${number(p.seed)}</dd><dt>Scoring</dt><dd>${esc(p.scoring || 'Not recorded')}</dd></dl>
       <pre>${esc(JSON.stringify(evidence,null,2))}</pre></details>
@@ -94,6 +100,10 @@
     $('#full-leaderboard').hidden=!ranked.length;
     const columns=[['INT Index','int_index','index'],['ARC Easy','arc_easy','acc_norm'],['ARC Challenge','arc_challenge','acc_norm'],['PIQA','piqa','acc_norm'],['HellaSwag','hellaswag','acc_norm'],['ArithMark 3','arithmark3','acc_norm'],['ArithMark 2','arithmark2','accuracy'],['BananaMind 1.1','bananamind_base_1_1','elo']];
     $('#leaderboard-table').innerHTML=ranked.length ? `<table><thead><tr><th>Rank</th><th>Model</th>${columns.map(c=>`<th>${esc(c[0])}</th>`).join('')}</tr></thead><tbody>${ranked.map(({report:r},i)=>`<tr><td>${i+1}</td><td><a href="${esc(r.run_url)}">${esc(r.run_name)}</a><br><small>${esc(r.model_size)} · ${esc(r.owner)}</small></td>${columns.map(([,task,metric])=>`<td>${format(r.measurements.find(m=>m.task===task && m.metric===metric)||{})}</td>`).join('')}</tr>`).join('')}</tbody></table>` : '';
+    const rankedPL = $('#mode-filter').value==='full' ? comparisonGroups(matching,'multiblimp_polish','accuracy')[0]?.[1] || [] : [];
+    $('#pl-leaderboard').hidden=!rankedPL.length;
+    const plCols=[['pl_induction · diag','pl_induction','accuracy'],['pl_lm BPB ⚠ · diag','pl_lm','bpb'],['pl_multiblimp · diag','pl_multiblimp','accuracy']];
+    $('#pl-leaderboard-table').innerHTML=rankedPL.length ? `<table><thead><tr><th>Rank</th><th>Model</th><th>MultiBLiMP-PL margin</th>${plCols.map(c=>`<th>${esc(c[0])}</th>`).join('')}</tr></thead><tbody>${rankedPL.map(({report:r},i)=>`<tr><td>${i+1}</td><td><a href="${esc(r.run_url)}">${esc(r.run_name)}</a><br><small>${esc(r.model_size)} · ${esc(r.owner)}</small></td><td>${esc(plMarginText(r.measurements.find(m=>m.task==='multiblimp_polish' && m.metric==='accuracy')||{}))}</td>${plCols.map(([,task,metric])=>`<td>${format(r.measurements.find(m=>m.task===task && m.metric===metric)||{})}</td>`).join('')}</tr>`).join('')}</tbody></table>` : '';
     $('#stats').innerHTML = [[matching.length,$('#mode-filter').value === 'full' ? 'full evaluations' : 'smoke evaluations'],[checkpoints.size,'saved checkpoints'],[tasks.size,'benchmark tasks with results']].map(([value,label]) => `<div class="stat"><strong>${value}</strong><small>${label}</small></div>`).join('');
     $('#smoke-notice').hidden = $('#mode-filter').value !== 'smoke';
     const previous = $('#benchmark-filter').value, names = new Map(matching.flatMap(r => r.measurements.map(m => [m.task,m.benchmark])));
@@ -108,6 +118,7 @@
     $('#next').disabled = (page+1)*perPage >= matching.length;
     $('#page-number').textContent = matching.length ? 'Page '+(page+1)+' of '+Math.ceil(matching.length/perPage) : '0 reports';
     chooseMetric();renderChart();
+    announce(`Showing ${matching.length} report${matching.length===1?'':'s'} · scope ${$('#mode-filter').value} · Polish board: ${rankedPL.length} model${rankedPL.length===1?'':'s'}`);
   }
   async function load() {
     const version = ++revision, mode = $('#mode-filter').value;
@@ -134,8 +145,8 @@
   }
   $('#model-search').oninput = $('#size-filter').onchange = () => {page=0;render();};
   $('#mode-filter').onchange = load;
-  $('#benchmark-filter').onchange = () => {chooseMetric();renderChart();};
-  $('#metric-filter').onchange = $('#cohort-filter').onchange = renderChart;
+  $('#benchmark-filter').onchange = () => {chooseMetric();renderChart();announce('Comparison benchmark: '+$('#benchmark-filter').value);};
+  $('#metric-filter').onchange = $('#cohort-filter').onchange = () => {renderChart();announce('Comparison updated');};
   $('#previous').onclick = () => {page--;render();$('#results').scrollIntoView();};
   $('#next').onclick = () => {page++;render();$('#results').scrollIntoView();};
   async function campaignStatus() {
