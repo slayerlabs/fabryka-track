@@ -63,6 +63,8 @@ from .generation import router as generation_router
 app.include_router(generation_router)
 from .benchmark_remote import router as benchmark_remote_router
 app.include_router(benchmark_remote_router)
+from .published_benchmarks import router as published_benchmarks_router
+app.include_router(published_benchmarks_router)
 
 
 @app.middleware("http")
@@ -287,7 +289,7 @@ def health(session: Session = Depends(db)):
 
 @app.get("/assets/{name}")
 def static_asset(name: str):
-    if name not in {"plotly-basic-3.1.0.min.js", "run-charts.js", "hf-datasets.js", "goals.js", "ascii.css", "research.js"}:
+    if name not in {"plotly-basic-3.1.0.min.js", "run-charts.js", "hf-datasets.js", "goals.js", "ascii.css", "research.js", "published-benchmarks.js"}:
         raise HTTPException(404, "Asset not found")
     return FileResponse(Path(__file__).parent / "static" / name, media_type="text/css" if name.endswith(".css") else "text/javascript")
 
@@ -326,6 +328,12 @@ def goal_rfc_page():
 def goal_page():
     return HTMLResponse((Path(__file__).parent / "static" / "goals.html").read_text(),
                         headers={"Cache-Control": "no-cache"})
+
+
+@app.get('/benchmark-results', response_class=HTMLResponse)
+def benchmark_results_page():
+    return HTMLResponse((Path(__file__).parent / 'static' / 'published-benchmarks.html').read_text(),
+                        headers={'Cache-Control': 'no-cache'})
 
 
 @app.get("/{path:path}", response_class=HTMLResponse)

@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Published benchmark results for public Fabryka Track model checkpoints, with explicit metrics and evaluation evidence.">
+  <title>Published benchmark results · Fabryka Track</title>
+  <link rel="stylesheet" href="/assets/ascii.css">
+  <style>
+    *{box-sizing:border-box}body{margin:0}a{color:inherit}header,nav{display:flex}main,footer{max-width:1220px;margin:auto;padding:32px 30px}h1{max-width:800px;margin:12px 0 18px;font-size:clamp(28px,4vw,46px)}h2{margin-top:0}p{max-width:900px}.muted,small{color:var(--muted)}.intro{padding:14px 0 30px}.intro p{font-size:15px}.actions{display:flex;gap:12px;flex-wrap:wrap;margin:20px 0}.primary,.secondary{display:inline-block;padding:10px 16px;text-decoration:none;cursor:pointer;font:inherit}button:disabled{opacity:.45;cursor:default}.stats{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px dashed var(--line);border-bottom:1px dashed var(--line);margin:0 0 28px}.stat{padding:20px 0}.stat strong{display:block;font-size:28px;font-weight:600}.filters{display:grid;grid-template-columns:2fr 1fr 1fr;gap:18px;padding:22px 0}label span{display:block;font-size:12px;font-weight:700;margin-bottom:8px}input,select{width:100%;padding:12px;font:inherit;min-width:0}.chart-controls{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin:18px 0}.chart-row{display:grid;grid-template-columns:minmax(140px,1.5fr) 2fr 78px;gap:15px;align-items:center;padding:10px 0}.chart-name{min-width:0;overflow-wrap:anywhere;line-height:1.45}.chart-name small{display:block;font-size:10px;margin-top:3px}.bar-track{background:#e8eee5;height:16px}.bar-fill{height:100%;background:var(--accent)}.chart-value{text-align:right;font-weight:700;font-variant-numeric:tabular-nums}.chart-note{border-top:1px dashed var(--line);padding-top:14px;font-size:12px}.section-title{display:flex;align-items:baseline;justify-content:space-between;gap:16px;margin:38px 0 18px}.report{margin-bottom:20px;scroll-margin-top:20px}.report-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:18px}.report h3{font-size:20px;overflow-wrap:anywhere;margin:6px 0 10px}.report .eyebrow{font-size:10px}.report-tag{border:1px solid var(--line);padding:4px 8px;white-space:nowrap;font-size:11px}.table-scroll{overflow-x:auto;margin:22px 0 12px}table{width:100%;border-collapse:collapse;text-align:left}th,td{padding:13px 12px 13px 0}td:nth-child(2){font-weight:700;white-space:nowrap;font-variant-numeric:tabular-nums}td:last-child{text-align:right}th:last-child{text-align:right}.metric-label{font-size:11px}.evidence{font-size:12px;margin-top:16px}.evidence summary{cursor:pointer;padding:6px 0}.evidence dl{display:grid;grid-template-columns:170px minmax(0,1fr);gap:10px 18px}.evidence dt{color:var(--muted)}.evidence dd{margin:0;overflow-wrap:anywhere}.evidence pre{overflow-wrap:anywhere;white-space:pre-wrap;font-size:11px;background:#eef2e9;padding:14px}.report-links{display:flex;flex-wrap:wrap;gap:16px;margin:18px 0 0;font-size:12px}.smoke-notice{background:#fff4df;border:1px dashed #b69b67;padding:16px;margin:0 0 20px}.empty{padding:22px}.methodology{margin:32px 0;font-size:12px}.methodology li{margin:10px 0}.pager{display:flex;gap:16px;align-items:center;justify-content:center;margin:24px 0}.load-error{border:1px dashed #9a3b2c;padding:18px}.chart-protocol{font-size:11px;overflow-wrap:anywhere}#cohort-filter{margin-top:14px}footer{font-size:11px}
+    @media(max-width:650px){main,footer{padding:25px 18px}.intro{padding-top:0}.intro p{font-size:13px}.filters,.chart-controls{grid-template-columns:1fr;gap:14px}.stat strong{font-size:23px}.stat small{font-size:10px}.chart-row{grid-template-columns:minmax(105px,1.5fr) 1fr 64px;gap:8px;font-size:11px}.report-heading{flex-direction:column;gap:6px}.report h3{font-size:17px}.evidence dl{grid-template-columns:1fr;gap:5px}.evidence dd{margin-bottom:10px}th,td{padding-right:16px}.section-title{flex-wrap:wrap}table{min-width:480px}.panel{padding:18px}}
+  </style>
+  <script defer src="/assets/published-benchmarks.js"></script>
+</head>
+<body>
+  <header>
+    <a class="brand" href="/">+-----------------+
+| FABRYKA / TRACK |
++-----------------+</a>
+    <nav aria-label="Main">
+      <a href="/new">Training studio</a><a href="/leaderboard">Leaderboard</a>
+      <a href="/benchmark-results" aria-current="page">Published results</a>
+      <a href="/benchmarks">Evaluation studio</a><a href="/login">Sign in</a>
+    </nav>
+  </header>
+  <main>
+    <section class="intro">
+      <div class="eyebrow">Public model evaluations</div>
+      <h1>Published benchmark results</h1>
+      <p class="muted">Recorded evaluations of saved checkpoints from public Track runs. Inspect the scores, the metric used and the evidence behind each result.</p>
+      <div class="actions"><a class="primary" href="#results">Explore results ↓</a><a class="secondary" href="/benchmarks">Evaluate your model →</a></div>
+    </section>
+    <div id="load-status" role="status" aria-live="polite">Loading published results…</div>
+    <div id="loaded" hidden>
+      <section class="stats" aria-label="Published evaluation coverage" id="stats"></section>
+      <section aria-label="Filter published results" class="filters">
+        <label><span>Model or author</span><input id="model-search" type="search" placeholder="Search public models…"></label>
+        <label><span>Model size</span><select id="size-filter"><option value="">All sizes</option></select></label>
+        <label><span>Evaluation scope</span><select id="mode-filter"><option value="full">Full evaluations</option><option value="smoke">Smoke tests · diagnostics</option></select></label>
+      </section>
+      <p id="smoke-notice" class="smoke-notice" hidden>Smoke tests use small samples to check that evaluation runs. They are not a model-quality ranking.</p>
+      <section class="panel" id="comparison" aria-labelledby="comparison-title">
+        <div class="eyebrow">Compare a recorded metric</div><h2 id="comparison-title">Checkpoint comparison</h2>
+        <p class="muted">Compare one benchmark and one metric at a time. Results with different recorded evaluation setups are kept in separate groups.</p>
+        <div class="chart-controls">
+          <label><span>Benchmark</span><select id="benchmark-filter"></select></label>
+          <label><span>Metric</span><select id="metric-filter"><option value="acc_norm">Length-normalized accuracy · acc_norm</option><option value="accuracy">Accuracy · acc</option><option value="bpb">Bits per UTF-8 byte · lower is better</option></select></label>
+        </div>
+        <label id="cohort-label" hidden><span>Recorded evaluation setup</span><select id="cohort-filter"></select></label>
+        <div id="comparison-chart" aria-live="polite"></div>
+      </section>
+      <div class="section-title" id="results"><h2>Checkpoint reports</h2><small id="result-count"></small></div>
+      <section id="reports" aria-label="Checkpoint benchmark tables"></section>
+      <div class="pager"><button class="secondary" id="previous">← Previous</button><span id="page-number"></span><button class="secondary" id="next">Next →</button></div>
+    </div>
+    <section class="panel methodology" aria-labelledby="method-title">
+      <h2 id="method-title">Read the metric, then the score</h2>
+      <ul>
+        <li><strong>Accuracy and acc_norm are different.</strong> Accuracy chooses the continuation with the highest total score. Length-normalized accuracy adjusts for continuation length. A percentage from one metric cannot stand in for the other.</li>
+        <li><strong>Full applies to the selected task.</strong> A full PIQA result does not mean every benchmark was evaluated. Missing scores are not estimated. Smoke tests are listed separately.</li>
+        <li><strong>Reports describe an exact checkpoint.</strong> Use the saved step, SHA-256, dataset revisions, sample count and harness version when comparing results. These are recorded Track evaluations, not independent certifications.</li>
+        <li><strong>There is no combined rank across different benchmarks.</strong> Accuracy, bits per byte, aggregate indices and Elo have different definitions. This page does not invent an INT Index or Elo from other scores.</li>
+      </ul>
+      <p class="muted">Charts are drawn from the numeric records shown here. New completed evaluations of public runs appear automatically. Making a run private removes its reports from this page.</p>
+    </section>
+  </main>
+  <footer>Fabryka Track · Published measurements with checkpoint evidence.</footer>
+</body>
+</html>
