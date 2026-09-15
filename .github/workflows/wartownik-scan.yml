@@ -1,0 +1,22 @@
+name: wartownik-scan
+
+# Mechanical fail-closed gate (Wartownik N-04, wired by Monter N-03): scans the
+# delta vs origin/main for secrets and held-out/canary content. Branch/PR-scope —
+# it gates OUR branches and PRs only. Enabling it repo-wide on `main` (gating the
+# whole team) is a separate decision for the repo owner, not switched on here.
+on:
+  push:
+    branches-ignore: [main]
+  pull_request:
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Fetch base (origin/main)
+        run: git fetch --no-tags origin main
+      - name: Secrets + held-out delta scan (fail-closed)
+        run: sh tools/wartownik-scan.sh . origin/main HEAD
