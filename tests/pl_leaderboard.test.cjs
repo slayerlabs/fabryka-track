@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { comparisonGroups, plMargin } = require('../src/fabryka_track/static/published-benchmarks.js');
+const { comparisonGroups, plMargin, langBadge, TASK_LANG } = require('../src/fabryka_track/static/published-benchmarks.js');
 
 function plReport(name, acc) {
   return {
@@ -28,4 +28,21 @@ test('margin over the 50% baseline is (acc-0.5)*2 and is NOT clamped (below-chan
   near(plMargin({ value: 0.50 }), 0);
   near(plMargin({ value: 0.45 }), -0.1); // no clamp — honest below-chance signal
   assert.equal(plMargin({}), null);
+});
+
+test('language map tags the catalog as 4 PL / 15 EN / 3 neutral (Wartownik FINAL map)', () => {
+  const vals = Object.values(TASK_LANG);
+  assert.equal(vals.filter(v => v === 'pl').length, 4);
+  assert.equal(vals.filter(v => v === 'en').length, 15);
+  assert.equal(vals.filter(v => v === 'neutral').length, 3);
+  assert.equal(TASK_LANG.multiblimp_polish, 'pl');
+  assert.equal(TASK_LANG.bananamind_base_1_1, 'en');   // English continuation, not neutral
+  assert.equal(TASK_LANG.arithmark3, 'neutral');       // math is language-neutral
+});
+
+test('langBadge renders a labelled badge for known tasks and nothing for unknown', () => {
+  assert.match(langBadge('pl_lm'), /PL/);
+  assert.match(langBadge('piqa'), /EN/);
+  assert.match(langBadge('int_index'), /NEU/);
+  assert.equal(langBadge('mystery_task'), '');
 });
