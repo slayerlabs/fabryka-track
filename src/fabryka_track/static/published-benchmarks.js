@@ -7,6 +7,7 @@
     ? (measurement.unit === 'percent' ? (measurement.value * 100).toFixed(2) + '%' : measurement.unit === 'elo' ? Math.round(measurement.value)+' Elo' : measurement.unit === 'index' ? measurement.value.toFixed(2) : measurement.value.toFixed(3)) : '—';
   const plMargin = measurement => finite(measurement && measurement.value) ? (measurement.value - 0.5) * 2 : null;
   const plMarginText = measurement => { const v = plMargin(measurement); return v === null ? '—' : (v >= 0 ? '+' : '') + v.toFixed(3); };
+  const plDiverges = (marginMeas, crosscheckMeas) => { const m = plMargin(marginMeas), c = plMargin(crosscheckMeas); return m !== null && c !== null && ((m > 0 && c < 0) || (m < 0 && c > 0)); };
   const TASK_LANG = {multiblimp_polish:'pl',pl_lm:'pl',pl_multiblimp:'pl',pl_induction:'pl',sciq:'en',arc_easy:'en',arc_challenge:'en',piqa:'en',hellaswag:'en',blimp:'en',lambada_openai:'en',winogrande:'en',boolq:'en',fast_lm:'en',fast_blimp:'en',fast_supplement:'en',fast_arc:'en',fast_ewok:'en',bananamind_base_1_1:'en',arithmark2:'neutral',arithmark3:'neutral',int_index:'neutral'};
   const LANG_META = {pl:['PL','Polish','#1d4ed8'],en:['EN','English','#6b7280'],neutral:['NEU','Language-neutral (math / index)','#0f766e']};
   const langBadge = task => { const l = TASK_LANG[task]; if (!l) return ''; const [label,title,bg] = LANG_META[l]; return `<span class="lang-badge" title="${title}" style="background:${bg};color:#fff;font-size:11px;padding:1px 6px;border-radius:10px;margin-left:6px;vertical-align:middle">${label}</span>`; };
@@ -39,7 +40,7 @@
       (a.measurement.value - b.measurement.value) || a.report.run_name.localeCompare(b.report.run_name));
     return [...groups.entries()].sort((a,b) => b[1].length - a[1].length);
   }
-  if (typeof module !== 'undefined' && module.exports) module.exports = {format, cohortKey, comparisonGroups, esc, plMargin, langBadge, TASK_LANG};
+  if (typeof module !== 'undefined' && module.exports) module.exports = {format, cohortKey, comparisonGroups, esc, plMargin, plDiverges, langBadge, TASK_LANG};
   if (typeof document === 'undefined') return;
   const $ = selector => document.querySelector(selector);
   let reports = [], page = 0, revision = 0;
@@ -103,7 +104,7 @@
     const rankedPL = $('#mode-filter').value==='full' ? comparisonGroups(matching,'multiblimp_polish','accuracy')[0]?.[1] || [] : [];
     $('#pl-leaderboard').hidden=!rankedPL.length;
     const plCols=[['pl_induction · cross-check','pl_induction','accuracy'],['pl_lm BPB ⚠ · diag','pl_lm','bpb'],['pl_multiblimp · diag','pl_multiblimp','accuracy']];
-    $('#pl-leaderboard-table').innerHTML=rankedPL.length ? `<table><thead><tr><th>Rank</th><th>Model</th><th>MultiBLiMP-PL margin</th>${plCols.map(c=>`<th>${esc(c[0])}</th>`).join('')}</tr></thead><tbody>${rankedPL.map(({report:r},i)=>`<tr><td>${i+1}</td><td><a href="${esc(r.run_url)}">${esc(r.run_name)}</a><br><small>${esc(r.model_size)} · ${esc(r.owner)}</small></td><td>${esc(plMarginText(r.measurements.find(m=>m.task==='multiblimp_polish' && m.metric==='accuracy')||{}))}</td>${plCols.map(([,task,metric])=>`<td>${format(r.measurements.find(m=>m.task===task && m.metric===metric)||{})}</td>`).join('')}</tr>`).join('')}</tbody></table>` : '';
+    $('#pl-leaderboard-table').innerHTML=rankedPL.length ? `<table><thead><tr><th>Rank</th><th>Model</th><th>MultiBLiMP-PL margin</th>${plCols.map(c=>`<th>${esc(c[0])}</th>`).join('')}</tr></thead><tbody>${rankedPL.map(({report:r},i)=>{const mm=r.measurements.find(m=>m.task==='multiblimp_polish'&&m.metric==='accuracy')||{};const im=r.measurements.find(m=>m.task==='pl_induction'&&m.metric==='accuracy')||{};const flag=plDiverges(mm,im);return `<tr><td>${i+1}</td><td><a href="${esc(r.run_url)}">${esc(r.run_name)}</a><br><small>${esc(r.model_size)} · ${esc(r.owner)}</small></td><td${flag?' title="rank margin and pl_induction cross-check disagree in direction — ranking validity questionable"':''}>${flag?'⚑ ':''}${esc(plMarginText(mm))}</td>${plCols.map(([,task,metric])=>`<td>${format(r.measurements.find(m=>m.task===task && m.metric===metric)||{})}</td>`).join('')}</tr>`;}).join('')}</tbody></table>` : '';
     $('#stats').innerHTML = [[matching.length,$('#mode-filter').value === 'full' ? 'full evaluations' : 'smoke evaluations'],[checkpoints.size,'saved checkpoints'],[tasks.size,'benchmark tasks with results']].map(([value,label]) => `<div class="stat"><strong>${value}</strong><small>${label}</small></div>`).join('');
     $('#smoke-notice').hidden = $('#mode-filter').value !== 'smoke';
     const previous = $('#benchmark-filter').value, names = new Map(matching.flatMap(r => r.measurements.map(m => [m.task,m.benchmark])));
