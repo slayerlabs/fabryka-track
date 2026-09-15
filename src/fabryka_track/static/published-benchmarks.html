@@ -48,9 +48,11 @@
       </section>
       <section class="panel" id="pl-leaderboard" hidden aria-labelledby="pl-leaderboard-title">
         <h2 id="pl-leaderboard-title">Polish leaderboard</h2>
-        <p class="muted">Polish models ranked by <strong>MultiBLiMP-PL margin over the 50% chance baseline</strong> ((accuracy&minus;0.5)&times;2; below-chance stays negative, not clamped). English and Polish are different competencies, so Polish-first models are ranked on Polish tasks only &mdash; never on the English board above. The remaining Polish columns are diagnostic and are not part of the rank.</p>
+        <p class="muted">Polish models ranked by <strong>MultiBLiMP-PL margin over the 50% chance baseline</strong> ((accuracy&minus;0.5)&times;2; below-chance stays negative, not clamped). English and Polish are different competencies, so Polish-first models are ranked on Polish tasks only &mdash; never on the English board above. The other Polish columns are a cross-check (pl_induction) and diagnostics (pl_lm, pl_multiblimp) &mdash; not part of the rank.</p>
         <div class="table-scroll" id="pl-leaderboard-table"></div>
         <p class="muted" id="pl-leaderboard-caveat" style="margin-top:10px"><strong>pl_lm BPB is contamination-uncontrolled:</strong> the out-of-sample text is public Polish Wikipedia, which appears in many models' pretraining, so a lower BPB can reflect memorisation rather than ability. It is shown for information only and never used for ranking.</p>
+        <p class="muted" id="pl-leaderboard-primary-caveat" style="margin-top:8px"><strong>Primary metric is contamination-reduced, not per-model controlled:</strong> MultiBLiMP-PL uses natural text, so it sits between the contamination-immune <code>pl_induction</code> (synthetic copy) and the uncontrolled <code>pl_lm</code> (Wiki-BPB). We do not silently assume the primary is contamination-free.</p>
+        <p class="muted" id="pl-leaderboard-crosscheck" style="margin-top:8px"><strong>pl_induction cross-check:</strong> it is contamination-immune. A large divergence between a model's rank margin and its <code>pl_induction</code> signal flags that model's ranking validity (and is the trigger for a future composite) &mdash; convergence corroborates that the rank reflects competence, not memorisation.</p>
       </section>
       <section class="panel" id="comparison" aria-labelledby="comparison-title">
         <div class="eyebrow">Compare a recorded metric</div><h2 id="comparison-title">Checkpoint comparison</h2>
