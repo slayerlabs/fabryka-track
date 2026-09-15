@@ -6,7 +6,7 @@ window.TrackCharts = (() => {
   const icons={settings:'<path d="M4 7h16M4 17h16"/><circle cx="8" cy="7" r="2"/><circle cx="16" cy="17" r="2"/>',expand:'<path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/>',reset:'<path d="M3 10a9 9 0 1 1 2 8M3 4v6h6"/>',download:'<path d="M12 3v12m-4-4 4 4 4-4M4 16v5h16v-5"/>',close:'<path d="m6 6 12 12M6 18 18 6"/>'};
   const icon=name=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name]}</svg>`;
   const placeholder=(series,key)=>`<div class="interactive-chart" data-chart-key="${escape(key||series.map(s=>s.id||s.name).join('|'))}" data-series="${escape(JSON.stringify(series))}"></div>`;
-  const label=name=>({'throughput/tokens_sec':'Byte tokens / sec','training/tokens_seen':'Training tokens','train/loss':'Training loss','val/loss':'Validation loss','val/perplexity':'Perplexity'})[name]||name;
+  const label=name=>({'throughput/tokens_sec':'Tokens / sec','training/tokens_seen':'Training tokens','train/loss':'Training loss','val/loss':'Validation loss','val/perplexity':'Perplexity','optimizer/learning_rate':'Learning rate','optimizer/gradient_norm':'Gradient norm','checkpoint/tokens':'Checkpoint tokens','checkpoint/step':'Checkpoint step'})[name]||name;
   function legend(el){
     const {series,settings}=el.chart;
     el.querySelector('.plot-legend').innerHTML=series.map((s,i)=>`<button class="plot-series ${settings.hidden.has(s.id||s.name)?'is-muted':''}" data-series-toggle="${i}" aria-pressed="${!settings.hidden.has(s.id||s.name)}" title="Toggle ${escape(s.name)}"><span class="plot-swatch" style="background:${s.color||palette[i%palette.length]}"></span><span>${escape(label(s.name))}</span><b>${number(s.points.at(-1)?.value)}</b></button>`).join('');
@@ -22,7 +22,7 @@ window.TrackCharts = (() => {
     for(const [i,s] of series.entries()){
       const points=s.points.filter(p=>Number.isFinite(p.value)&&(settings.scale!=='log'||p.value>0));
       const origin=s.points.find(p=>p.timestamp)?.timestamp;
-      const x=points.map(p=>settings.axis==='elapsed'&&origin?(new Date(p.timestamp)-new Date(origin))/1000:p.step);
+      const x=points.map(p=>settings.axis==='tokens'?p.tokens:settings.axis==='elapsed'&&origin?(new Date(p.timestamp)-new Date(origin))/1000:p.step);
       const raw=points.map(p=>p.value);let avg;
       const y=raw.map(v=>avg=avg===undefined?v:settings.smooth*avg+(1-settings.smooth)*v);
       const color=s.color||palette[i%palette.length],key=s.id||s.name;
@@ -36,7 +36,7 @@ window.TrackCharts = (() => {
     const layout={height:el.classList.contains('plot-expanded')?Math.max(300,innerHeight*.9-170):285,margin:{l:52,r:20,t:20,b:42},autosize:true,
       paper_bgcolor:bg,plot_bgcolor:bg,font:{family:font,size:11,color:'#9298a1'},hovermode:'x',dragmode:settings.drag,
       uirevision:settings.axis+':'+settings.scale+':'+settings.reset,showlegend:false,
-      xaxis:{title:{text:settings.axis==='elapsed'?'Elapsed time · seconds':'Step',font:{size:10,color:'#9298a1'},standoff:12},
+      xaxis:{title:{text:settings.axis==='tokens'?'Training tokens':settings.axis==='elapsed'?'Elapsed time · seconds':'Step',font:{size:10,color:'#9298a1'},standoff:12},
         gridcolor:grid,zeroline:false,showline:true,linecolor:grid,nticks:6,tickfont:{size:10},exponentformat:'SI',
         showspikes:true,spikemode:'across',spikesnap:'cursor',spikethickness:1,spikedash:'dot',spikecolor:'#78828b'},
       yaxis:{type:settings.scale,gridcolor:grid,zeroline:false,nticks:5,tickfont:{size:10},exponentformat:'SI',automargin:true},
@@ -65,6 +65,12 @@ window.TrackCharts = (() => {
     el.innerHTML=`<div class="plot-toolbar"><span class="plot-count"></span><div class="plot-actions"><button data-plot-reset title="Reset zoom" aria-label="Reset zoom">${icon('reset')}</button><button data-plot-export title="Download PNG" aria-label="Download chart as PNG">${icon('download')}</button><button data-plot-expand title="Expand chart" aria-label="Expand chart">${icon('expand')}</button><button data-plot-settings title="Chart controls" aria-label="Chart controls" aria-expanded="false">${icon('settings')}</button></div></div><div class="plot-settings" hidden><div class="plot-settings-title">Chart controls <button data-plot-settings-close aria-label="Close chart controls">${icon('close')}</button></div><label>X axis<select data-plot-axis aria-label="X axis"><option value="step">Step</option><option value="elapsed">Elapsed time</option></select></label><label>Y axis<select data-plot-scale aria-label="Y axis scale"><option value="linear">Linear</option><option value="log" ${log?'selected':''}>Logarithmic</option></select></label><label>Interaction<select data-plot-drag aria-label="Chart interaction"><option value="zoom">Box zoom</option><option value="pan">Pan</option></select></label><label class="plot-smoothing">Smoothing <output>0</output><input data-plot-smooth aria-label="Exponential smoothing" type="range" min="0" max="0.99" step="0.01" value="0"></label><small>Exponential moving average. Raw measurements remain visible.</small></div><div class="plot-canvas" role="img" aria-label="Interactive training metrics"></div><div class="plot-tooltip" hidden></div><div class="plot-legend"></div>`;
     el.chart={series,settings:{scale:log?'log':'linear',axis:'step',smooth:0,reset:0,drag:'zoom',hidden:new Set()},canvas:el.querySelector('.plot-canvas')};
     const {settings}=el.chart;
+    const points=series.flatMap(s=>s.points),axisSelect=el.querySelector('[data-plot-axis]');
+    if(points.length&&points.every(p=>Number.isFinite(p.tokens))){
+      axisSelect.insertAdjacentHTML('beforeend','<option value="tokens">Training tokens</option>');
+      settings.axis='tokens';axisSelect.value='tokens';
+    }
+    if(!points.some(p=>p.timestamp))axisSelect.querySelector('[value="elapsed"]').disabled=true;
     const closeSettings=()=>{el.querySelector('.plot-settings').hidden=true;el.querySelector('[data-plot-settings]').setAttribute('aria-expanded','false');};
     el.querySelector('[data-plot-settings]').onclick=()=>{const panel=el.querySelector('.plot-settings');panel.hidden=!panel.hidden;el.querySelector('[data-plot-settings]').setAttribute('aria-expanded',String(!panel.hidden));};
     el.querySelector('[data-plot-settings-close]').onclick=closeSettings;
