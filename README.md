@@ -159,12 +159,17 @@ stored only as hashes. HF authentication attempts are rate-limited.
 Browser mutations require X-Track-Request: 1 and reject foreign Origin headers.
 
 Datasets, private run details, notes, logs, manifests and artifacts are owner-only.
-Included example datasets are available to every signed-in account. Publishing
-is explicit after a studio run finishes and shares leaderboard data and a read-only
+Included example datasets are available to every signed-in account. Studio runs
+are public by default once finished and share leaderboard data and a read-only
 run detail page with metric curves and selected training settings:
 username, run name, metrics, date, update count and mixture percentages. Uploaded
 filenames, content, logs, notes and model downloads stay private. Unpublishing
-removes the public score. The SDK cannot overwrite studio metrics or checkpoints.
+removes the public score and prevents other accounts from generating new samples.
+Signed-in users can try saved checkpoints of public finished Studio runs through
+**Sample generations**, including models trained by other users. Checkpoint downloads,
+notes, logs and editing remain owner-only. See [checkpoint sampling](docs/run-workspace.md)
+for request limits, cached decoding and partial output behavior.
+The SDK cannot overwrite studio metrics or checkpoints.
 
 Set `FABRYKA_API_URL=https://track.fabryka.ai` and `FABRYKA_API_KEY` in the SDK
 process environment. HTTP API clients send `Authorization: Bearer <key>`.
