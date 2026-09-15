@@ -7,6 +7,10 @@ Two protocols, one likelihood contract:
 Both bucket scoring windows by length because learned positions make left padding
 change the score; the only difference is the unit (byte vs subword token) and loader.
 The byte and token protocols are NOT interchangeable — a run is scored under one.
+
+TokenCheckpointLM is hardened to load untrusted external model dirs (register-external-
+model path): safetensors-only weights (no pickle), checkpoint contained within model_dir,
+and bounded architecture dims so a hostile config cannot OOM the runner.
 """
 import torch
 from itertools import islice
@@ -150,24 +154,37 @@ class TokenCheckpointLM(LM):
     windows, same truncation accounting) — only the unit is a subword token, not a byte.
     """
 
+    # Upper bounds so a hostile/foreign config.json cannot OOM the runner (Wartownik).
+    _MAX_DIMS = {"vocab_size": 300_000, "d_model": 8192, "n_layer": 128,
+                 "n_head": 128, "block_size": 32768}
+
     def __init__(self, model_dir, checkpoint=None, device="cpu"):
         super().__init__()
         import os, re, glob, json
         from tokenizers import Tokenizer
         from safetensors.torch import load_file
         from .token_model import TokenGPT
-        cfg = json.load(open(os.path.join(model_dir, "config.json")))
-        self.context_length = cfg["block_size"]
+        model_dir = os.path.realpath(model_dir)
+        with open(os.path.join(model_dir, "config.json")) as fh:
+            cfg = json.load(fh)
+        dims = {k: int(cfg[k]) for k in ("vocab_size", "d_model", "n_layer", "n_head", "block_size")}
+        for name, value in dims.items():
+            if not 1 <= value <= self._MAX_DIMS[name]:
+                raise ValueError(f"config {name}={value} out of bounds (1..{self._MAX_DIMS[name]})")
+        self.context_length = dims["block_size"]
         self.tok = Tokenizer.from_file(os.path.join(model_dir, "tokenizer.json"))
-        self.model = TokenGPT(cfg["vocab_size"], cfg["d_model"], cfg["n_layer"],
-                              cfg["n_head"], cfg["block_size"]).eval()
+        self.model = TokenGPT(dims["vocab_size"], dims["d_model"], dims["n_layer"],
+                              dims["n_head"], dims["block_size"]).eval()
         if checkpoint is None:
             snaps = glob.glob(os.path.join(model_dir, "ckpt_*.safetensors"))
             if not snaps:
                 raise FileNotFoundError(f"no ckpt_*.safetensors in {model_dir}")
             checkpoint = max(snaps, key=lambda p: int(re.search(r"ckpt_(\d+)", os.path.basename(p)).group(1)))
-        elif not os.path.isabs(checkpoint):
-            checkpoint = os.path.join(model_dir, checkpoint)
+        else:
+            checkpoint = os.path.realpath(os.path.join(model_dir, checkpoint))
+        # Containment: the checkpoint must resolve inside model_dir (block ../ traversal).
+        if os.path.commonpath([checkpoint, model_dir]) != model_dir:
+            raise ValueError(f"checkpoint escapes model_dir: {checkpoint}")
         state = load_file(checkpoint)
         missing, unexpected = self.model.load_state_dict(state, strict=False)
         # head.weight is tied to the token embedding, so its absence is expected.
