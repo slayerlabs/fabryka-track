@@ -3,6 +3,7 @@ import hashlib
 import json
 import math
 import sys
+import time
 from datetime import datetime, timezone
 from importlib.metadata import version
 
@@ -18,6 +19,7 @@ from .benchmarks import TASKS
 from .database import SessionLocal
 from .hf_publish import checkpoint_path
 from .models import BenchmarkEvaluation, Run
+from .leaderboard_suite import DATA, evaluate as evaluate_continuations, index_result
 
 
 def persist(eid, **values):
@@ -80,13 +82,20 @@ def run(eid, job=None, reporter=None):
         empty_context_prefix='space byte (32)',scoring='every continuation byte, maximal sliding context',
         validation_loss=payload.get('best_val_loss'),dataset_revisions=provenance.get('dataset_revisions',{}),
         device=device,gpu=torch.cuda.get_device_name() if device.startswith('cuda') else None,
-        scoring_implementation='fused-causal-prefix-v1')
+        scoring_implementation='bounded-fused-prefix-v2')
     save(status='running',provenance=provenance)
     model=ByteCheckpointLM(path,device=device);manager=TaskManager();api=HfApi();results=dict(job.get('results',{}));failures=[]
     for name in tasks:
         if name in results and not results[name].get('error'):continue
         save(current_task=name)
+        task_started=time.monotonic()
         try:
+            if name in DATA or name=='int_index':
+                results[name]=index_result(results) if name=='int_index' else evaluate_continuations(name,model,mode)
+                results[name]['elapsed_seconds']=time.monotonic()-task_started
+                provenance['dataset_revisions'].update(results[name]['dataset_revisions'])
+                save(results=results,provenance=provenance)
+                continue
             if name.startswith('pl_'):
                 from .fast_pl_ladder import evaluate as evaluate_pl
                 results[name]=evaluate_pl(name,model,mode)
@@ -134,6 +143,7 @@ def run(eid, job=None, reporter=None):
             results[name]['dataset_revisions']=revisions
             results[name]['task_versions']=output['versions']
             results[name]['splits']={k:v.get('test_split') or v.get('validation_split') for k,v in output['configs'].items()}
+            results[name]['elapsed_seconds']=time.monotonic()-task_started
         except Exception as exc:
             failures.append(name)
             import traceback; traceback.print_exc(file=sys.stderr)
