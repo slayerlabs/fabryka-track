@@ -805,7 +805,7 @@
     </footer>
     <div id="toast" role="status" aria-live="polite"></div>
     <script src="/assets/plotly-basic-3.1.0.min.js"></script>
-    <script src="/assets/run-charts.js?v=2"></script>
+    <script src="/assets/run-charts.js?v=3"></script>
     <script src="/assets/hf-datasets.js"></script>
     <script>
       const $ = (s) => document.querySelector(s),
@@ -1374,6 +1374,15 @@
         const billed=c.billed_usd!=null?` · billed ${money(c.billed_usd)}`:' · billed: pending';
         return `<small class="muted" title="Estimate: GPU rate × time from allocation to pod release. Excludes evaluations, VPS and storage.">Cost: <b>${est}</b>${rate}${billed}</small>`;
       }
+      function externalTrainingStatus(r) {
+        const t=r.metadata?.tracking||{}, seen=t.tokens_seen||0, target=r.config.planned_training_tokens||0;
+        const active=r.state==='running', age=Date.now()-new Date(t.received_at||0).getTime();
+        const sourceAge=Date.now()-new Date(t.source_updated_at||0).getTime();
+        const fresh=age<60000&&sourceAge<120000&&t.process_alive;
+        const state=active?(fresh?'Training in progress · live':'Progress feed delayed — last known running'):r.state;
+        const rate=r.metrics?.['throughput/tokens_sec']?.at(-1)?.value;
+        return `<section class="notice" aria-label="Live training progress"><div class="row"><strong>${esc(state)}</strong><span>${fmt(target?seen/target*100:0,2)}%</span></div><progress max="100" value="${target?Math.min(100,seen/target*100):0}" aria-label="Training token progress"></progress><p>${fmt(seen/1e6,2)}M / ${fmt(target/1e9,1)}B tokenizer tokens · ${fmt(t.step||0,0)} optimizer updates</p>${active&&fresh&&rate>0?`<p>ETA at current update rate: approximately ${duration(Math.max(0,target-seen)/rate)}. Checkpoint and other overhead can extend this.</p>`:''}<small>${t.received_at?`Last synchronized: ${esc(new Date(t.received_at).toLocaleString())}`:'Waiting for the first synchronization.'}${t.checkpoint?` · Latest local checkpoint: ${fmt(t.checkpoint.tokens/1e6,2)}M tokens (step ${t.checkpoint.step})`:''}</small><p class="muted">No validation measurements have been reported${r.metrics?.['validation/bpb']?.length?' for token loss or perplexity; held-out BPB appears below': ' yet'}. Training loss alone does not establish quality on unseen text.</p></section>`;
+      }
       function operationalStatus(r) {
         const g=r.gpu_status;
         if(!g)return '';
@@ -1457,12 +1466,13 @@
         if (token !== generation) return;
         const readOnly = !!r.read_only;
         const local = r.metadata.engine === "tiny-transformer";
+        const external = r.metadata.engine === "external-training";
         const modelLabel = r.config.model || "Tiny transformer · 134,912 parameters";
-        app.innerHTML = `<a href="${readOnly ? "/leaderboard" : "/runs"}" class="muted" style="display:inline-block;margin-bottom:25px;text-decoration:none">← ${readOnly ? "Leaderboard" : "My runs"}</a><div class="intro row"><div><div class="eyebrow">${local ? "Training results" : "Tracked experiment"}</div><h1>${esc(r.name)}</h1><p class="muted">${local ? esc(modelLabel) + (r.config.compute==='runpod'?" · RunPod GPU · ":" · Local CPU · ") : ""}${new Date(r.started_at).toLocaleString()}</p></div><span class="badge ${esc(r.state)}" id="run-state">${esc(r.state)}</span></div><div class="compare-tabs" id="run-tabs"><button data-run-tab="charts" aria-selected="true">Charts</button><button data-run-tab="namespace" aria-selected="false">Namespace</button>${local && r.state==='finished'?'<button data-run-tab="samples" aria-selected="false">Sample generations</button>':''}</div><section id="run-samples" class="panel" hidden style="padding:22px;margin-top:16px"></section><section id="run-namespace" class="panel" hidden style="padding:22px;margin-top:16px"></section>${metricHelp()}<div id="run-explorer"></div><div id="live"></div><div class="actions"><div id="run-actions"></div><a class="secondary" href="/new">New training run →</a></div><details><summary>Dataset mix & settings</summary><div class="panel"><pre>${esc(JSON.stringify(r.config, null, 2))}</pre></div></details><details id="private-notes"><summary>Run notes</summary><label class="field"><span>What are you testing?</span><textarea id="note">${esc(r.note)}</textarea></label><label class="field"><span>Conclusion</span><textarea id="conclusion">${esc(r.conclusion)}</textarea></label><button class="secondary" id="save-note">Save notes</button></details><details id="private-logs"><summary>Training log</summary><div class="panel"><pre id="logs"></pre></div></details>`;
+        app.innerHTML = `<a href="${readOnly ? "/leaderboard" : "/runs"}" class="muted" style="display:inline-block;margin-bottom:25px;text-decoration:none">← ${readOnly ? "Leaderboard" : "My runs"}</a><div class="intro row"><div><div class="eyebrow">${local ? "Training results" : "Tracked experiment"}</div><h1>${esc(r.name)}</h1><p class="muted">${external ? esc(modelLabel)+" · "+esc(r.config.tokenizer_vocab_size)+"-token vocabulary · " : local ? esc(modelLabel) + (r.config.compute==='runpod'?" · RunPod GPU · ":" · Local CPU · ") : ""}${new Date(r.started_at).toLocaleString()}</p></div><span class="badge ${esc(r.state)}" id="run-state">${esc(r.state)}</span></div><div class="compare-tabs" id="run-tabs"><button data-run-tab="charts" aria-selected="true">Charts</button><button data-run-tab="namespace" aria-selected="false">Namespace</button>${local && r.state==='finished'?'<button data-run-tab="samples" aria-selected="false">Sample generations</button>':''}</div><section id="run-samples" class="panel" hidden style="padding:22px;margin-top:16px"></section><section id="run-namespace" class="panel" hidden style="padding:22px;margin-top:16px"></section>${metricHelp()}<div id="run-explorer"></div><div id="live"></div><div class="actions"><div id="run-actions"></div><a class="secondary" href="/new">New training run →</a></div><details><summary>Dataset mix & settings</summary><div class="panel"><pre>${esc(JSON.stringify(r.config, null, 2))}</pre></div></details><details id="private-notes"><summary>Run notes</summary><label class="field"><span>What are you testing?</span><textarea id="note">${esc(r.note)}</textarea></label><label class="field"><span>Conclusion</span><textarea id="conclusion">${esc(r.conclusion)}</textarea></label><button class="secondary" id="save-note">Save notes</button></details><details id="private-logs"><summary>Training log</summary><div class="panel"><pre id="logs"></pre></div></details>`;
         if (readOnly) {
           document.querySelector('[data-run-tab="namespace"]').remove();
           $("#private-notes").remove(); $("#private-logs").remove();
-          $("#run-actions").insertAdjacentHTML('afterend', '<p class="muted">Public model · signed-in users can generate text continuations. Uploaded files and notes remain private.</p>');
+          $("#run-actions").insertAdjacentHTML('afterend', external ? '<p class="muted">Public training progress · checkpoints are saved on the training host.</p>' : '<p class="muted">Public model · signed-in users can generate text continuations. Uploaded files and notes remain private.</p>');
         } else if (local && r.state === "finished") {
           $("#run-actions").closest('.actions').insertAdjacentHTML('afterend', '<section class="panel" id="hf-export" style="margin:20px 0"></section>');
         }
@@ -1536,11 +1546,11 @@
           const previousCharts = [...$("#live").querySelectorAll(".interactive-chart")];
           const savedExplorer=$("#run-explorer");if(savedExplorer)$("#live").before(savedExplorer);
           $("#live").innerHTML =
-            `${operationalStatus(r)}${local ? `<div class="row"><small>${r.metadata.gpu_cleanup === "pending" ? "Artifacts verified — terminating RunPod…" : r.state === "queued" ? (r.config.compute==='runpod'?"Provisioning RunPod GPU…":"Queued — waiting for the current run") : r.state === "finished" ? (result?.stop_reason === "early_stopping" ? "Stopped early — validation stopped improving" : "Training complete") : r.state === "cancelled" ? "Training cancelled" : r.state === "interrupted" ? "Training interrupted — start a new run to retry" : r.state === "failed" ? "Training failed — see the log below" : r.state === "stopping" ? "Stopping training…" : "Training in progress"}</small><small>${fmt(percent, 0)}% · step ${r.metrics.progress?.at(-1)?.step || 0} / ${r.config.steps}</small></div><progress max="100" value="${percent}" aria-label="Training progress"></progress>` : ""}<div class="metrics">${[
+            `${external ? externalTrainingStatus(r) : operationalStatus(r)}${local ? `<div class="row"><small>${r.metadata.gpu_cleanup === "pending" ? "Artifacts verified — terminating RunPod…" : r.state === "queued" ? (r.config.compute==='runpod'?"Provisioning RunPod GPU…":"Queued — waiting for the current run") : r.state === "finished" ? (result?.stop_reason === "early_stopping" ? "Stopped early — validation stopped improving" : "Training complete") : r.state === "cancelled" ? "Training cancelled" : r.state === "interrupted" ? "Training interrupted — start a new run to retry" : r.state === "failed" ? "Training failed — see the log below" : r.state === "stopping" ? "Stopping training…" : "Training in progress"}</small><small>${fmt(percent, 0)}% · step ${r.metrics.progress?.at(-1)?.step || 0} / ${r.config.steps}</small></div><progress max="100" value="${percent}" aria-label="Training progress"></progress>` : ""}<div class="metrics">${[
               ["Training loss", latest(r, "train/loss") ?? latest(r, "loss")],
-              ["Validation loss", latest(r, "val/loss")],
-              ["Validation perplexity", latest(r, "val/perplexity")],
-              ["Byte tokens / sec", latest(r, "throughput/tokens_sec")],
+              [external ? "Training tokens (M)" : "Validation loss", external ? (latest(r, "training/tokens_seen")||0)/1e6 : latest(r, "val/loss")],
+              [external ? "Checkpoint tokens (M)" : "Validation perplexity", external ? (r.metadata.tracking?.checkpoint?.tokens??0)/1e6 : latest(r, "val/perplexity")],
+              [external ? "Tokenizer tokens / sec" : "Byte tokens / sec", latest(r, "throughput/tokens_sec")],
             ]
               .map(
                 ([k, v]) =>
@@ -1559,9 +1569,12 @@
                   points: r.metrics["val/loss"] || [],
                 },
               ],
-            )}</div><div class="chart"><h3>Validation perplexity</h3>${chart([{ name: "Perplexity", points: r.metrics["val/perplexity"] || [] }])}</div>${Object.entries(
+            )}</div>${!external || r.metrics["val/perplexity"]?.length ? `<div class="chart"><h3>Validation perplexity</h3>${chart([{ name: "Perplexity", points: r.metrics["val/perplexity"] || [] }])}</div>` : ""}${Object.entries(
               r.metrics,
-            )
+            ).sort(([a],[b])=>{
+              const order=['throughput/tokens_sec','optimizer/learning_rate','optimizer/gradient_norm','training/tokens_seen','checkpoint/tokens','checkpoint/step'];
+              return external?(order.indexOf(a)<0?99:order.indexOf(a))-(order.indexOf(b)<0?99:order.indexOf(b)):0;
+            })
               .filter(
                 ([k]) =>
                   ![
@@ -1574,11 +1587,11 @@
               )
               .map(
                 ([k, v]) =>
-                  `<div class="chart"><h3>${esc(({"throughput/tokens_sec":"Training throughput","training/tokens_seen":"Training tokens"})[k]||k)}</h3>${chart([{ name: k, points: v }])}</div>`,
+                  `<div class="chart"><h3>${esc(({"throughput/tokens_sec":"Training throughput","training/tokens_seen":"Training tokens","optimizer/learning_rate":"Learning rate","optimizer/gradient_norm":"Gradient norm","checkpoint/tokens":"Saved checkpoint · tokens","checkpoint/step":"Saved checkpoint · step","validation/bpb":"Validation bits per byte"})[k]||k)}</h3>${chart([{ name: k, points: v }])}</div>`,
               )
               .join(
                 "",
-              )}</div><p class="muted" style="font-size:12px;margin-top:15px">Lower loss and perplexity mean better next-byte predictions. Compare runs with the same validation data. ${active ? "Refreshes every 2 seconds." : ""}</p>`;
+              )}</div><p class="muted" style="font-size:12px;margin-top:15px">${external ? "Loss is measured per tokenizer token. Source events have no timestamps; use tokens or steps to inspect the history. Throughput measures updates and excludes checkpoint overhead." : "Lower loss and perplexity mean better next-byte predictions. Compare runs with the same validation data."} ${active ? "Refreshes every 2 seconds." : ""}</p>`;
           const toolbar=$('#run-explorer');$('#live .charts').before(toolbar);
           $('#live .charts').style.gridTemplateColumns=$('#metric-layout').value==='column'?'1fr':'';
           filterMetrics();
