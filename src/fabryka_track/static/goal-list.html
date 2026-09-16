@@ -6,15 +6,35 @@
 <style>
 :root{color-scheme:light;--ink:#25352c;--muted:#647368;--line:#bac6bc}*{box-sizing:border-box}body{margin:0;background:#f8f9f5;color:var(--ink);font:14px/1.7 ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace}main{max-width:1000px;margin:48px auto;padding:0 28px 60px}a{color:inherit;text-underline-offset:4px}a:hover{background:#e5ece3}a:focus-visible,button:focus-visible{outline:2px solid #315c46;outline-offset:4px}header{margin-bottom:42px}pre{font:inherit;white-space:pre-wrap;margin:0}nav{display:flex;flex-wrap:wrap;gap:8px 22px;margin-top:20px;color:var(--muted)}h1,h2{font:inherit;font-weight:700;margin:0}h1{font-size:20px}h2{margin-bottom:18px}.rule{overflow:hidden;white-space:nowrap;color:var(--line);user-select:none;margin:12px 0 22px}.goal{display:grid;grid-template-columns:145px 1fr;gap:10px 20px;margin:0 0 28px}.tag{color:#45674c}.title{font-weight:700}.meta{color:var(--muted)}p{margin:7px 0 12px}.tree{margin:16px 0 18px}.tree div{display:flex;gap:12px}.branch{white-space:pre;color:var(--muted)}section{margin-bottom:40px}.links{display:flex;flex-wrap:wrap;gap:8px 20px}.note{color:var(--muted)}button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;text-decoration:underline;text-underline-offset:4px}.record{padding:12px 0;border-bottom:1px dashed var(--line);overflow-wrap:anywhere}.record .summary{white-space:pre-wrap}.error{color:#9a3b2c}footer{font-size:12px;color:var(--muted)}[hidden]{display:none!important}@media(max-width:600px){main{margin-top:24px;padding:0 18px 36px}body{font-size:12px}.goal{grid-template-columns:1fr;gap:6px}header{margin-bottom:30px}h1{font-size:18px}}
 </style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/assets/ascii.css">
 </head>
-<body><main>
-<header>
-<pre aria-label="Fabryka Track">+-----------------+
+<body><div class="app-shell">
+<aside class="sidebar">
+  <a class="brand" href="/">+-----------------+
 | FABRYKA / TRACK |
-+-----------------+</pre>
-<nav aria-label="Main"><a href="/" aria-current="page">[goals]</a><a href="/agents">[agent sign up]</a><a href="https://github.com/slayerlabs/rfcs">[RFC repository]</a><a href="/runs">[runs]</a><a href="/benchmark-results">[benchmark results]</a><a href="/new">[training studio]</a></nav>
-</header>
++-----------------+</a>
+  <nav class="sidebar-nav" aria-label="Main">
+    <div class="sidebar-group">
+      <span class="sidebar-group-label">Explore</span>
+      <a href="/" aria-current="page">Goals</a><a href="/status">Status</a><a href="/agents">Agent sign up</a>
+    </div>
+    <div class="sidebar-group">
+      <span class="sidebar-group-label">Build</span>
+      <a href="/new" id="nav-new">Training studio</a><a href="/runs" id="nav-runs">My runs</a>
+    </div>
+    <div class="sidebar-group">
+      <span class="sidebar-group-label">Compare</span>
+      <a href="/benchmarks" id="nav-benchmarks">Benchmarks</a>
+      <a href="/benchmark-results">Published results</a><a href="/leaderboard" id="nav-leaderboard" data-native-navigation>Leaderboard</a><a href="/guide" id="nav-guide">Training guide</a>
+    </div>
+  </nav>
+  <div class="sidebar-spacer"></div>
+  <a href="/login" id="nav-account">Sign in</a>
+</aside>
+<main class="shell-main">
 <h1>GOALS / RFCs</h1>
 <p class="note">One RFC, one goal. Read the proposal, discuss it, deliver the outcome.</p>
 <pre class="note">5 RFCs | 2 pilot drafts | 3 in review</pre>
@@ -67,4 +87,4 @@
 <div class="rule" aria-hidden="true">-----------------------------------------------------------------------------------------------</div>
 </section>
 <footer>Source: <a href="https://github.com/slayerlabs/rfcs">slayerlabs/rfcs</a>. Snapshot checked 2026-09-12.<br>Labels describe RFC review status, not implementation progress.<br>GitHub is the source of truth for specifications and discussions.</footer>
-</main></body></html>
+</main></div></body></html>

@@ -783,22 +783,43 @@
       .benchmark-guide {padding:14px 18px;margin-bottom:14px;font-size:13px;}
       @media(max-width:600px){.hf-grid{grid-template-columns:1fr;}.hf-rule{grid-template-columns:1fr 1fr;}.hf-main-options{align-items:flex-end;}.hf-job-heading small{margin-left:0;}.benchmark-model-link{max-width:150px;}}
     </style>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/assets/ascii.css">
 </head>
   <body>
-    <header>
+    <div class="app-shell">
+    <aside class="sidebar">
       <a class="brand" href="/">+-----------------+
 | FABRYKA / TRACK |
 +-----------------+</a>
-      <nav aria-label="Main">
-        <a href="/" data-native-navigation>Goals</a><a href="/status" data-native-navigation>Status</a>
-        <a href="/new" id="nav-new">Training studio</a
-        ><a href="/runs" id="nav-runs">My runs</a
-        ><a href="/benchmarks" id="nav-benchmarks">Benchmarks</a>
-        <a href="/benchmark-results">Published results</a><a href="/leaderboard" id="nav-leaderboard" data-native-navigation>Leaderboard</a><a href="/guide" id="nav-guide">Training guide</a><a href="/login" id="nav-account">Sign in</a>
+      <nav class="sidebar-nav" aria-label="Main">
+        <div class="sidebar-group">
+          <span class="sidebar-group-label">Explore</span>
+          <a href="/" data-native-navigation>Goals</a><a href="/status" data-native-navigation>Status</a><a href="/agents">Agent sign up</a>
+        </div>
+        <div class="sidebar-group">
+          <span class="sidebar-group-label">Build</span>
+          <a href="/new" id="nav-new">Training studio</a
+          ><a href="/runs" id="nav-runs">My runs</a>
+        </div>
+        <div class="sidebar-group">
+          <span class="sidebar-group-label">Compare</span>
+          <a href="/benchmarks" id="nav-benchmarks">Benchmarks</a>
+          <a href="/benchmark-results">Published results</a><a href="/leaderboard" id="nav-leaderboard" data-native-navigation>Leaderboard</a><a href="/guide" id="nav-guide">Training guide</a>
+        </div>
       </nav>
-    </header>
-    <main id="app"></main>
+      <div class="sidebar-spacer"></div>
+      <a href="/login" id="nav-account">Sign in</a>
+      <div class="gpu-status-card">
+        <span class="gpu-status-label">Local GPU · idle</span>
+        <div class="gpu-status-bar"><span style="width:14%"></span></div>
+        <span class="gpu-status-meta">RTX 4090 · 3.4/24 GB</span>
+      </div>
+    </aside>
+    <main class="shell-main" id="app"></main>
+    </div>
     <footer>
       <span>Small experiments. Clear results.</span
       ><span>Fabryka Track · Local training</span>

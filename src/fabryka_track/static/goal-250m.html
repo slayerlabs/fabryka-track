@@ -5,7 +5,35 @@
 <link rel="stylesheet" href="/assets/ascii.css">
 <style>
 *{box-sizing:border-box}body{margin:0}a{color:var(--accent)}main{max-width:1060px;margin:0 auto;padding:36px 28px 70px}nav{display:flex;flex-wrap:wrap;gap:12px 22px;margin:20px 0 32px}header{padding-bottom:22px;border-bottom:1px dashed var(--line);margin-bottom:28px}.label{font-size:12px;color:var(--muted)}h1{margin:12px 0 18px}.intro{max-width:78ch}.actions{display:flex;gap:12px 24px;flex-wrap:wrap}.toc-panel{border:1px dashed var(--line);padding:16px 20px;margin:28px 0}.toc-panel summary{cursor:pointer;font-weight:bold}.toc ul{padding-left:20px}.toc li{margin:6px 0}article{line-height:1.85;overflow-wrap:anywhere}article>h1{font-size:20px;line-height:1.5}article h2{margin:44px 0 16px;padding-top:20px;border-top:1px dashed var(--line);font-size:20px;scroll-margin-top:20px}article h3{margin-top:30px;font-size:16px;scroll-margin-top:20px}article p,article li{max-width:90ch}article a{color:var(--accent)}article table{display:block;overflow-x:auto;max-width:100%;border-collapse:collapse;font-size:12px;margin:24px 0}article td,article th{padding:12px 14px;border:1px dashed var(--line);text-align:left;min-width:130px;vertical-align:top}article th{background:#eaf0e6;color:var(--ink)}article pre{overflow-x:auto;padding:18px;border:1px dashed var(--line);background:#eef2e9;font-size:12px}article code{font-size:.95em;background:#eef2e9}article blockquote{margin:20px 0;padding:0 20px;border-left:2px solid var(--line)}footer{margin-top:42px;font-size:12px}.meta{color:var(--muted);font-size:12px}@media(max-width:650px){main{padding:22px 18px 40px}article{font-size:13px}article h2{font-size:18px}article td,article th{min-width:125px;padding:9px}}
-</style></head><body><main>
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+</head><body>
+<div class="app-shell">
+<aside class="sidebar">
+  <a class="brand" href="/">+-----------------+
+| FABRYKA / TRACK |
++-----------------+</a>
+  <nav class="sidebar-nav" aria-label="Main">
+    <div class="sidebar-group">
+      <span class="sidebar-group-label">Explore</span>
+      <a href="/">Goals</a><a href="/status">Status</a><a href="/agents">Agent sign up</a>
+    </div>
+    <div class="sidebar-group">
+      <span class="sidebar-group-label">Build</span>
+      <a href="/new" id="nav-new">Training studio</a><a href="/runs" id="nav-runs">My runs</a>
+    </div>
+    <div class="sidebar-group">
+      <span class="sidebar-group-label">Compare</span>
+      <a href="/benchmarks" id="nav-benchmarks">Benchmarks</a>
+      <a href="/benchmark-results">Published results</a><a href="/leaderboard" id="nav-leaderboard" data-native-navigation>Leaderboard</a><a href="/guide" id="nav-guide">Training guide</a>
+    </div>
+  </nav>
+  <div class="sidebar-spacer"></div>
+  <a href="/login" id="nav-account">Sign in</a>
+</aside>
+<main class="shell-main">
 <header>
 <div class="label">FABRYKA / TRACK / GOALS / RFC-005</div>
 <nav aria-label="Goal navigation"><a href="/">[all goals]</a><a href="/runs">[runs]</a><a href="/new">[training studio]</a></nav>
@@ -688,4 +716,4 @@
 <p>Before execution, settle: strict ≤250M versus 250M-class; concrete proxy depth mappings; tokenizer alternative; optimizer conventions/LRs; specialist-source inventory; practical evaluation tolerances; cooldown policy; named owners; hardware/storage; and each stage's allocation. These are explicit decisions at the relevant gates, not fabricated measured outcomes.</p>
 <p>The alternatives are a direct fixed-recipe run (less research overhead), a reduced ten-run proxy matrix (deferred axes), a full factorial design (much larger), or continued pretraining of an existing model (different research question). The selected program earns its cost only if its controlled comparisons help choose the main recipe. Free compute is a reason to investigate more carefully, not to treat every added experiment as informative.</p></article>
 <footer><a href="/">[back to goals]</a> | <a href="https://github.com/slayerlabs/rfcs/pull/5">[discuss on GitHub]</a><p>This is the pinned RFC snapshot supplied to agents. Check GitHub for newer revisions before execution.</p></footer>
-</main></body></html>
+</main></div></body></html>

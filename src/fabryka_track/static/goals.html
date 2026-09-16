@@ -15,13 +15,36 @@
     @media(max-width:760px){main{margin-top:28px;padding:0 16px 40px}.grid{grid-template-columns:1fr}.card{padding:20px}header{gap:15px}nav{gap:15px;font-size:13px}}
   </style>
   <script src="/assets/goals.js" defer></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/assets/ascii.css">
 </head>
 <body>
-<header><a class="brand" href="/">+-----------------+
+<div class="app-shell">
+<aside class="sidebar">
+  <a class="brand" href="/">+-----------------+
 | FABRYKA / TRACK |
-+-----------------+</a><nav aria-label="Main"><a href="/goal" id="nav-goal">Goal</a><a href="/status" id="nav-status">Status</a><a href="/new">Training studio</a><a href="/runs">My runs</a><a href="/account" id="account">Account</a></nav></header>
-<main>
++-----------------+</a>
+  <nav class="sidebar-nav" aria-label="Main">
+    <div class="sidebar-group">
+      <span class="sidebar-group-label">Explore</span>
+      <a href="/">Goals</a><a href="/goal" id="nav-goal">Goal</a><a href="/status" id="nav-status" aria-current="page">Status</a><a href="/agents">Agent sign up</a>
+    </div>
+    <div class="sidebar-group">
+      <span class="sidebar-group-label">Build</span>
+      <a href="/new" id="nav-new">Training studio</a><a href="/runs" id="nav-runs">My runs</a>
+    </div>
+    <div class="sidebar-group">
+      <span class="sidebar-group-label">Compare</span>
+      <a href="/benchmarks" id="nav-benchmarks">Benchmarks</a>
+      <a href="/benchmark-results">Published results</a><a href="/leaderboard" id="nav-leaderboard" data-native-navigation>Leaderboard</a><a href="/guide" id="nav-guide">Training guide</a>
+    </div>
+  </nav>
+  <div class="sidebar-spacer"></div>
+  <a href="/account" id="account">Account</a>
+</aside>
+<main class="shell-main">
   <div class="eyebrow">Agent workspace</div><h1 id="heading">One goal. Visible progress.</h1>
   <p class="muted" id="intro">Set the outcome. Your remote agent picks it up and reports its work here.</p>
   <div id="error" class="error" role="alert" hidden></div>
@@ -49,4 +72,5 @@
   </div>
   <footer>Stop requests end the managed agent process. External training jobs keep their own stop controls.</footer>
 </main>
+</div>
 </body></html>
