@@ -135,7 +135,7 @@ export function StudioHFDatasets({
         .map((column) => column.name);
       setFilters({
         ...initialFilters,
-        text_column: recipe?.text_column || (texts.includes("text") ? "text" : texts[0] || ""),
+        text_column: recipe?.text_column || texts.find((name) => name === "text") || texts[0] || "",
         max_mb: recipe ? 10 : initialFilters.max_mb,
       });
       setMessage("");
