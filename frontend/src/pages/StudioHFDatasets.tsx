@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useCustom, useCustomMutation } from "@refinedev/core";
 
+import type { RecipeSource } from "./StudioMixData";
+
 interface Source {
   repo: string;
   revision: string;
@@ -54,9 +56,11 @@ const active = (job: ImportJob) => ["queued", "running"].includes(job.state);
 export function StudioHFDatasets({
   onImported,
   userId,
+  recipeRequest,
 }: {
   onImported: () => void;
   userId: string;
+  recipeRequest?: { source: RecipeSource; nonce: number };
 }) {
   const [repo, setRepo] = useState("");
   const [info, setInfo] = useState<Inspection | null>(null);
@@ -98,10 +102,20 @@ export function StudioHFDatasets({
     if (seen.current.size) setOpen(true);
     if (finished) {
       imported.current();
-      setMessage("Dataset imported. Assign mix points to include it.");
+      setMessage("Dataset imported. Apply a recipe or adjust its share to include it.");
     }
   }, [jobs]);
-  async function inspect(source: Partial<Source> & { repo: string }) {
+  const handledRecipe = useRef(0);
+  useEffect(() => {
+    if (!recipeRequest || busy || handledRecipe.current === recipeRequest.nonce) return;
+    handledRecipe.current = recipeRequest.nonce;
+    setOpen(true);
+    setRepo(recipeRequest.source.repo);
+    void inspect(recipeRequest.source, recipeRequest.source);
+    document.getElementById("hf-import")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [recipeRequest, busy]);
+
+  async function inspect(source: Partial<Source> & { repo: string }, recipe?: RecipeSource) {
     if (busy) return;
     setBusy(true);
     setMessage("Inspecting public dataset…");
@@ -121,7 +135,8 @@ export function StudioHFDatasets({
         .map((column) => column.name);
       setFilters({
         ...initialFilters,
-        text_column: texts.includes("text") ? "text" : texts[0] || "",
+        text_column: recipe?.text_column || (texts.includes("text") ? "text" : texts[0] || ""),
+        max_mb: recipe ? 10 : initialFilters.max_mb,
       });
       setMessage("");
     } catch (e) {
@@ -225,6 +240,7 @@ export function StudioHFDatasets({
   );
   return (
     <details
+      id="hf-import"
       className="panel hf-import"
       open={open}
       onToggle={(event) => setOpen(event.currentTarget.open)}

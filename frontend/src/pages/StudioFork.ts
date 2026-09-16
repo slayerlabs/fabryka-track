@@ -1,3 +1,4 @@
+import { totalShares, validShare } from "./StudioMixData";
 import type { Run } from "./RunData";
 
 export interface StudioCheckpoint {
@@ -113,9 +114,7 @@ export function hydrateFork(
       !("weight" in item) ||
       typeof item.id !== "string" ||
       typeof item.weight !== "number" ||
-      !Number.isInteger(item.weight) ||
-      item.weight < 1 ||
-      item.weight > 100 ||
+      !validShare(item.weight) ||
       item.id in weights
     )
       throw new Error(
@@ -123,7 +122,7 @@ export function hydrateFork(
       );
     weights[item.id] = item.weight;
   }
-  if (Object.values(weights).reduce((sum, weight) => sum + weight, 0) !== 100)
+  if (totalShares(Object.values(weights)) !== 100)
     throw new Error(
       "The parent dataset percentages do not add up to 100. Its recipe cannot be restored safely.",
     );

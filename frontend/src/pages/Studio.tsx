@@ -10,6 +10,8 @@ import { useCustom, useCustomMutation } from "@refinedev/core";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { request } from "../provider";
 import { LoginPage, type StudioUser } from "./Account";
+import { StudioMixRecipes } from "./StudioMixRecipes";
+import { normalizeShares, roundShare, totalShares, type RecipeSource } from "./StudioMixData";
 import { corpusSources } from "./StudioData";
 import { StudioHFDatasets } from "./StudioHFDatasets";
 import { StudioDatasetReader, type Dataset } from "./StudioDatasetReader";
@@ -58,6 +60,7 @@ interface Draft {
   character: string | null;
   training_budget_version: number;
   point_budget_version: number;
+  precise_weights: boolean;
 }
 const initialDraft: Draft = {
   weights: {},
@@ -80,6 +83,7 @@ const initialDraft: Draft = {
   character: null,
   training_budget_version: 1,
   point_budget_version: 1,
+  precise_weights: false,
 };
 const profiles = [
   { id: "poet", name: "Poet / writer", category: "literature" },
@@ -180,6 +184,7 @@ function restoreDraft(
       draft[key] = saved[key];
   for (const key of ["early_stopping", "auto_benchmark"] as const)
     if (typeof saved[key] === "boolean") draft[key] = saved[key];
+  draft.precise_weights = saved.precise_weights === true;
   draft.character =
     typeof saved.character === "string" ? saved.character : null;
   if (
@@ -232,15 +237,15 @@ function restoreDraft(
   );
   draft.weights =
     saved.point_budget_version !== 1 ||
-    Object.values(weights).some((weight) => weight % 5 !== 0) ||
-    Object.values(weights).reduce((sum, weight) => sum + weight, 0) > 100
+    (!draft.precise_weights && Object.values(weights).some((weight) => weight % 5 !== 0)) ||
+    (!draft.precise_weights && totalShares(Object.values(weights)) > 100)
       ? allocatePoints(
           datasets.map((dataset) => ({
             id: dataset.id,
             size: weights[dataset.id],
           })),
         )
-      : weights;
+      : Object.fromEntries(Object.entries(weights).map(([id, weight]) => [id, roundShare(weight)]));
   return draft;
 }
 
@@ -446,6 +451,7 @@ function TrainingStudio({
       ? { ...initialDraft, ...fork.settings }
       : restoreDraft(user.id, datasets, capabilities),
   );
+  const [recipeRequest, setRecipeRequest] = useState<{ source: RecipeSource; nonce: number }>();
   const [stage, setStage] = useState(1);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -473,7 +479,8 @@ function TrainingStudio({
   const mix = datasets
     .filter((dataset) => (draft.weights[dataset.id] || 0) > 0)
     .map((dataset) => ({ ...dataset, weight: draft.weights[dataset.id] }));
-  const totalWeight = mix.reduce((sum, dataset) => sum + dataset.weight, 0);
+  const totalWeight = totalShares(mix.map((dataset) => dataset.weight));
+  const precise = Boolean(fork) || draft.precise_weights;
   const points = totalWeight / 5;
   const launchIssue =
     mix.length > 20
@@ -545,28 +552,13 @@ function TrainingStudio({
     }));
   }
   function balance(id: string, value: number) {
+    if (!Number.isFinite(value)) return;
     setDraft((previous) => {
-      const used = datasets.reduce(
-        (sum, dataset) => sum + (previous.weights[dataset.id] || 0) / 5,
-        0,
-      );
-      const availablePoints = 20 - used + (previous.weights[id] || 0) / 5;
-      return {
-        ...previous,
-        character: null,
-        weights: {
-          ...previous.weights,
-          [id]: fork
-            ? Math.max(
-                0,
-                Math.min(
-                  Math.round(value * 5),
-                  Math.round(availablePoints * 5),
-                ),
-              )
-            : Math.max(0, Math.min(Math.round(value), availablePoints)) * 5,
-        },
-      };
+      const others = totalShares(datasets.filter((d) => d.id !== id).map((d) => previous.weights[d.id] || 0));
+      const requested = precise ? roundShare(value) : Math.round(value / 5) * 5;
+      return { ...previous, character: null, weights: {
+        ...previous.weights, [id]: roundShare(Math.max(0, Math.min(requested, precise ? 100 : 100 - others))),
+      } };
     });
     setProfileMessage("");
   }
@@ -587,6 +579,7 @@ function TrainingStudio({
     }
     update({
       character: profile.id,
+      precise_weights: false,
       weights: allocatePoints(
         selected.map((dataset) => ({ id: dataset.id, size: dataset.bytes })),
       ),
@@ -772,14 +765,24 @@ function TrainingStudio({
         <section className="panel" id="workspace">
           {stage === 1 ? (
             <>
-              {fork ? (
+              <StudioMixRecipes
+                datasets={datasets}
+                onImport={(source) => setRecipeRequest({ source, nonce: Date.now() })}
+                onApply={(weights) => {
+                  update({ weights, precise_weights: true, character: null });
+                  setMessage("Ivme v3 shares applied exactly. Review your model and budget before starting.");
+                }}
+              />
+              {precise ? (
                 <div className="notice">
-                  <b>Inherited dataset mix</b>
+                  <b>{fork ? "Inherited dataset mix" : "Exact dataset shares"}</b>
                   <p>
-                    The original dataset percentages are preserved exactly.
-                    Adjust shares in 1% increments; the total must remain 100%.
+                    Dataset percentages are preserved exactly.
+                    Adjust shares to two decimal places; the total must remain 100%.
                   </p>
-                  <p role="status">{100 - totalWeight}% remaining</p>
+                  <p role="status" aria-live="polite">{totalWeight > 100 ? `${roundShare(totalWeight - 100)}% over allocated` : `${roundShare(100 - totalWeight)}% remaining`}</p>
+                  <button type="button" className="secondary" disabled={!mix.length || totalWeight === 100} onClick={() => update({ weights: normalizeShares(Object.fromEntries(mix.map((d) => [d.id, d.weight]))), character: null })}>Normalize to 100%</button>{" "}
+                  <button type="button" className="preview-link" onClick={() => update({ weights: {}, character: null })}>Clear shares</button>
                 </div>
               ) : (
                 <section
@@ -871,6 +874,7 @@ function TrainingStudio({
                   </small>
                 </section>
               )}
+              {!precise && <button type="button" className="preview-link" onClick={() => update({ precise_weights: true, character: null })}>Edit exact percentages</button>}
               <h2>Your dataset library</h2>
               {datasets.map((dataset) => {
                 const weight = draft.weights[dataset.id] || 0;
@@ -915,25 +919,25 @@ function TrainingStudio({
                         type="button"
                         className="point-control"
                         disabled={!weight}
-                        aria-label={`Remove ${fork ? "1%" : "a point"}: ${dataset.name}`}
+                        aria-label={`Remove ${precise ? "0.01%" : "a point"}: ${dataset.name}`}
                         onClick={() =>
-                          balance(dataset.id, weight / 5 - (fork ? 0.2 : 1))
+                          balance(dataset.id, weight - (precise ? 0.01 : 5))
                         }
                       >
                         −
                       </button>
                       <input
                         id={`slider-${dataset.id}`}
-                        type="range"
+                        type={precise ? "number" : "range"}
                         min={0}
-                        max={fork ? 100 : 20}
-                        step={1}
-                        value={fork ? weight : weight / 5}
-                        aria-label={`${dataset.name} ${fork ? "percentage" : "points"}`}
+                        max={precise ? 100 : 20}
+                        step={precise ? 0.01 : 1}
+                        value={precise ? weight : weight / 5}
+                        aria-label={`${dataset.name} ${precise ? "percentage" : "points"}`}
                         onChange={(event) =>
                           balance(
                             dataset.id,
-                            +event.target.value / (fork ? 5 : 1),
+                            +event.target.value * (precise ? 1 : 5),
                           )
                         }
                         style={{ accentColor: datasetColor(dataset) }}
@@ -941,10 +945,10 @@ function TrainingStudio({
                       <button
                         type="button"
                         className="point-control"
-                        disabled={points >= 20}
-                        aria-label={`Add ${fork ? "1%" : "a point"}: ${dataset.name}`}
+                        disabled={precise ? weight >= 100 : points >= 20}
+                        aria-label={`Add ${precise ? "0.01%" : "a point"}: ${dataset.name}`}
                         onClick={() =>
-                          balance(dataset.id, weight / 5 + (fork ? 0.2 : 1))
+                          balance(dataset.id, weight + (precise ? 0.01 : 5))
                         }
                       >
                         +
@@ -953,8 +957,8 @@ function TrainingStudio({
                         className="percent"
                         htmlFor={`slider-${dataset.id}`}
                       >
-                        {fork
-                          ? `${weight}%`
+                        {precise
+                          ? `${weight.toFixed(2)}%`
                           : `${weight / 5} points · ${weight}%`}
                       </output>
                     </div>
@@ -988,6 +992,7 @@ function TrainingStudio({
               </div>
               <StudioHFDatasets
                 userId={user.id}
+                recipeRequest={recipeRequest}
                 onImported={() => {
                   update({ character: null });
                   onRefresh();
@@ -1465,7 +1470,7 @@ function TrainingStudio({
             <h3>Your recipe</h3>
             <small>
               {mix.length} sources ·{" "}
-              {fork
+              {precise
                 ? `${totalWeight}% allocated`
                 : `${points} / 20 points · ${totalWeight}% allocated`}
             </small>
@@ -1474,7 +1479,7 @@ function TrainingStudio({
                 <span
                   key={dataset.id}
                   style={{
-                    width: `${dataset.weight}%`,
+                    width: `${dataset.weight / Math.max(100, totalWeight) * 100}%`,
                     background: datasetColor(dataset),
                   }}
                 />
