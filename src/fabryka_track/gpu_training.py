@@ -43,7 +43,7 @@ CHECKPOINT_NAME = re.compile(r'^checkpoint-(\d+)\.pt$')
 def allowed_artifact(name):
     """Fixed runner files, plus periodic checkpoint-<step>.pt lineage snapshots."""
     return name in FILES or bool(CHECKPOINT_NAME.match(name))
-SIZES = {'8m':(256,10,8),'16m':(384,9,8),'32m':(512,10,8),'64m':(640,13,10),'128m':(768,18,12)}
+SIZES = {'8m':(256,10,8),'16m':(384,9,8),'32m':(512,10,8),'64m':(640,13,10),'128m':(768,18,12),'150m':(768,21,12)}
 PRESETS = {}
 for key,(width,layers,heads) in SIZES.items():
     parameters = layers*(12*width*width+13*width)+(512+512+2)*width

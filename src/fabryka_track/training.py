@@ -147,7 +147,7 @@ class TrainingInput(BaseModel):
     auto_benchmark: bool = False
     auto_benchmark_suite: Literal['piqa', 'core', 'polish', 'fast_pl'] = 'piqa'
     seed: int = Field(default=42, ge=0, le=2**32-1)
-    model_size: Literal["tiny", "small", "8m", "16m", "32m", "64m", "128m"] = "tiny"
+    model_size: Literal["tiny", "small", "8m", "16m", "32m", "64m", "128m", "150m"] = "tiny"
     compute: Literal["cpu", "runpod"] = "cpu"
     budget_mode: Literal["manual", "chinchilla", "tokens"] = "manual"
     max_runtime_seconds: int = Field(default=3600, ge=600, le=86400)
@@ -181,7 +181,7 @@ def launch(body: TrainingInput, session=Depends(session_scope), user=Depends(req
     if body.compute == 'runpod':
         if not allowed(user, session):raise HTTPException(403, 'RunPod access is not enabled for this account.')
         if body.max_runtime_seconds>settings.runpod_max_seconds:raise HTTPException(422, 'Requested duration exceeds the server GPU time limit.')
-        if body.model_size in ('tiny','small'):raise HTTPException(422, 'Choose a GPU model from 8M to 128M.')
+        if body.model_size in ('tiny','small'):raise HTTPException(422, 'Choose a GPU model from 8M to 150M.')
     elif body.model_size not in ('tiny','small'):
         raise HTTPException(422, 'Models 8M and larger require RunPod.')
     parent_run = checkpoint = warm_start_checkpoint = None

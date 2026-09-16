@@ -1534,7 +1534,7 @@ function TrainingStudio({
                   role="group"
                   aria-label="Planned parameter count"
                 >
-                  {[8, 16, 32, 64, 128].map((value) => (
+                  {[8, 16, 32, 64, 128, 150].map((value) => (
                     <button
                       key={value}
                       disabled={Boolean(fork) && gpu}

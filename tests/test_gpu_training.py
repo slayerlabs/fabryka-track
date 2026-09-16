@@ -37,6 +37,11 @@ def test_gpu_parameters_match_real_architecture():
         assert sum(p.numel() for p in m.parameters())==preset['parameters']
 
 
+def test_150m_preset_stays_under_cap():
+    assert gpu.PRESETS['150m']['parameters'] == 149_633_280
+    assert gpu.PRESETS['150m']['parameters'] <= 150_000_000
+
+
 def test_huggingface_connected_accounts_can_use_gpu(monkeypatch):
     monkeypatch.setattr(settings,'runpod_api_key','test-provider-secret')
     monkeypatch.setattr(settings,'runpod_allowed_users','')

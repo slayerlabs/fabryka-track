@@ -65,3 +65,19 @@ excess explicitly. Review/start stays disabled until the total is 100%.
 **Normalize to 100%** scales selected shares proportionally using largest-remainder
 rounding at 0.01% precision, so equal thirds become 33.34/33.33/33.33 without drift.
 Unfinished exact-share drafts survive page reloads without being rounded to points.
+
+## Five-size baseline
+
+The shared plan is in `ivme-size-sweep.json`: 8M, 16M, 32M, 64M and 150M
+use exactly the same six source weights. Track's nominal 150M preset is a
+21-layer, width-768, 12-head byte transformer with **149,633,280 parameters**
+and 512-byte context, below the 150M cap. The other presets have 8,160,256,
+16,364,160, 32,049,152 and 64,662,400 parameters respectively.
+
+The plan deliberately leaves training budget and runtime unset until chosen.
+It is not a launch request. Materialize sufficiently large source samples, pin
+revisions and checksums, and use identical validation partitions across sizes.
+The UI's 10 MB starter imports are preparation samples, not a full Ivme corpus.
+Track counts byte tokens; 15B Ivme BPE tokens cannot be copied as 15B byte
+tokens and called equivalent. The existing API permits at most 10B byte tokens
+and a 24-hour runtime per request.

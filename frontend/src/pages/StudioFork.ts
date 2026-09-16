@@ -76,7 +76,7 @@ export function hydrateFork(
   }
   const model_size = choice(
     "model_size",
-    ["tiny", "small", "8m", "16m", "32m", "64m", "128m"],
+    ["tiny", "small", "8m", "16m", "32m", "64m", "128m", "150m"],
     "tiny",
   );
   const compute = choice("compute", ["cpu", "runpod"], "cpu");
