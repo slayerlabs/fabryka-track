@@ -772,6 +772,10 @@ function TrainingStudio({
                   update({ weights, precise_weights: true, character: null });
                   setMessage("Ivme v3 shares applied exactly. Review your model and budget before starting.");
                 }}
+                onImported={() => {
+                  update({ character: null });
+                  onRefresh();
+                }}
               />
               {precise ? (
                 <div className="notice">

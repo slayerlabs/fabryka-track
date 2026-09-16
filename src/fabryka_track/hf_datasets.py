@@ -3,6 +3,7 @@ import hashlib
 import math
 import io
 import shutil
+from typing import Literal
 from uuid import uuid4
 import re
 import threading
@@ -27,6 +28,16 @@ LOCK = threading.Lock()
 STOP = threading.Event()
 POOL = None
 ACTIVE = ('queued', 'running')
+
+# Mirrors frontend/src/pages/StudioMixData.ts's ivmeSources — keep both in sync.
+IVME_SOURCES = [
+    {'name': 'FineWeb-Edu', 'repo': 'HuggingFaceFW/fineweb-edu', 'config': 'sample-10BT', 'split': 'train', 'text_column': 'text', 'weight': 46.67},
+    {'name': 'DCLM', 'repo': 'mlfoundations/dclm-baseline-1.0', 'config': 'default', 'split': 'train', 'text_column': 'text', 'weight': 27.78},
+    {'name': 'FineWiki English', 'repo': 'HuggingFaceFW/finewiki', 'config': 'en', 'split': 'train', 'text_column': 'text', 'weight': 8.89},
+    {'name': 'FineMath 3+', 'repo': 'HuggingFaceTB/finemath', 'config': 'finemath-3plus', 'split': 'train', 'text_column': 'text', 'weight': 7.78},
+    {'name': 'Cosmopedia v2', 'repo': 'HuggingFaceTB/smollm-corpus', 'config': 'cosmopedia-v2', 'split': 'train', 'text_column': 'text', 'weight': 5.56},
+    {'name': 'SimpleStories', 'repo': 'SimpleStories/SimpleStories', 'config': 'default', 'split': 'train', 'text_column': 'story', 'weight': 3.32},
+]
 
 
 class Source(BaseModel):
@@ -285,6 +296,102 @@ def run_import(job_id):
             temporary.replace(final_path)
             db.add(dataset); db.flush()
             job.dataset_id = dataset.id; job.progress = stats; job.state = 'finished'; db.commit()
+    except Exception as exc:
+        if temporary: temporary.unlink(missing_ok=True)
+        if final_path: final_path.unlink(missing_ok=True)
+        with SessionLocal() as db:
+            job = db.get(DatasetImport, job_id)
+            if job:
+                job.state = 'failed'; job.error = public_error(exc); db.commit()
+
+
+class IvmeMixSpec(BaseModel):
+    model_size: Literal['8m', '16m', '32m', '64m', '128m', '150m'] = '150m'
+
+
+@router.post('/ivme-mix', status_code=202)
+def start_ivme_mix(body: IvmeMixSpec, user=Depends(require_user), session=Depends(session_scope)):
+    if POOL is None: raise HTTPException(503, 'Dataset importer is unavailable.')
+    from .gpu_training import PRESETS
+    # Chinchilla-optimal budget (20 tokens/parameter), same formula as training.py's plan_training().
+    target_tokens = 20 * PRESETS[body.model_size]['parameters']
+    try:
+        pinned = []
+        for item in IVME_SOURCES:
+            budget_mb = max(1, math.ceil(target_tokens * item['weight'] / 100 / 1_000_000))
+            spec = pin(ImportSpec(repo=item['repo'], config=item['config'], split=item['split'],
+                                   text_column=item['text_column'], max_mb=budget_mb))
+            pinned.append({**item, 'revision': spec.revision, 'max_mb': budget_mb})
+    except Exception as exc:
+        raise HTTPException(422, public_error(exc)) from exc
+    with LOCK:
+        active = session.scalars(select(DatasetImport).where(DatasetImport.state.in_(ACTIVE))).all()
+        if len(active) >= 2 or any(j.owner_id == user.id for j in active):
+            raise HTTPException(409, 'An import is already active. Wait for it to finish, then retry.')
+        job = DatasetImport(owner_id=user.id, config={'kind': 'ivme_mix', 'model_size': body.model_size,
+                                                        'target_tokens': target_tokens, 'sources': pinned})
+        session.add(job); session.commit()
+        POOL.submit(run_ivme_mix, job.id)
+        return serialize(job)
+
+
+def run_ivme_mix(job_id):
+    """Sequentially collects each Ivme source up to its chinchilla-proportional byte
+    budget and concatenates them into one new file-backed Dataset, ready to train on
+    directly (no per-run weighted-mix bookkeeping needed)."""
+    temporary = final_path = None
+    try:
+        with SessionLocal() as db:
+            job = db.get(DatasetImport, job_id)
+            job.state = 'running'; db.commit()
+            model_size, target_tokens, sources = job.config['model_size'], job.config['target_tokens'], job.config['sources']
+        folder = settings.artifact_dir / 'datasets'
+        folder.mkdir(parents=True, exist_ok=True)
+        if shutil.disk_usage(folder).free < target_tokens + 2000000000:
+            raise ValueError('Not enough storage for this import. Choose a smaller model size.')
+        temporary = folder / (job_id + '.partial')
+        components, overall = [], {'scanned': 0, 'accepted': 0, 'duplicates': 0, 'bytes': 0}
+        last_update = time.monotonic()
+        def update(name, stats):
+            nonlocal last_update
+            if time.monotonic() - last_update < 1: return
+            with SessionLocal() as db:
+                job = db.get(DatasetImport, job_id)
+                job.progress = {**overall, 'current_source': name,
+                                 **{k: overall[k] + stats[k] for k in ('scanned', 'accepted', 'duplicates', 'bytes')}}
+                db.commit()
+            last_update = time.monotonic()
+        with temporary.open('wb') as output:
+            for i, item in enumerate(sources):
+                spec = ImportSpec(repo=item['repo'], revision=item['revision'], config=item['config'],
+                                   split=item['split'], text_column=item['text_column'], max_mb=item['max_mb'])
+                if i: output.write(b'\n\n')
+                _, stats = collect(stream(spec), spec, progress=lambda s, name=item['name']: update(name, s),
+                                    stop_event=STOP, output=output)
+                for key in ('scanned', 'accepted', 'duplicates'): overall[key] += stats[key]
+                overall['bytes'] += stats['bytes'] + (2 if i else 0)
+                components.append({'name': item['name'], 'repo': item['repo'], 'config': item['config'],
+                                    'revision': item['revision'], 'weight': item['weight'], 'bytes': stats['bytes']})
+        digest = hashlib.sha256()
+        with temporary.open('rb') as content_file:
+            for chunk in iter(lambda: content_file.read(1024 * 1024), b''): digest.update(chunk)
+        with SessionLocal() as db:
+            job = db.get(DatasetImport, job_id); job.progress = overall; db.commit()
+        if overall['bytes'] < 4096:
+            raise ValueError('Too little matching text collected for this mix.')
+        with SessionLocal() as db:
+            job = db.get(DatasetImport, job_id)
+            source = {'kind': 'mix', 'recipe': 'ivme-v3-en', 'target_model_size': model_size,
+                      'target_tokens': target_tokens, 'components': components, 'storage': 'file',
+                      'sampling': 'Proportional bounded samples per source, concatenated in recipe order.'}
+            dataset = Dataset(id=str(uuid4()), owner_id=job.owner_id,
+                              name=f'Ivme v3 · English mix ({model_size.upper()})'[:200],
+                              content='', byte_count=overall['bytes'], source=source,
+                              sha256=digest.hexdigest(), example=False)
+            final_path = dataset_path(dataset)
+            temporary.replace(final_path)
+            db.add(dataset); db.flush()
+            job.dataset_id = dataset.id; job.progress = overall; job.state = 'finished'; db.commit()
     except Exception as exc:
         if temporary: temporary.unlink(missing_ok=True)
         if final_path: final_path.unlink(missing_ok=True)

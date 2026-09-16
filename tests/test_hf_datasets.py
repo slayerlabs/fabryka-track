@@ -110,3 +110,34 @@ def test_large_import_streams_without_returning_content(tmp_path):
         content,streamed=hf.collect(rows,body,output=output)
     assert content is None and streamed==stats
     assert path.read_bytes()==expected.encode()
+
+
+def test_ivme_mix_composes_one_chinchilla_sized_dataset_from_all_six_sources(client,monkeypatch):
+    monkeypatch.setattr(hf,'pin',lambda s:s.model_copy(update={'revision':'c'*40}))
+    def fake_stream(s):
+        column='story' if s.repo=='SimpleStories/SimpleStories' else 'text'
+        return iter([{column:f'{s.repo} document {i}: '+('useful training words. '*80)} for i in range(40)])
+    monkeypatch.setattr(hf,'stream',fake_stream)
+    from fabryka_track.gpu_training import PRESETS
+    response=client.post('/api/hf-datasets/ivme-mix',json={'model_size':'8m'})
+    assert response.status_code==202
+    assert response.json()['config']['target_tokens']==20*PRESETS['8m']['parameters']
+    for _ in range(200):
+        result=client.get('/api/hf-datasets/imports').json()[0]
+        if result['state'] not in hf.ACTIVE:break
+        time.sleep(.02)
+    assert result['state']=='finished',result
+    dataset=next(d for d in client.get('/api/datasets').json() if d['id']==result['dataset_id'])
+    source=dataset['source']
+    assert source['kind']=='mix' and source['recipe']=='ivme-v3-en' and source['target_model_size']=='8m'
+    assert source['storage']=='file'
+    assert [c['name'] for c in source['components']]==[s['name'] for s in hf.IVME_SOURCES]
+    assert [c['weight'] for c in source['components']]==[s['weight'] for s in hf.IVME_SOURCES]
+    assert all(c['bytes']>0 for c in source['components'])
+    content=client.get('/api/datasets/'+dataset['id']+'/content').content.decode()
+    for source_item in hf.IVME_SOURCES:
+        assert source_item['repo'] in content
+    assert dataset['bytes']==sum(c['bytes'] for c in source['components'])+2*5
+    from test_training import launch,finished
+    run=finished(client,launch(client,mix=[{'dataset_id':dataset['id'],'weight':100}],lr_schedule='trapezoidal').json()['id'])
+    assert run['state']=='finished'
