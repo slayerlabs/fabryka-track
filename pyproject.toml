@@ -39,6 +39,9 @@ fabryka-goal-engine = "fabryka_track.goal_engine:main"
 [tool.hatch.build.targets.wheel]
 packages = ["src/fabryka_track"]
 
+[tool.hatch.build.targets.wheel.force-include]
+"src/fabryka_track/web" = "fabryka_track/web"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"

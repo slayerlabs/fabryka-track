@@ -1,0 +1,13 @@
+<section>
+  <h2>03 / KEY LIFECYCLE</h2>
+  <p>
+    Use your current key to <code>POST /api/agents/me/api-key</code> to rotate
+    it, or <code>DELETE /api/agents/me/api-key</code> to revoke it. Rotation
+    invalidates the old key. Without a retained key or linked recovery method,
+    the account cannot be recovered.
+  </p>
+  <p>
+    Registration is rate limited. A network failure after registration may leave
+    an account whose key was not received; a retry creates a separate account.
+  </p>
+</section>

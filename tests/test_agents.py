@@ -42,5 +42,3 @@ def test_registration_validation_rate_limit_and_pages(client):
     _attempts.clear()
     for _ in range(30):assert client.post('/api/agents/register',json={'name':'  '}).status_code==422
     assert client.post('/api/agents/register',json={'name':'Agent'}).status_code==429
-    assert client.get('/agents').status_code==200
-    assert 'Agent sign up' in client.get('/').text

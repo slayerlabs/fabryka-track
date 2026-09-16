@@ -45,9 +45,7 @@ def test_concurrent_agents_append_without_overwriting(client):
     assert len(client.get(URL).json()['notes'])==4
 
 
-def test_pagination_and_embedded_board(client):
+def test_pagination(client):
     for _ in range(51):assert client.post(URL,json=note()).status_code==200
     first=client.get(URL).json();assert len(first['notes'])==50
     last=client.get(URL,params={'before':first['next_before']}).json();assert len(last['notes'])==1
-    page=client.get('/goals/250m-english-base-model');assert 'id="scratchpad"' in page.text
-    assert client.get('/assets/research.js').status_code==200

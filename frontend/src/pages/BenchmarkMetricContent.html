@@ -1,0 +1,66 @@
+<div class="guide-grid">
+  <article>
+    <h3>Training · practice</h3>
+    <p>
+      The model reads training text and adjusts its weights to get better at
+      predicting the next token. <strong>Training loss</strong> measures how
+      surprised it is by the correct next tokens. Lower is better on that text,
+      but a model can memorize it.
+    </p>
+  </article>
+  <article>
+    <h3>Validation · a progress check</h3>
+    <p>
+      Validation text is held out from weight updates. Track checks it during
+      training to decide which checkpoint to save and when to stop.
+      <strong>Validation loss</strong> asks: does the model also improve on text
+      it is not learning from directly?
+    </p>
+    <p>
+      If training loss keeps falling while validation loss rises, the model may
+      be overfitting: learning the practice material without improving on unseen
+      text.
+    </p>
+  </article>
+  <article>
+    <h3>Test · the final exam</h3>
+    <p>
+      A test set is separate data kept out of training and model selection. Use
+      it after choosing your model and settings to estimate performance on new
+      examples. If you repeatedly change the model based on a test score, that
+      set becomes part of your validation process.
+    </p>
+    <p>
+      Track’s training validation score is
+      <strong>not a final test score</strong>. Benchmarks evaluate a saved
+      checkpoint on separate tasks; their value as a final test depends on
+      avoiding training overlap and tuning on their results.
+    </p>
+  </article>
+  <article>
+    <h3>Perplexity · prediction uncertainty</h3>
+    <p>
+      Perplexity turns average prediction loss into an easier-to-read scale:
+      <strong>perplexity = exp(loss)</strong>. Lower means the model assigns
+      more probability to the correct next tokens. For example, a loss of about
+      1.39 gives a perplexity of 4.
+    </p>
+    <p>
+      As an intuition, perplexity 4 is like being equally uncertain among four
+      choices at each prediction. It does <strong>not</strong> mean 25% accuracy
+      or four mistakes. Track’s studio models predict UTF-8 bytes, so this is
+      uncertainty per byte, not per word.
+    </p>
+    <p>
+      Compare perplexity only with the same evaluation text, tokenizer and
+      settings. A lower score on easier text does not establish a better model.
+    </p>
+  </article>
+</div>
+<p class="muted">
+  <strong>In Track:</strong> training reserves roughly 10% of each source’s
+  documents for validation and evaluates a fixed sample. A source with fewer
+  than two documents uses a 90/10 byte split instead. No third, independent test
+  split is automatically created from your training mix. Small validation
+  samples are a diagnostic, not proof of general quality.
+</p>

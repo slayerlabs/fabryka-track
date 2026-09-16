@@ -1,6 +1,6 @@
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const { comparisonGroups, plMargin, plDiverges, langBadge, TASK_LANG } = require('../src/fabryka_track/static/published-benchmarks.js');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { comparisonGroups, plMargin, plDiverges, TASK_LANG } from '../frontend/src/pages/PublicBenchmarkModel.ts';
 
 function plReport(name, acc) {
   return {
@@ -40,12 +40,6 @@ test('language map tags the catalog as 4 PL / 15 EN / 3 neutral (Wartownik FINAL
   assert.equal(TASK_LANG.arithmark3, 'neutral');       // math is language-neutral
 });
 
-test('langBadge renders a labelled badge for known tasks and nothing for unknown', () => {
-  assert.match(langBadge('pl_lm'), /PL/);
-  assert.match(langBadge('piqa'), /EN/);
-  assert.match(langBadge('int_index'), /NEU/);
-  assert.equal(langBadge('mystery_task'), '');
-});
 
 test('plDiverges enforces the cross-check: flags only when rank margin and pl_induction disagree in direction', () => {
   const acc = v => ({ value: v });

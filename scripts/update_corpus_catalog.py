@@ -1,8 +1,7 @@
-"""Embed the verified, text-free source catalog into the standalone UI."""
+"""Refresh the verified, text-free source catalog consumed by the React UI."""
 import argparse
 import hashlib
 import json
-import re
 from pathlib import Path
 
 COLORS={'hplt':'#a84d33','wikipedia':'#527660','eurlex':'#647d96','wolne_lektury':'#91733a',
@@ -15,7 +14,3 @@ if __name__=='__main__':
         assert hashlib.sha256((args.folder/(d['key']+'.txt')).read_bytes()).hexdigest()==d['sha256']
         d['color']=COLORS[d['key']]
     Path('docs/corpus-samples.json').write_text(json.dumps(catalog,ensure_ascii=False,indent=2)+'\n')
-    p=Path('src/fabryka_track/static/index.html');s=p.read_text()
-    encoded=json.dumps({d['id']:d for d in catalog},ensure_ascii=True).replace('<','\\u003c')
-    s=re.sub(r'// CORPUS_CATALOG_START.*?// CORPUS_CATALOG_END',lambda _: '// CORPUS_CATALOG_START\n      const corpusSources = '+encoded+';\n      // CORPUS_CATALOG_END',s,flags=re.S)
-    p.write_text(s)
