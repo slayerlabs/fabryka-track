@@ -479,3 +479,11 @@ The Studio supports public Hugging Face imports with previews, text/column filte
 ### Remote goal engine
 
 Open `/goal` for the canonical [RFC PR #5](https://github.com/slayerlabs/rfcs/pull/5). The existing `/status` prototype can show progress, answer blockers, and stop work. Track owns the durable goal history; an agent runtime on a separate machine claims work through the scoped engine API. See [the engine setup and adapter protocol](docs/goal-engine.md).
+
+### Ivme v3 English dataset mixture
+
+The `/new` studio includes a six-source Ivme-inspired data preset with guided
+public Hugging Face imports and exact 0.01% dataset shares. Applying it preserves
+the selected model and budget and never starts training. See
+[the recipe and contributor notes](docs/ivme-dataset-mix.md) for dataset subsets,
+byte-token sampling semantics, source matching and verification.

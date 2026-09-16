@@ -134,7 +134,7 @@ async def upload_dataset(file: UploadFile = File(...), session=Depends(session_s
 
 class MixItem(BaseModel):
     dataset_id: str
-    weight: int = Field(ge=1, le=100)
+    weight: float = Field(ge=0.01, le=100, multiple_of=0.01, allow_inf_nan=False)
 
 
 class TrainingInput(BaseModel):
@@ -166,7 +166,7 @@ class TrainingInput(BaseModel):
         generic = {"test", "run", "training", "new", "untitled", "trening", "nowy", "nazwa", "asdf", "qwerty"}
         if len(self.name) < 8 or len(letters) < 4 or len(set(letters)) < 2 or all(w in generic for w in words):
             raise ValueError("Use a descriptive run name (8–120 characters), including the model, dataset or experiment; for example: Polish GPT - Wikipedia baseline.")
-        if sum(d.weight for d in self.mix) != 100:
+        if sum(round(d.weight * 100) for d in self.mix) != 10000:
             raise ValueError("Dataset percentages must add up to 100.")
         if len({d.dataset_id for d in self.mix}) != len(self.mix):
             raise ValueError("Each dataset can only appear once.")

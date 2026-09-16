@@ -2460,3 +2460,13 @@ footer {
     transition: none !important;
   }
 }
+
+/* Exact research dataset recipes in Training studio. */
+.recipe-preset { margin-bottom: 24px; }
+.recipe-preset .table-wrap { overflow-x: auto; }
+.recipe-preset table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.recipe-preset th, .recipe-preset td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); }
+.recipe-preset th { font-size: 12px; }
+.recipe-preset td:nth-child(2) { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.recipe-preset small { color: var(--muted); overflow-wrap: anywhere; }
+.dataset-controls input[type="number"] { min-width: 0; width: 100%; padding: 7px; border: 1px solid var(--line); border-radius: 5px; background: var(--paper); color: var(--ink); }
