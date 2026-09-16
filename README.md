@@ -43,6 +43,19 @@ Frontend checks: `npm --prefix frontend run build` and
 `node --experimental-strip-types --test tests/*.test.mjs`. Browser smoke checks
 must cover authenticated training/run workflows as well as anonymous public pages.
 
+### Runs dashboard — 2026-09-16
+
+Added the white workspace dashboard with experiment-grouped run trees, status/date
+filters, real validation-loss sparklines, comparison selection and an owner-only
+checkpoint inventory. Fork and Retry restore the selected checkpoint's recipe in
+Training studio and require an explicit launch; they never start GPU work on click.
+F1 and GPU usage remain unavailable when not reported, rather than showing sample
+values. The dashboard uses `GET /api/dashboard`; `/checkpoints` supports downloads
+and reviewed forks. See [run workspace](docs/run-workspace.md).
+
+Fixed Plotly trace identifiers so metric names containing slashes no longer crash
+navigation away from a run or comparison chart.
+
 ### Frontend migration — 2026-09-16
 
 Replaced the standalone HTML/JavaScript application with a full React + Refine
@@ -441,7 +454,7 @@ A startup failure may produce only the controller's failure log. Interrupted GPU
 training cannot resume from optimizer state; checkpoints are selected by best
 validation loss, with actual completed steps and tokens recorded.
 
-The web UI uses document navigation at `/new`, `/runs`, `/run/<id>`,
+The web UI uses document navigation at `/new`, `/runs`, `/checkpoints`, `/run/<id>`,
 `/compare/<ids>`, `/benchmarks`, `/leaderboard`, `/guide`, `/login` and `/account`.
 Legacy hash bookmarks redirect to these pages.
 

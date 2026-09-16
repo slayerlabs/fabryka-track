@@ -23,31 +23,30 @@ import {
 } from "./pages/Public";
 import { BenchmarksPage } from "./pages/Benchmarks";
 import { LeaderboardPage } from "./pages/Leaderboard";
+import { CheckpointsPage } from "./pages/Checkpoints";
+import { useDashboard } from "./pages/DashboardData";
+import { Icon, type IconName } from "./Icons";
 
-const navigation = [
+const navigation: { label: string; links: [string, string, IconName][] }[] = [
   {
-    label: "Explore",
+    label: "Workspace",
     links: [
-      ["/", "Goals"],
-      ["/status", "Status"],
-      ["/agents", "Agent sign up"],
-      ["https://github.com/slayerlabs/rfcs", "RFC repository"],
+      ["/new", "Training studio", "flask"],
+      ["/runs", "My runs", "play"],
+      ["/checkpoints", "Checkpoints", "layers"],
+      ["/benchmarks", "Benchmarks", "chart"],
+      ["/leaderboard", "Leaderboard", "trophy"],
     ],
   },
   {
-    label: "Build",
+    label: "Research & resources",
     links: [
-      ["/new", "Training studio"],
-      ["/runs", "My runs"],
-    ],
-  },
-  {
-    label: "Compare",
-    links: [
-      ["/benchmarks", "Benchmarks"],
-      ["/benchmark-results", "Published results"],
-      ["/leaderboard", "Leaderboard"],
-      ["/guide", "Training guide"],
+      ["/", "Goals", "target"],
+      ["/status", "Status", "chart"],
+      ["/agents", "Agent sign up", "users"],
+      ["/benchmark-results", "Published results", "chart"],
+      ["/guide", "Training guide", "book"],
+      ["https://github.com/slayerlabs/rfcs", "RFC repository", "book"],
     ],
   },
 ];
@@ -55,6 +54,8 @@ const navigation = [
 export function App() {
   const location = useLocation();
   const { data: identity } = useGetIdentity<Identity | null>();
+  const dashboard = useDashboard(Boolean(identity));
+  const memory = identity ? dashboard.data?.gpu_memory : undefined;
   useEffect(() => {
     const name =
       navigation
@@ -81,22 +82,76 @@ export function App() {
       <div className="app-shell">
         <aside className="sidebar">
           <Link className="brand" to="/">
-            Fabryka<span className="brand-sep">/</span>Track
+            <span className="brand-mark">f</span>
+            <span className="brand-name">
+              fabryka<span>/ track</span>
+            </span>
           </Link>
           <nav className="sidebar-nav" aria-label="Main">
             {navigation.map((group) => (
-              <div className="sidebar-group" key={group.label}>
-                <span className="sidebar-group-label">{group.label}</span>
-                {group.links.map(([path, label]) => (
-                  <NavLink key={path} to={path} end={path === "/"}>
-                    {label}
-                  </NavLink>
-                ))}
-              </div>
+              <details
+                className="sidebar-group"
+                key={group.label}
+                open={group.label === "Workspace" ? true : undefined}
+              >
+                <summary className="sidebar-group-label">{group.label}</summary>
+                <div className="sidebar-links">
+                  {group.links.map(([path, label, icon]) => (
+                    <NavLink key={path} to={path} end={path === "/"}>
+                      <Icon name={icon} />
+                      <span>{label}</span>
+                      {path === "/runs" && identity && dashboard.data && (
+                        <span className="sidebar-count">
+                          {dashboard.data.runs.length}
+                        </span>
+                      )}
+                    </NavLink>
+                  ))}
+                </div>
+              </details>
             ))}
           </nav>
           <div className="sidebar-spacer" />
-          <NavLink to={identity ? "/account" : "/login"}>
+          {identity && (
+            <div className="gpu-status-card">
+              <div className="gpu-status-label">
+                <span
+                  className={`gpu-live-dot${memory?.active_runs ? " is-live" : ""}`}
+                />
+                GPU activity
+              </div>
+              {memory?.used_gb != null &&
+              memory.total_gb != null &&
+              memory.total_gb > 0 ? (
+                <>
+                  <div className="gpu-memory-value">
+                    <b>{memory.used_gb.toFixed(1)}</b> /{" "}
+                    {memory.total_gb.toFixed(1)} GB VRAM
+                  </div>
+                  <progress
+                    className="gpu-status-bar"
+                    value={memory.used_gb}
+                    max={memory.total_gb}
+                    aria-label="GPU memory usage"
+                  />
+                </>
+              ) : (
+                <span className="gpu-status-meta">Live VRAM not reported</span>
+              )}
+              <span className="gpu-status-meta">
+                {dashboard.error
+                  ? "GPU status unavailable"
+                  : memory
+                    ? `${memory.active_runs} active GPU run${memory.active_runs === 1 ? "" : "s"}`
+                    : "Loading GPU activity…"}
+              </span>
+            </div>
+          )}
+          <NavLink
+            className="sidebar-account"
+            to={identity ? "/account" : "/login"}
+          >
+            <Icon name="user" />
             {identity?.username || "Sign in"}
           </NavLink>
         </aside>
@@ -139,6 +194,14 @@ export function App() {
               }
             />
             <Route
+              path="/checkpoints"
+              element={
+                <Authenticated key="checkpoints" fallback={<LoginPage />}>
+                  <CheckpointsPage />
+                </Authenticated>
+              }
+            />
+            <Route
               path="/benchmarks"
               element={
                 <Authenticated key="benchmarks" fallback={<LoginPage />}>
@@ -166,7 +229,7 @@ export function App() {
           </Routes>
         </main>
       </div>
-      <footer>
+      <footer className="app-footer">
         <span>Small experiments. Clear results.</span>
         <span>Fabryka Track</span>
       </footer>

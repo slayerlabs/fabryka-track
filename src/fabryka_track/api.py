@@ -26,6 +26,7 @@ from .goals import router as goals_router
 from .research import router as research_router
 from .agents import router as agents_router
 from .external_training import router as external_training_router, is_shared_live, PUBLIC_METRICS
+from .dashboard import router as dashboard_router
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
@@ -61,6 +62,7 @@ app.include_router(goals_router)
 app.include_router(research_router)
 app.include_router(agents_router)
 app.include_router(external_training_router)
+app.include_router(dashboard_router)
 from .generation import router as generation_router
 app.include_router(generation_router)
 from .benchmark_remote import router as benchmark_remote_router
@@ -332,7 +334,7 @@ def goal_rfc_page():
 def web(path: str = ""):
     pages = {"": "Goals / RFCs", "new": "Training studio", "runs": "My runs",
              "benchmarks": "Benchmarks", "leaderboard": "Leaderboard", "guide": "Learning guide",
-             "login": "Sign in", "register": "Sign in", "account": "Account",
+             "login": "Sign in", "register": "Sign in", "account": "Account", "checkpoints": "Checkpoints",
              "status": "Goal status", "agents": "Agent sign up",
              "benchmark-results": "Published benchmarks",
              "goals/250m-english-base-model": "250M English base model"}
