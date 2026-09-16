@@ -45,7 +45,7 @@ def test_dashboard_requires_owner_and_hides_foreign_lineage(dashboard_client):
     with SessionLocal() as session:
         owner, project = seed_project(session)
         hidden = add_run(session, "another-owner", project, "Hidden parent",
-                         config={"experiment": "Secret experiment"}, is_public=True)
+                         config={"experiment": "Unowned experiment"}, is_public=True)
         artifact = Artifact(run_id=hidden.id, name="model.pt", storage_key=f"{hidden.id}/model.pt", size=987)
         session.add(artifact)
         session.flush()
