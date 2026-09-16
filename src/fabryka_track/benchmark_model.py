@@ -19,9 +19,13 @@ from .native_model import TinyTransformer
 
 
 class ByteCheckpointLM(LM):
-    def __init__(self, checkpoint, device="cpu"):
+    def __init__(self, checkpoint, device="cpu", *, payload=None, rolling_policy='sliding'):
         super().__init__()
-        payload = torch.load(checkpoint, map_location='cpu', weights_only=True)
+        if payload is None:
+            payload = torch.load(checkpoint, map_location='cpu', weights_only=True)
+        if rolling_policy not in ('sliding','harness'):
+            raise ValueError('Unknown rolling policy')
+        self.rolling_policy = rolling_policy
         self.cfg = payload['config']
         self.context_length = self.cfg['context_length']
         self.model = TinyTransformer(**{k: self.cfg[k] for k in ('width','layers','heads','context_length')}).eval()
@@ -136,7 +140,29 @@ class ByteCheckpointLM(LM):
         return self.score_many([tuple(r.args) for r in requests])
 
     def loglikelihood_rolling(self, requests):
-        return [pair[0] for pair in self.score_many([('',r.args[0]) for r in requests])]
+        """Legacy sliding by default; opt-in official harness block windows.
+
+        Work in bytes throughout: a window may split a Unicode code point and
+        must never decode/re-encode it. Each document starts a new prefix.
+        """
+        if self.rolling_policy == 'sliding':
+            return [pair[0] for pair in self.score_many([('', r.args[0]) for r in requests])]
+        from lm_eval.utils import get_rolling_token_windows
+        totals = []
+        size = max(1, 8192 // self.context_length)
+        for request in requests:
+            tokens = list(request.args[0].encode('utf-8'))
+            self.total_requests += 1
+            if len(tokens) > self.context_length:
+                self.truncated_requests += 1
+            windows = ((0, inputs, len(inputs) - len(targets), targets)
+                       for inputs, targets in get_rolling_token_windows(
+                           tokens, prefix_token=32, max_seq_len=self.context_length, context_len=1))
+            total = 0.0
+            for _, values, _ in self._batches(windows, size, self._score_prefix_chunk):
+                total += sum(values)
+            totals.append(total)
+        return totals
 
     def generate_until(self, requests):
         raise NotImplementedError('TinyLM suite uses likelihood tasks only.')

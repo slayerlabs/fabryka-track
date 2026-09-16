@@ -6,8 +6,9 @@ from sqlalchemy import select
 
 from conftest import sign_in
 from fabryka_track.database import SessionLocal
-from fabryka_track.models import Account, Artifact, Checkpoint, GPUJob, Metric, Project, Run, RunArtifactLink, now
+from fabryka_track.models import Account, Artifact, BenchmarkEvaluation, Checkpoint, GPUJob, Metric, Project, Run, RunArtifactLink, RunAttribute, now
 from fabryka_track.settings import settings
+from fabryka_track.wikitext_suite import PROTOCOL as WIKITEXT_PROTOCOL
 
 
 @pytest.fixture()
@@ -190,3 +191,95 @@ def test_checkpoint_storage_deduplicates_links_and_only_offers_loadable_forks(da
     assert sizes[ids[4]] == 128
     assert sum(sizes.values()) == 384
     assert len(checkpoints) == 3
+
+
+def test_focus_persists_for_whole_family_and_never_crosses_ownership(dashboard_client):
+    with SessionLocal() as session:
+        owner, project = seed_project(session)
+        parent = add_run(session, owner, project, "Owned baseline")
+        child = add_run(session, owner, project, "Owned fork", parent_run_id=parent.id)
+        foreign = add_run(session, "another-owner", project, "Foreign fork", parent_run_id=parent.id)
+        ids = parent.id, child.id, foreign.id
+        session.commit()
+    assert not any(run["focused"] for run in dashboard_client.get("/api/dashboard").json()["runs"])
+    response = dashboard_client.patch(f"/api/runs/{ids[1]}/focus", json={"focused": True})
+    assert response.status_code == 200
+    assert response.json() == {"family_id": ids[0], "focused": True}
+    runs = dashboard_client.get("/api/dashboard").json()["runs"]
+    assert {run["id"] for run in runs if run["focused"]} == set(ids[:2])
+    assert {run["family_id"] for run in runs} == {ids[0]}
+    assert dashboard_client.patch(f"/api/runs/{ids[2]}/focus", json={"focused": True}).status_code == 404
+    assert dashboard_client.patch(f"/api/runs/{ids[0]}/focus", json={"focused": False}).status_code == 200
+    assert not any(run["focused"] for run in dashboard_client.get("/api/dashboard").json()["runs"])
+    with SessionLocal() as session:
+        assert session.get(RunAttribute, (ids[2], "workspace/focused")) is None
+
+
+def test_running_forks_keep_entire_family_visible_and_block_archive(dashboard_client):
+    with SessionLocal() as session:
+        owner, project = seed_project(session)
+        parent = add_run(session, owner, project, "Finished baseline")
+        child = add_run(session, owner, project, "Active fork", state="running", parent_run_id=parent.id)
+        unrelated = add_run(session, owner, project, "Archived experiment")
+        ids = parent.id, child.id, unrelated.id
+        session.add(Metric(run_id=child.id, key="progress", step=8, value=40))
+        session.commit()
+    runs = {run["id"]: run for run in dashboard_client.get("/api/dashboard").json()["runs"]}
+    assert runs[ids[0]]["focused"] and runs[ids[1]]["focused"]
+    assert not runs[ids[2]]["focused"]
+    assert runs[ids[1]]["progress"] == 0.4
+    assert dashboard_client.patch(f"/api/runs/{ids[0]}/focus", json={"focused": False}).status_code == 409
+
+
+def test_dashboard_attaches_only_matching_checkpoint_evidence(dashboard_client):
+    with SessionLocal() as session:
+        owner, project = seed_project(session)
+        run = add_run(session, owner, project, "Checkpoint evidence")
+        artifact = Artifact(run_id=run.id, name="model.pt", storage_key=f"{run.id}/model.pt", size=123)
+        session.add(artifact)
+        session.flush()
+        checkpoint = add_checkpoint(session, run, artifact=artifact)
+        other = add_checkpoint(session, run, step=20)
+        session.add(Metric(run_id=run.id, key="training/tokens_seen", step=10, value=10240))
+        provenance = {"protocol": WIKITEXT_PROTOCOL, "checkpoint_id": checkpoint.id,
+                      "artifact_id": artifact.id, "checkpoint_sha256": "a" * 64,
+                      "dataset_split": "validation"}
+        measurement = {"byte_perplexity": 2.1, "bits_per_byte": 1.070389,
+                       "num_bytes": 50000, "num_documents": 20}
+        for status, mode, split in [("finished", "full", "validation"),
+                                    ("finished", "full", "test"),
+                                    ("finished", "smoke", "validation"),
+                                    ("failed", "full", "validation")]:
+            session.add(BenchmarkEvaluation(run_id=run.id, status=status, mode=mode,
+                tasks=["wikitext2"], results={"wikitext2": measurement},
+                provenance={**provenance, "dataset_split": split}))
+        session.add(BenchmarkEvaluation(run_id=run.id, status="finished", mode="full",
+            tasks=["wikitext2"], results={"wikitext2": measurement},
+            provenance={**provenance, "artifact_id": str(uuid4())}))
+        incomplete = BenchmarkEvaluation(run_id=run.id, status="finished", mode="full",
+            tasks=["wikitext2"], results={"wikitext2": {**measurement, "num_bytes": 0}},
+            provenance=provenance)
+        session.add(incomplete)
+        session.flush()
+        incomplete_id = incomplete.id
+        ids = checkpoint.id, other.id
+        session.commit()
+    checkpoints = {row["id"]: row for row in dashboard_client.get("/api/dashboard").json()["checkpoints"]}
+    assert checkpoints[ids[0]]["tokens_seen"] == 10240
+    assert checkpoints[ids[1]]["tokens_seen"] is None
+    assert checkpoints[ids[1]]["evaluations"] == []
+    evidence = checkpoints[ids[0]]["evaluations"]
+    assert {(row["status"], row["mode"], row["split"]) for row in evidence} == {
+        ("finished", "full", "validation"), ("finished", "full", "test"),
+        ("finished", "smoke", "validation"), ("failed", "full", "validation")}
+    assert next(row for row in evidence if row["id"] == incomplete_id)["byte_perplexity"] is None
+    assert all(row["byte_perplexity"] == (2.1 if row["status"] == "finished" else None)
+               for row in evidence if row["id"] != incomplete_id)
+
+
+def test_new_training_stays_focused_after_completion(dashboard_client):
+    from test_training import launch, finished
+    run = finished(dashboard_client, launch(dashboard_client, steps=10).json()["id"])
+    assert run["state"] == "finished"
+    rows = dashboard_client.get("/api/dashboard").json()["runs"]
+    assert next(row for row in rows if row["id"] == run["id"])["focused"] is True

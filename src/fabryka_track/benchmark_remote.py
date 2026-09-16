@@ -1,5 +1,6 @@
 """Scoped pull-worker API; no SSH credentials or user account keys on runners."""
 import json
+import math
 import secrets
 import time
 from datetime import datetime, timezone
@@ -8,10 +9,10 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
-from .benchmarks import lock
+from .benchmarks import evaluation_checkpoint_path, lock
 from .database import session_scope
-from .hf_publish import checkpoint_path
-from .models import BenchmarkEvaluation, Run
+from .models import BenchmarkEvaluation
+from . import wikitext_suite
 from .settings import settings
 
 router=APIRouter(prefix='/api/benchmark-runner')
@@ -33,15 +34,33 @@ def assignment(session,eid,runner,lease):
     return row
 
 
+class ClaimCapabilities(BaseModel):
+    protocols: list[str] = Field(default_factory=list, max_length=20)
+
+
 @router.post('/claim')
-def claim(runner=Depends(worker),session=Depends(session_scope)):
+def claim(body: ClaimCapabilities | None = None, runner=Depends(worker),session=Depends(session_scope)):
     with lock:
         active=list(session.scalars(select(BenchmarkEvaluation).where(BenchmarkEvaluation.status=='running')))
         if any(r.provenance.get('runner')==runner for r in active):return {'job':None}
         queued=session.scalars(select(BenchmarkEvaluation).where(BenchmarkEvaluation.status=='queued').order_by(BenchmarkEvaluation.created_at,BenchmarkEvaluation.id))
-        row=next((row for row in queued if row.provenance.get('target_runner') in (None,runner)),None)
-        if not row:return {'job':None}
-        checkpoint_path(session,session.get(Run,row.run_id))
+        from .tiny_ml_suite import PROTOCOL as tiny_protocol
+        supported = body.protocols if body else []
+        row=None
+        for candidate in queued:
+            if candidate.provenance.get('target_runner') not in (None,runner):continue
+            if candidate.provenance.get('protocol') in (tiny_protocol,wikitext_suite.PROTOCOL) and candidate.provenance['protocol'] not in supported:continue
+            try:
+                evaluation_checkpoint_path(session,candidate)
+            except HTTPException as exc:
+                candidate.status='failed';candidate.error=exc.detail
+                candidate.ended_at=datetime.now(timezone.utc)
+                continue
+            row=candidate
+            break
+        if not row:
+            session.commit()
+            return {'job':None}
         row.status='running';row.ended_at=None;row.error=None
         row.provenance={**row.provenance,'runner':runner,'lease':str(uuid4()),'heartbeat':time.time(),
                         'execution_started_at':datetime.now(timezone.utc).isoformat()}
@@ -52,7 +71,7 @@ def claim(runner=Depends(worker),session=Depends(session_scope)):
 @router.get('/{eid}/checkpoint')
 def checkpoint(eid:str,lease:str,runner=Depends(worker),session=Depends(session_scope)):
     row=assignment(session,eid,runner,lease)
-    return FileResponse(checkpoint_path(session,session.get(Run,row.run_id)),filename='model.pt')
+    return FileResponse(evaluation_checkpoint_path(session,row),filename='model.pt')
 
 
 class Progress(BaseModel):
@@ -70,14 +89,31 @@ def progress(eid:str,body:Progress,runner=Depends(worker),session=Depends(sessio
     with lock:
         row=assignment(session,eid,runner,body.lease)
         original=row.provenance
-        row.provenance={**original,**(body.provenance or {}),'runner':runner,'lease':body.lease,'heartbeat':time.time(),
-                        'checkpoint_sha256':original['checkpoint_sha256']}
+        protected = {'checkpoint_id','artifact_id','checkpoint_storage_key','checkpoint_sha256',
+                     'checkpoint_step','dataset_split','protocol','seed','fewshot','limit_per_subtask',
+                     'dataset','dataset_config','evaluator_version','wikitext_task_version','detokenizer',
+                     'context_policy','byte_denominator','external_comparability','target_runner','visibility','reference'}
+        if 'wikitext2' in row.tasks:protected.add('dataset_revisions')
+        updates={k:v for k,v in (body.provenance or {}).items() if k not in protected}
+        row.provenance={**original,**updates,'runner':runner,'lease':body.lease,'heartbeat':time.time()}
         if body.results is not None:
             if set(body.results)-set(row.tasks):raise HTTPException(422,'Unexpected benchmark tasks')
             row.results=body.results
         if body.current_task is not None:row.current_task=body.current_task
         if body.status=='finished' and any(k not in row.results or row.results[k].get('error') for k in row.tasks):
             raise HTTPException(422,'All assigned tasks must finish')
+        if body.status=='finished' and 'wikitext2' in row.tasks:
+            result=row.results['wikitext2']
+            if (result.get('protocol') != original.get('protocol') or
+                    result.get('dataset_split') != original.get('dataset_split') or
+                    result.get('mode') != row.mode or
+                    result.get('dataset_revisions') != original.get('dataset_revisions') or
+                    any(not isinstance(result.get(k),(int,float)) or isinstance(result[k],bool) or
+                        not math.isfinite(result[k]) or result[k] < 0 or (k == 'byte_perplexity' and result[k] == 0)
+                        for k in ('byte_perplexity','bits_per_byte')) or
+                    any(type(result.get(k)) is not int or result[k] <= 0 for k in ('num_bytes','num_documents'))):
+                raise HTTPException(422,'WikiText result must include complete pinned corpus metrics')
+        if body.status=='finished':evaluation_checkpoint_path(session,row)
         row.status=body.status
         if body.status!='running':
             row.ended_at=datetime.now(timezone.utc);row.current_task=None;row.error=body.error

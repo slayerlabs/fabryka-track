@@ -345,6 +345,21 @@ function RunWorkspace({ id }: { id: string }) {
           {active && "Refreshes every 2 seconds."}
         </p>
       </div>
+      {!readOnly && (
+        <div className="checkpoint-protocol-note">
+          <Link
+            className="runs-button runs-button-secondary"
+            to={`/checkpoints?run=${encodeURIComponent(id)}`}
+          >
+            Monitor checkpoints · WikiText-2 validation / test
+          </Link>
+          <p>
+            Evaluate compatible saved snapshots while training continues, or
+            review a weights-only fork. No evaluation or training is launched by
+            opening this page.
+          </p>
+        </div>
+      )}
       {finished && <RunBenchmarks id={id} canEvaluate={!readOnly && local} />}
       <div className="actions">
         <div>

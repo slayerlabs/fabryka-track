@@ -43,6 +43,21 @@ Frontend checks: `npm --prefix frontend run build` and
 `node --experimental-strip-types --test tests/*.test.mjs`. Browser smoke checks
 must cover authenticated training/run workflows as well as anonymous public pages.
 
+### Focused checkpoint workflow — 2026-09-16
+
+`/runs` now opens focused baseline/fork families, with persistent whole-family
+Focus/Archive and an All runs view. New runs stay focused after completion;
+active families cannot be archived. The headline is full-validation WikiText-2
+BYTE_PPL, not F1 or training loss. The native 150M preset is 149,633,280 parameters.
+
+`/checkpoints?run=<id>` supports explicit evaluation of individual saved snapshots,
+including during training, and separately confirmed final-test verification.
+Evaluation pins checkpoint identity, artifact SHA, dataset revision, split and
+protocol; smoke and test scores never enter the validation ranking. Forks remain
+reviewed weights-only launches, not full-state training resume. Opening either
+page starts no jobs. See [run workspace](docs/run-workspace.md) for the protocol and
+worker rollout. No numerical parity with external leaderboard reports is claimed.
+
 ### Runs dashboard — 2026-09-16
 
 Added the white workspace dashboard with experiment-grouped run trees, status/date
@@ -487,3 +502,8 @@ public Hugging Face imports and exact 0.01% dataset shares. Applying it preserve
 the selected model and budget and never starts training. See
 [the recipe and contributor notes](docs/ivme-dataset-mix.md) for dataset subsets,
 byte-token sampling semantics, source matching and verification.
+
+## Private Tiny-ML leaderboard
+
+Compare your checkpoints at `/benchmarks` with private BLiMP, ARC-Easy and
+WikiText-2 byte perplexity evaluations. See [protocol and worker setup](docs/private-tiny-ml.md).
