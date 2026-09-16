@@ -21,6 +21,7 @@ from .hf_publish import checkpoint_path
 from .models import Account, BenchmarkEvaluation, Run, RunLog
 
 router = APIRouter(prefix='/api')
+from .tiny_ml_suite import PROTOCOL as TINY_ML_PROTOCOL, TASKS as TINY_ML_TASKS, REVISIONS as TINY_ML_REVISIONS, REFERENCE as TINY_ML_REFERENCE, scores as tiny_ml_scores
 from .fast_ladder import COMPONENTS, PROTOCOL as FAST_PROTOCOL, fast_score
 from .fast_pl_ladder import PROTOCOL as PL_PROTOCOL, pl_score
 from .leaderboard_suite import TASKS as LEADERBOARD_TASKS, PROTOCOL as LEADERBOARD_PROTOCOL, REVISIONS
@@ -28,11 +29,12 @@ from .pl_leaderboard_suite import TASKS as LEADERBOARD_PL_TASKS, PROTOCOL as LEA
 
 PROTOCOL = 'tinylm-en-v1-byte-sliding'
 CORE = ['sciq','arc_easy','piqa','hellaswag','blimp']
-SUITES = {'piqa':['piqa'], 'core':CORE, 'tinylm':CORE+['lambada_openai'],
+SUITES = {'tiny_ml':TINY_ML_TASKS, 'piqa':['piqa'], 'core':CORE, 'tinylm':CORE+['lambada_openai'],
           'extended':CORE+['lambada_openai','winogrande','boolq'],
           'polish': ['multiblimp_polish'], 'fast':[k for k in COMPONENTS if k!='fast_ewok'], 'fast_pl':['pl_lm','pl_multiblimp','pl_induction'],
           'leaderboard':LEADERBOARD_TASKS, 'leaderboard_pl':LEADERBOARD_PL_TASKS}
 TASKS = {
+    'wikitext': ('WikiText-2 byte perplexity','EleutherAI/wikitext_document_level'),
     'sciq': ('SciQ','allenai/sciq'), 'arc_easy': ('ARC-Easy','allenai/ai2_arc'),
     'piqa': ('PIQA','baber/piqa'), 'hellaswag': ('HellaSwag','Rowan/hellaswag'),
     'blimp': ('BLiMP','nyu-mll/blimp'), 'lambada_openai': ('LAMBADA','EleutherAI/lambada_openai'),
@@ -74,7 +76,7 @@ def serialize(row, session=None):
         position=1+session.scalar(select(func.count()).select_from(BenchmarkEvaluation).where(
             BenchmarkEvaluation.status=='queued',
             (BenchmarkEvaluation.created_at<row.created_at) | ((BenchmarkEvaluation.created_at==row.created_at)&(BenchmarkEvaluation.id<row.id))))
-    return {k:getattr(row,k) for k in ('id','run_id','status','mode','tasks','results','provenance','current_task','error','created_at','ended_at')} | {'tiny_score':tiny_score(row.results), 'protocol':row.provenance.get('protocol',PROTOCOL), 'fast_score':fast_score(row.results), 'pl_score':pl_score(row.results), 'queue_position':position}
+    return {k:getattr(row,k) for k in ('id','run_id','status','mode','tasks','results','provenance','current_task','error','created_at','ended_at')} | {'tiny_score':tiny_score(row.results), 'protocol':row.provenance.get('protocol',PROTOCOL), 'fast_score':fast_score(row.results), 'pl_score':pl_score(row.results), 'queue_position':position, 'tiny_ml_score':tiny_ml_scores(row.results, row.provenance.get('parameters')) if row.provenance.get('protocol')==TINY_ML_PROTOCOL and row.mode=='full' and row.status=='finished' else None}
 
 
 def auto_benchmark_summary(session, run):
@@ -107,7 +109,7 @@ def auto_benchmark_summary(session, run):
 def catalog():
     return {'protocol':PROTOCOL, 'available':importlib.util.find_spec('lm_eval') is not None,
             'tasks':[{'id':k,'name':v[0],'url':('https://huggingface.co/datasets/'+v[1] if v[1] else 'https://huggingface.co/spaces/AxiomicLabs/Open_SLM_Leaderboard')} for k,v in TASKS.items()],
-            'core':CORE,'suites':SUITES,'tiers':TIERS,'fast_ladder':COMPONENTS}
+            'tiny_ml_reference':TINY_ML_REFERENCE, 'core':CORE,'suites':SUITES,'tiers':TIERS,'fast_ladder':COMPONENTS}
 
 
 def visible_run(session,run_id,user):
@@ -119,12 +121,13 @@ def visible_run(session,run_id,user):
 
 @router.get('/runs/{run_id}/benchmarks')
 def history(run_id:str,user=Depends(current_user),session=Depends(session_scope)):
-    visible_run(session,run_id,user)
-    return [serialize(row,session) for row in session.scalars(select(BenchmarkEvaluation).where(BenchmarkEvaluation.run_id==run_id).order_by(BenchmarkEvaluation.created_at.desc()))]
+    run=visible_run(session,run_id,user)
+    return [serialize(row,session) for row in session.scalars(select(BenchmarkEvaluation).where(BenchmarkEvaluation.run_id==run_id).order_by(BenchmarkEvaluation.created_at.desc()))
+            if (user and run.owner_id==user.id) or row.provenance.get('visibility')!='private']
 
 
 class EvaluationInput(BaseModel):
-    suite: Literal['core','tinylm','extended','polish','fast','piqa','fast_pl','leaderboard','leaderboard_pl'] = 'tinylm'
+    suite: Literal['tiny_ml','core','tinylm','extended','polish','fast','piqa','fast_pl','leaderboard','leaderboard_pl'] = 'tinylm'
     mode: Literal['smoke','full'] = 'smoke'
 
 
@@ -141,7 +144,7 @@ def start(run_id:str,body:EvaluationInput,user=Depends(require_user),session=Dep
             raise HTTPException(409,'This run already has a queued or running evaluation.')
         digest=hashlib.sha256(path.read_bytes()).hexdigest()
         tasks=SUITES[body.suite]
-        protocol=LEADERBOARD_PL_PROTOCOL if body.suite=='leaderboard_pl' else LEADERBOARD_PROTOCOL if body.suite=='leaderboard' else PL_PROTOCOL if body.suite=='fast_pl' else FAST_PROTOCOL if body.suite=='fast' else PROTOCOL
+        protocol=TINY_ML_PROTOCOL if body.suite=='tiny_ml' else LEADERBOARD_PL_PROTOCOL if body.suite=='leaderboard_pl' else LEADERBOARD_PROTOCOL if body.suite=='leaderboard' else PL_PROTOCOL if body.suite=='fast_pl' else FAST_PROTOCOL if body.suite=='fast' else PROTOCOL
         previous=list(session.scalars(select(BenchmarkEvaluation).where(BenchmarkEvaluation.run_id==run_id,
             BenchmarkEvaluation.mode==body.mode).order_by(BenchmarkEvaluation.created_at.desc())))
         compatible=[r for r in previous if r.provenance.get('checkpoint_sha256')==digest and
@@ -165,6 +168,8 @@ def start(run_id:str,body:EvaluationInput,user=Depends(require_user),session=Dep
             provenance={k:v for k,v in (source.provenance.items() if source else []) if k not in ('runner','lease','heartbeat','worker_pid')}
             provenance.update(checkpoint_sha256=digest,protocol=protocol,fewshot=0,seed=42,
                               limit_per_subtask=10 if body.mode=='smoke' else None,reused_tasks=list(completed))
+            if body.suite=='tiny_ml':
+                provenance.update(dataset_revisions=dict(TINY_ML_REVISIONS), visibility='private', reference=dict(TINY_ML_REFERENCE), parameters=run.config.get('parameters'))
             if body.suite=='leaderboard':provenance['dataset_revisions']=dict(REVISIONS)
             if source:provenance['reused_from_evaluation']=source.id
             row=BenchmarkEvaluation(run_id=run.id,mode=body.mode,tasks=tasks,results=completed,provenance=provenance,
@@ -332,3 +337,22 @@ def evaluations(limit:int=Query(50,ge=1,le=100),offset:int=Query(0,ge=0),user=De
     total=session.scalar(select(func.count()).select_from(BenchmarkEvaluation).join(Run).where(Run.owner_id==user.id))
     return {'items':[serialize(row,session)|{'run_name':session.get(Run,row.run_id).name} for row in rows],
             'total':total,'offset':offset,'limit':limit}
+
+
+@router.get('/benchmarks/tiny-ml')
+def tiny_ml_board(user=Depends(require_user),session=Depends(session_scope)):
+    rows=session.execute(select(BenchmarkEvaluation,Run).join(Run).where(
+        Run.owner_id==user.id, BenchmarkEvaluation.provenance['protocol'].as_string()==TINY_ML_PROTOCOL,
+        BenchmarkEvaluation.mode=='full', BenchmarkEvaluation.status=='finished'
+    ).order_by(BenchmarkEvaluation.created_at.desc(), BenchmarkEvaluation.id.desc())).all()
+    items=[];seen=set()
+    for evaluation,run in rows:
+        digest=evaluation.provenance.get('checkpoint_sha256')
+        key=(run.id,digest)
+        if key in seen:continue
+        seen.add(key)
+        item=serialize(evaluation)
+        if item['tiny_ml_score'] is None:continue
+        items.append(item | {'run_name':run.name,'model_size':run.config.get('model_size')})
+    items.sort(key=lambda item:item['tiny_ml_score']['efficiency'],reverse=True)
+    return {'items':items,'protocol':TINY_ML_PROTOCOL,'reference':TINY_ML_REFERENCE}

@@ -487,3 +487,8 @@ public Hugging Face imports and exact 0.01% dataset shares. Applying it preserve
 the selected model and budget and never starts training. See
 [the recipe and contributor notes](docs/ivme-dataset-mix.md) for dataset subsets,
 byte-token sampling semantics, source matching and verification.
+
+## Private Tiny-ML leaderboard
+
+Compare your checkpoints at `/benchmarks` with private BLiMP, ARC-Easy and
+WikiText-2 byte perplexity evaluations. See [protocol and worker setup](docs/private-tiny-ml.md).

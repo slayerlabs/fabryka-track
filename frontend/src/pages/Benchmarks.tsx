@@ -1,3 +1,4 @@
+import { TinyMLBoard } from "./TinyMLBoard";
 import { Fragment, useState } from "react";
 import { useCustom, useCustomMutation } from "@refinedev/core";
 import { request } from "../provider";
@@ -5,6 +6,7 @@ import { MetricHelp } from "./BenchmarkHelp";
 import guide from "./BenchmarkGuide.html?raw";
 interface TaskResult {
   accuracy?: number;
+  byte_perplexity?: number;
   bpb?: number;
   nll?: number;
   samples?: number;
@@ -139,7 +141,7 @@ function EvaluationDetails({
                   <td>
                     {catalog.tasks.find((task) => task.id === key)?.name || key}
                   </td>
-                  <td>{value.error || percent(value.accuracy)}</td>
+                  <td>{value.error || (key === "wikitext" ? "Byte PPL " + metric(value.byte_perplexity) + " · BPB " + metric(value.bpb) : percent(value.accuracy))}</td>
                   <td>{value.samples ?? "—"}</td>
                 </tr>
               ))}
@@ -156,7 +158,7 @@ export function BenchmarksPage() {
     [order, setOrder] = useState<"asc" | "desc" | null>(null),
     [expanded, setExpanded] = useState<Set<string>>(new Set()),
     [runId, setRunId] = useState(""),
-    [suite, setSuite] = useState("fast"),
+    [suite, setSuite] = useState("tiny_ml"),
     [mode, setMode] = useState("smoke"),
     [message, setMessage] = useState("");
   const catalogQuery = useCustom<Catalog>({
@@ -270,6 +272,7 @@ export function BenchmarksPage() {
           My runs →
         </a>
       </div>
+      <TinyMLBoard />
       <MetricHelp />
       <div dangerouslySetInnerHTML={{ __html: guide }} />
       {failure && (
@@ -339,6 +342,7 @@ export function BenchmarksPage() {
                 onChange={(e) => setSuite(e.target.value)}
               >
                 {[
+                  ["tiny_ml", "Tiny-ML · private BLiMP + ARC-Easy + WikiText-2"],
                   ["fast", "Fast ladder EN · 4 ready / EWoK pending"],
                   [
                     "fast_pl",

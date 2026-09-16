@@ -3,6 +3,7 @@ import { fmt, pct, RunError, useRunAction, useRunQuery } from "./RunData";
 type Measurement = {
   error?: string;
   accuracy?: number;
+  byte_perplexity?: number;
   random_baseline?: number;
   normalized?: number;
   samples?: number;
@@ -137,6 +138,7 @@ export function RunBenchmarks({
             <label className="field">
               <span>Suite</span>
               <select name="suite">
+                <option value="tiny_ml">Tiny-ML · private BLiMP + ARC-Easy + WikiText-2</option>
                 <option value="fast">
                   Fast ladder EN · 4 ready / EWoK pending
                 </option>
@@ -302,7 +304,7 @@ export function RunBenchmarks({
                         {catalog.data?.tasks.find((t) => t.id === key)?.name ||
                           key}
                       </td>
-                      <td>{v.error || pct(v.accuracy)}</td>
+                      <td>{v.error || (key === "wikitext" ? "Byte PPL " + fmt(v.byte_perplexity, 4) : pct(v.accuracy))}</td>
                       <td>{pct(v.random_baseline)}</td>
                       <td>{pct(v.normalized)}</td>
                       <td>{v.samples ?? "—"}</td>

@@ -51,7 +51,8 @@ def main():
                     idle_checks+=1
                     if idle_checks<3:
                         runner_status(root,'checking_gpu_idle');time.sleep(10);continue
-                response=client.post(base+'/claim');response.raise_for_status();job=response.json()['job']
+                from .tiny_ml_suite import PROTOCOL as tiny_protocol
+                response=client.post(base+'/claim', json={'protocols':[tiny_protocol]});response.raise_for_status();job=response.json()['job']
                 if not job:runner_status(root,'waiting_for_job');time.sleep(5);continue
                 runner_status(root,'running',evaluation_id=job['id'])
                 execute(client,base,root,job)

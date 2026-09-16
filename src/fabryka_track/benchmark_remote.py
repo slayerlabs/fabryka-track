@@ -33,13 +33,20 @@ def assignment(session,eid,runner,lease):
     return row
 
 
+class ClaimCapabilities(BaseModel):
+    protocols: list[str] = Field(default_factory=list, max_length=20)
+
+
 @router.post('/claim')
-def claim(runner=Depends(worker),session=Depends(session_scope)):
+def claim(body: ClaimCapabilities | None = None, runner=Depends(worker),session=Depends(session_scope)):
     with lock:
         active=list(session.scalars(select(BenchmarkEvaluation).where(BenchmarkEvaluation.status=='running')))
         if any(r.provenance.get('runner')==runner for r in active):return {'job':None}
         queued=session.scalars(select(BenchmarkEvaluation).where(BenchmarkEvaluation.status=='queued').order_by(BenchmarkEvaluation.created_at,BenchmarkEvaluation.id))
-        row=next((row for row in queued if row.provenance.get('target_runner') in (None,runner)),None)
+        from .tiny_ml_suite import PROTOCOL as tiny_protocol
+        supported = body.protocols if body else []
+        row=next((row for row in queued if row.provenance.get('target_runner') in (None,runner)
+                  and (row.provenance.get('protocol') != tiny_protocol or tiny_protocol in supported)),None)
         if not row:return {'job':None}
         checkpoint_path(session,session.get(Run,row.run_id))
         row.status='running';row.ended_at=None;row.error=None
@@ -71,7 +78,8 @@ def progress(eid:str,body:Progress,runner=Depends(worker),session=Depends(sessio
         row=assignment(session,eid,runner,body.lease)
         original=row.provenance
         row.provenance={**original,**(body.provenance or {}),'runner':runner,'lease':body.lease,'heartbeat':time.time(),
-                        'checkpoint_sha256':original['checkpoint_sha256']}
+                        'checkpoint_sha256':original['checkpoint_sha256'],
+                        **{key:original[key] for key in ('visibility','protocol','reference') if key in original}}
         if body.results is not None:
             if set(body.results)-set(row.tasks):raise HTTPException(422,'Unexpected benchmark tasks')
             row.results=body.results

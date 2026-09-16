@@ -92,14 +92,15 @@ def report(evaluation, run, owner):
 def public_query():
     return select(BenchmarkEvaluation, Run, Account).join(Run, BenchmarkEvaluation.run_id == Run.id).outerjoin(
         Account, Run.owner_id == Account.id).where(
-        Run.is_public == True, Run.state == 'finished', BenchmarkEvaluation.status == 'finished')
+        Run.is_public == True, Run.state == 'finished', BenchmarkEvaluation.status == 'finished',
+        func.coalesce(BenchmarkEvaluation.provenance['visibility'].as_string(), '') != 'private')
 
 
 @router.get('/campaign-status')
 def campaign_status(session=Depends(session_scope)):
     rows=session.execute(select(BenchmarkEvaluation,Run).join(Run).where(
         Run.is_public==True,Run.state=='finished',BenchmarkEvaluation.mode=='full')).all()
-    rows=[(evaluation,run) for evaluation,run in rows if evaluation.provenance.get('campaign')]
+    rows=[(evaluation,run) for evaluation,run in rows if evaluation.provenance.get('campaign') and evaluation.provenance.get('visibility')!='private']
     if not rows:return {'total':0,'states':{},'running':[]}
     latest=max(rows,key=lambda row:row[0].created_at)[0].provenance['campaign']
     rows=[row for row in rows if row[0].provenance['campaign']==latest]

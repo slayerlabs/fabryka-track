@@ -15,6 +15,7 @@ from lm_eval.tasks import TaskManager
 from lm_eval.tasks._yaml_loader import load_yaml
 from sqlalchemy import update
 
+from .tiny_ml_suite import summarize_wikitext
 from .benchmark_model import ByteCheckpointLM
 from .benchmarks import TASKS
 from .database import SessionLocal
@@ -154,7 +155,7 @@ def run(eid, job=None, reporter=None):
                 limit=10 if mode=='smoke' else None,bootstrap_iters=0,log_samples=True,
                 random_seed=42,numpy_random_seed=42,torch_random_seed=42,fewshot_random_seed=42,
                 task_manager=manager)
-            results[name]=summarize(name,output)
+            results[name]=summarize_wikitext(output) if name=='wikitext' else summarize(name,output)
             results[name]['dataset_revisions']=revisions
             results[name]['task_versions']=output['versions']
             results[name]['splits']={k:v.get('test_split') or v.get('validation_split') for k,v in output['configs'].items()}
