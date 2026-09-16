@@ -1,0 +1,73 @@
+{
+  "name": "Ivme v3 data baseline size sweep",
+  "status": "prepared; budget and dataset materialization required",
+  "model_sizes": [
+    "8m",
+    "16m",
+    "32m",
+    "64m",
+    "150m"
+  ],
+  "parameter_cap": 150000000,
+  "seed": 42,
+  "tokenizer": "utf8-byte",
+  "target_tokens": null,
+  "max_runtime_seconds": null,
+  "sources": [
+    {
+      "name": "FineWeb-Edu",
+      "repo": "HuggingFaceFW/fineweb-edu",
+      "config": "sample-10BT",
+      "split": "train",
+      "text_column": "text",
+      "weight": 46.67
+    },
+    {
+      "name": "DCLM",
+      "repo": "mlfoundations/dclm-baseline-1.0",
+      "config": "default",
+      "split": "train",
+      "text_column": "text",
+      "weight": 27.78
+    },
+    {
+      "name": "FineWiki English",
+      "repo": "HuggingFaceFW/finewiki",
+      "config": "en",
+      "split": "train",
+      "text_column": "text",
+      "weight": 8.89
+    },
+    {
+      "name": "FineMath 3+",
+      "repo": "HuggingFaceTB/finemath",
+      "config": "finemath-3plus",
+      "split": "train",
+      "text_column": "text",
+      "weight": 7.78
+    },
+    {
+      "name": "Cosmopedia v2",
+      "repo": "HuggingFaceTB/smollm-corpus",
+      "config": "cosmopedia-v2",
+      "split": "train",
+      "text_column": "text",
+      "weight": 5.56
+    },
+    {
+      "name": "SimpleStories",
+      "repo": "SimpleStories/SimpleStories",
+      "config": "default",
+      "split": "train",
+      "text_column": "story",
+      "weight": 3.32
+    }
+  ],
+  "notes": [
+    "Dataset recipe only; not Ivme architecture or BPE replication.",
+    "Same source snapshots and validation partitions for every size.",
+    "Resolve and pin dataset revisions before import.",
+    "FineWeb-Edu sample-10BT is a starter subset choice, not established Ivme provenance.",
+    "Do not launch on the 10 MB UI preview samples as a full training corpus."
+  ]
+}
