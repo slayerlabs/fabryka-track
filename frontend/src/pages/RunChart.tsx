@@ -132,6 +132,11 @@ export function RunChart({
             average === undefined ? v : smooth * average + (1 - smooth) * v),
       );
       const key = s.id || s.name;
+      // Plotly interpolates trace UIDs into CSS selectors during updates/purge.
+      const uid = key.replace(
+        /[^a-zA-Z0-9-]/g,
+        (char) => `_${char.charCodeAt(0).toString(16)}_`,
+      );
       const base: Trace = {
         type: "scatter",
         mode: points.length === 1 ? "markers" : "lines",
@@ -149,11 +154,11 @@ export function RunChart({
         output.push({
           ...base,
           y: raw,
-          uid: key + "-raw",
+          uid: `raw-${uid}`,
           opacity: 0.17,
           hoverinfo: "skip",
         });
-      output.push({ ...base, uid: key });
+      output.push({ ...base, uid: `series-${uid}` });
     }
     return output;
   }, [series, scale, axis, smooth, hidden, muted]);

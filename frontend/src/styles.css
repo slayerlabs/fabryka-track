@@ -1,12 +1,31 @@
 :root {
-  --bg: #f5f3ed;
-  --paper: #fffefa;
-  --ink: #292b25;
-  --muted: #74766c;
-  --line: #dedfd5;
-  --accent: #a84d33;
-  --green: #527660;
-  --blue: #647d96;
+  color-scheme: light;
+  --bg: #ffffff;
+  --paper: #ffffff;
+  --ink: #1d2029;
+  --muted: #7e838e;
+  --muted-2: #666d7a;
+  --muted-3: #4d5563;
+  --line: #e7e9ef;
+  --line-2: #eff0f4;
+  --accent: #7665df;
+  --accent-hover: #6251c8;
+  --accent-tint: #eeebfc;
+  --accent-tint-2: #f8f7ff;
+  --accent-dark: #6654cb;
+  --green: #29985e;
+  --green-tint: #eaf8ef;
+  --blue: #5b8ee5;
+  --amber: #bd842c;
+  --amber-tint: #fff6e4;
+  --amber-line: #eddcb8;
+  --red: #c45161;
+  --red-tint: #fdeef1;
+  --sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono:
+    "IBM Plex Mono", ui-monospace, SFMono-Regular, Consolas, "Liberation Mono",
+    monospace;
+  --shadow: 0 2px 4px #18223803;
 }
 * {
   box-sizing: border-box;
@@ -1803,35 +1822,6 @@ main:has(.studio-intro) {
   }
 }
 
-/* Shared Track presentation — "Turn 2" purple / IBM Plex system. Native controls and data visualizations stay functional. */
-:root {
-  color-scheme: light;
-  --bg: #e9e7e4;
-  --paper: #ffffff;
-  --ink: #1d1b19;
-  --muted: #6f685f;
-  --muted-2: #5d574f;
-  --muted-3: #4a443d;
-  --line: #e4e0da;
-  --line-2: #e8e4dd;
-  --accent: #6b5fb8;
-  --accent-hover: #584ca3;
-  --accent-tint: #efeaf9;
-  --accent-tint-2: #faf8ff;
-  --accent-dark: #4b3f96;
-  --green: #27714a;
-  --green-tint: #eaf6ef;
-  --amber: #8a6a22;
-  --amber-tint: #fdf8ec;
-  --amber-line: #e8ddc0;
-  --red: #b23b3b;
-  --red-tint: #fdeeee;
-  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --mono:
-    "IBM Plex Mono", ui-monospace, SFMono-Regular, Consolas, "Liberation Mono",
-    monospace;
-  --shadow: 0 18px 40px -28px rgba(29, 27, 25, 0.35);
-}
 body {
   background: var(--bg);
   color: var(--ink);
@@ -1868,165 +1858,288 @@ summary:focus-visible {
   outline-offset: 4px;
 }
 
-/* Sidebar shell — replaces the old flat top header/nav row on every page */
+.ui-icon {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  vertical-align: middle;
+}
 .app-shell {
   display: grid;
-  grid-template-columns: 232px minmax(0, 1fr);
+  grid-template-columns: 272px minmax(0, 1fr);
   align-items: start;
-  max-width: 1440px;
-  margin: 0 auto;
+  min-height: calc(100vh - 65px);
 }
 .sidebar {
   position: sticky;
   top: 0;
   display: flex;
   flex-direction: column;
-  gap: 26px;
-  padding: 28px 18px;
-  min-height: 100vh;
+  gap: 18px;
+  padding: 42px 20px 22px;
+  height: 100dvh;
+  overflow-y: auto;
   border-right: 1px solid var(--line);
+  background: #f8f9fc;
 }
 .sidebar .brand {
   display: flex;
-  align-items: baseline;
-  gap: 5px;
-  font: 600 14px/1 var(--mono);
-  letter-spacing: 0.01em;
-  text-decoration: none;
+  align-items: center;
+  gap: 13px;
+  padding: 0 14px;
+  margin-bottom: 31px;
   color: var(--ink);
-  padding: 4px 8px 18px;
+  text-decoration: none;
+  letter-spacing: -0.6px;
 }
 .sidebar .brand:hover {
-  color: var(--accent);
+  background: none;
 }
-.brand-mark {
-  color: var(--accent);
-  font-size: 16px;
+.brand .brand-mark {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  margin: 0;
+  border-radius: 11px;
+  background: var(--accent);
+  color: white;
+  font: 700 35px/1 var(--sans);
+  box-shadow: 0 3px 7px #7665df18;
 }
-.brand-sep {
+.brand .brand-name {
+  color: var(--ink);
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.brand .brand-name span {
+  display: block;
   color: var(--muted);
+  margin: 4px 0 0;
+  font-size: 14px;
   font-weight: 400;
-  margin: 0 1px;
+  letter-spacing: 0;
+}
+.sidebar-nav,
+.sidebar-links {
+  display: flex;
+  flex-direction: column;
 }
 .sidebar-nav {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
+  gap: 35px;
 }
 .sidebar-group {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  margin: 0;
+}
+.sidebar-links {
+  gap: 7px;
 }
 .sidebar-group-label {
-  font: 600 10.5px/1.4 var(--mono);
-  letter-spacing: 0.1em;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1px;
   text-transform: uppercase;
   color: var(--muted);
-  padding: 6px 8px 6px;
+  padding: 4px 15px 8px;
 }
-.sidebar-group nav,
-.sidebar-group {
+.sidebar-group:first-child .sidebar-group-label {
+  display: none;
+}
+.sidebar a:not(.brand) {
   display: flex;
-  flex-direction: column;
-}
-.sidebar a {
-  display: block;
-  padding: 8px 8px;
-  border-radius: 7px;
-  font-size: 13.5px;
-  color: var(--muted-3);
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 0;
+  border-radius: 9px;
+  font-size: 13px;
+  line-height: 1.4;
+  font-weight: 500;
+  color: var(--muted-2);
   text-decoration: none;
 }
-.sidebar a:hover {
-  background: var(--accent-tint-2);
+.sidebar a:not(.brand):hover {
+  background: #eff0f6;
   color: var(--ink);
 }
 .sidebar a.active,
+.sidebar a.active:hover,
 .sidebar a[aria-current] {
   background: var(--accent-tint);
   color: var(--accent-dark);
   font-weight: 600;
 }
+.sidebar-count {
+  margin-left: auto;
+  padding: 1px 7px;
+  background: #e2dcf9;
+  color: var(--accent-dark);
+  border-radius: 5px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
 .sidebar-spacer {
   flex: 1;
 }
 .gpu-status-card {
-  border: 1px solid var(--line-2);
+  border: 1px solid var(--line);
   border-radius: 10px;
-  padding: 12px 14px;
+  padding: 17px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  background: var(--paper);
-  margin: 0 8px;
+  gap: 10px;
+  background: #ffffffb3;
+  margin: 0 1px;
 }
-.gpu-status-card .gpu-status-label {
-  font: 600 10.5px/1.2 var(--mono);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+.gpu-status-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted-3);
+}
+.gpu-live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #bbc1ca;
+}
+.gpu-live-dot.is-live {
+  background: var(--blue);
+  box-shadow: 0 0 0 3px #5b8ee512;
+}
+.gpu-memory-value {
+  font-size: 12px;
   color: var(--muted);
 }
-.gpu-status-card .gpu-status-bar {
+.gpu-memory-value b {
+  font-size: 20px;
+  color: var(--ink);
+}
+.gpu-status-bar {
+  width: 100%;
   height: 6px;
-  border-radius: 3px;
-  background: var(--accent-tint);
-  overflow: hidden;
+  accent-color: var(--blue);
 }
-.gpu-status-card .gpu-status-bar > span {
-  display: block;
-  height: 100%;
-  background: var(--accent);
+.gpu-status-meta {
+  font-size: 11px;
+  color: var(--muted);
 }
-.gpu-status-card .gpu-status-meta {
+.sidebar .sidebar-account {
   font-size: 12px;
-  color: var(--muted-2);
 }
 .shell-main {
   min-width: 0;
   width: 100%;
-  max-width: none;
-  margin: 0;
-  padding: 36px 40px 60px;
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: 47px 44px 60px;
+}
+.app-footer {
+  margin-left: 272px;
+  font-size: 11px;
+  padding: 20px 44px;
+}
+@media (min-width: 1500px) {
+  .app-shell {
+    grid-template-columns: 286px minmax(0, 1fr);
+  }
+  .sidebar {
+    padding-left: 22px;
+    padding-right: 22px;
+  }
+  .app-footer {
+    margin-left: 286px;
+  }
+}
+@media (max-width: 1100px) and (min-width: 761px) {
+  .app-shell {
+    grid-template-columns: 224px minmax(0, 1fr);
+  }
+  .sidebar {
+    padding: 30px 12px 18px;
+  }
+  .shell-main {
+    padding: 34px 26px 44px;
+  }
+  .app-footer {
+    margin-left: 224px;
+    padding: 18px 26px;
+  }
 }
 @media (max-width: 760px) {
   .app-shell {
     display: block;
-    max-width: 100%;
   }
   .sidebar {
     position: static;
-    min-height: 0;
+    height: auto;
     flex-direction: row;
     flex-wrap: wrap;
-    gap: 14px;
+    gap: 16px;
     border-right: 0;
     border-bottom: 1px solid var(--line);
-    padding: 16px;
+    padding: 20px 18px 14px;
+    overflow: visible;
+  }
+  .sidebar .brand {
+    margin: 0;
+    padding: 0;
+  }
+  .brand .brand-mark {
+    width: 34px;
+    height: 34px;
+    font-size: 28px;
+  }
+  .brand .brand-name {
+    font-size: 16px;
+  }
+  .brand .brand-name span {
+    display: inline;
+    margin-left: 5px;
   }
   .sidebar-nav {
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: 14px;
+    order: 3;
+    width: 100%;
+    gap: 12px;
   }
-  .sidebar-group {
+  .sidebar-links {
     flex-direction: row;
     flex-wrap: wrap;
     align-items: center;
-    gap: 4px;
+    gap: 5px;
   }
   .sidebar-group-label {
-    padding: 0 4px 0 0;
+    width: 100%;
+    padding: 0 8px;
+    font-size: 9px;
   }
-  .sidebar-spacer {
+  .sidebar a:not(.brand) {
+    padding: 9px 10px;
+    font-size: 12px;
+    gap: 7px;
+  }
+  .sidebar .ui-icon {
+    width: 16px;
+    height: 16px;
+  }
+  .sidebar-account {
+    margin-left: auto;
+  }
+  .sidebar-spacer,
+  .gpu-status-card {
     display: none;
   }
-  .gpu-status-card {
-    margin: 0;
-    width: 100%;
-  }
   .shell-main {
-    padding: 20px 18px 40px;
+    padding: 28px 20px 40px;
+  }
+  .app-footer {
+    margin-left: 0;
+    padding: 18px 20px;
   }
 }
 

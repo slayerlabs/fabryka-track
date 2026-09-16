@@ -92,3 +92,34 @@ in place. Completed tasks are retained; failed tasks are retried. A fully comple
 matching suite returns its existing evaluation without creating another job. Extending
 a suite copies compatible completed tasks from one coherent prior evaluation and
 queues only the remainder. Smoke results are never substituted for full results.
+
+## Runs dashboard and forks
+
+`/runs` groups owned runs by experiment and nests forks under their parent.
+Status, date and search filters apply to the table and summary cards; status-tab
+counts respect the date/search scope. Select 2–10 visible runs to open comparison.
+If a filter hides a parent, the fork identifies that parent without inventing a
+replacement baseline.
+
+F1 is shown only when an F1 metric was logged. Parent deltas require the same
+metric key. GPU hours use recorded RunPod billing seconds, not CPU runtime or
+allocation estimates. Checkpoint storage is based on artifact sizes, counting each
+artifact once. Missing values remain unavailable. GPU activity counts recent
+running worker heartbeats; peak allocations are not presented as current VRAM.
+The owner-only `/api/dashboard` projection returns latest metrics and at most 40
+validation-loss points per run rather than transferring full metric histories.
+
+`/checkpoints` lists saved weights with run/best filters, steps, validation loss,
+creation times, recorded sizes and authenticated downloads. Fork on either page
+opens `/new?parent=<run-id>&checkpoint=<checkpoint-id>`; Retry uses the same reviewed
+warm-start flow for stopped/failed runs with a compatible saved checkpoint.
+Multiple checkpoints open a chooser, defaulting to the best available checkpoint.
+Missing or unsupported checkpoints are not offered as executable forks. Existing
+trainers require local checkpoint files; R2-only artifacts are not forkable here.
+
+The fork draft restores the original accessible datasets and exact percentages,
+keeps model shape and compute fixed, and allows supported training-setting changes.
+Missing datasets or incompatible model shapes block launch rather than substituting
+data or architecture. The review step shows lineage. **Launch fork** creates a new
+run initialized from saved weights; optimizer, schedule and step counter start fresh.
+The parent and normal saved studio draft remain unchanged.

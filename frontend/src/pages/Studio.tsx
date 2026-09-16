@@ -7,12 +7,20 @@ import {
   type CSSProperties,
 } from "react";
 import { useCustom, useCustomMutation } from "@refinedev/core";
-import { Link, useNavigate } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import { request } from "../provider";
 import { LoginPage, type StudioUser } from "./Account";
 import { corpusSources } from "./StudioData";
 import { StudioHFDatasets } from "./StudioHFDatasets";
 import { StudioDatasetReader, type Dataset } from "./StudioDatasetReader";
+import { useRunQuery, type Run } from "./RunData";
+import { useDashboard } from "./DashboardData";
+import {
+  hydrateFork,
+  type StudioArchitecture,
+  type StudioCheckpoint,
+  type StudioForkSource,
+} from "./StudioFork";
 export { GuidePage } from "./StudioGuide";
 
 interface Capabilities {
@@ -25,7 +33,7 @@ interface Capabilities {
     {
       parameters: number;
       label: string;
-      architecture: { context_length: number; layers: number };
+      architecture: StudioArchitecture;
     }
   >;
 }
@@ -43,6 +51,8 @@ interface Draft {
   max_runtime_seconds: number;
   lr_schedule: string;
   early_stopping: boolean;
+  patience: number;
+  min_delta: number;
   auto_benchmark: boolean;
   auto_benchmark_suite: string;
   character: string | null;
@@ -63,6 +73,8 @@ const initialDraft: Draft = {
   max_runtime_seconds: 3600,
   lr_schedule: "constant",
   early_stopping: true,
+  patience: 20,
+  min_delta: 0.01,
   auto_benchmark: true,
   auto_benchmark_suite: "piqa",
   character: null,
@@ -161,6 +173,8 @@ function restoreDraft(
     "seed",
     "target_tokens",
     "max_runtime_seconds",
+    "patience",
+    "min_delta",
   ] as const)
     if (typeof saved[key] === "number" && Number.isFinite(saved[key]))
       draft[key] = saved[key];
@@ -231,6 +245,9 @@ function restoreDraft(
 }
 
 export function StudioPage() {
+  const [params] = useSearchParams();
+  const parentId = params.get("parent");
+  const checkpointId = params.get("checkpoint");
   const { query } = useCustom<{ user: StudioUser | null }>({
     url: "/api/auth/me",
     method: "get",
@@ -243,10 +260,27 @@ export function StudioPage() {
       </p>
     );
   const user = query.data?.data.user;
-  return user ? <StudioLoader key={user.id} user={user} /> : <LoginPage />;
+  return user ? (
+    <StudioLoader
+      key={`${user.id}:${parentId || ""}:${checkpointId || ""}`}
+      user={user}
+      parentId={parentId}
+      checkpointId={checkpointId}
+    />
+  ) : (
+    <LoginPage />
+  );
 }
 
-function StudioLoader({ user }: { user: StudioUser }) {
+function StudioLoader({
+  user,
+  parentId,
+  checkpointId,
+}: {
+  user: StudioUser;
+  parentId: string | null;
+  checkpointId: string | null;
+}) {
   const library = useCustom<Dataset[]>({
     url: "/api/datasets",
     method: "get",
@@ -275,6 +309,25 @@ function StudioLoader({ user }: { user: StudioUser }) {
     );
   if (!library.query.data || !capabilities.query.data)
     return <p role="status">Loading datasets and compute options…</p>;
+  if (parentId !== null || checkpointId !== null) {
+    if (!parentId || !checkpointId)
+      return (
+        <p className="error" role="alert">
+          Select both a parent run and a saved checkpoint.{" "}
+          <Link to="/checkpoints">Choose a checkpoint</Link>.
+        </p>
+      );
+    return (
+      <StudioForkLoader
+        user={user}
+        parentId={parentId}
+        checkpointId={checkpointId}
+        datasets={library.query.data.data}
+        capabilities={capabilities.query.data.data}
+        onRefresh={refresh}
+      />
+    );
+  }
   return (
     <TrainingStudio
       user={user}
@@ -285,19 +338,113 @@ function StudioLoader({ user }: { user: StudioUser }) {
   );
 }
 
-function TrainingStudio({
+function StudioForkLoader({
   user,
+  parentId,
+  checkpointId,
   datasets,
   capabilities,
   onRefresh,
 }: {
   user: StudioUser;
+  parentId: string;
+  checkpointId: string;
   datasets: Dataset[];
   capabilities: Capabilities;
   onRefresh: () => void;
 }) {
+  const parent = useRunQuery<Run>(`/api/runs/${encodeURIComponent(parentId)}`);
+  const checkpoints = useRunQuery<StudioCheckpoint[]>(
+    `/api/runs/${encodeURIComponent(parentId)}/checkpoints`,
+  );
+  const dashboard = useDashboard();
+  const failure = parent.error || checkpoints.error || dashboard.error;
+  if (failure)
+    return (
+      <p className="error" role="alert">
+        Cannot load this fork: {failure.message}{" "}
+        <Link to="/checkpoints">Choose an accessible checkpoint</Link>.
+      </p>
+    );
+  if (!parent.data || !checkpoints.data || !dashboard.data)
+    return <p role="status">Loading parent recipe and checkpoint…</p>;
+  let source: StudioForkSource;
+  try {
+    const checkpoint = checkpoints.data.find(
+      (item) => item.id === checkpointId,
+    );
+    const owned = dashboard.data.checkpoints.find(
+      (item) => item.id === checkpointId && item.run_id === parentId,
+    );
+    if (!checkpoint || !owned)
+      throw new Error(
+        "This checkpoint does not belong to an accessible parent run.",
+      );
+    if (!owned.can_fork)
+      throw new Error(
+        "This checkpoint cannot be loaded by the trainer. Choose a supported checkpoint whose model artifact is still available on the server.",
+      );
+    source = {
+      parent: parent.data,
+      checkpoint,
+      settings: hydrateFork(parent.data, checkpoint, capabilities.models),
+    };
+    const missing = Object.keys(source.settings.weights).filter(
+      (id) => !datasets.some((dataset) => dataset.id === id),
+    );
+    if (missing.length)
+      throw new Error(
+        `The parent uses datasets that are missing or inaccessible (${missing.join(", ")}). Restore access to those original datasets, then refresh. No replacement data has been selected.`,
+      );
+    if (source.settings.compute === "runpod" && !capabilities.runpod_available)
+      throw new Error(
+        "This checkpoint requires RunPod GPU access, which is not enabled for your account. Enable GPU access before forking; switching to a CPU model would be incompatible.",
+      );
+  } catch (error) {
+    return (
+      <div className="notice" role="alert">
+        <p>
+          {error instanceof Error
+            ? error.message
+            : "Cannot restore this checkpoint."}
+        </p>
+        <button className="secondary" onClick={onRefresh}>
+          Refresh datasets
+        </button>{" "}
+        <Link to={`/run/${encodeURIComponent(parentId)}`}>Open parent run</Link>
+        {" · "}
+        <Link to="/checkpoints">Choose another checkpoint</Link>
+      </div>
+    );
+  }
+  return (
+    <TrainingStudio
+      user={user}
+      datasets={datasets}
+      capabilities={capabilities}
+      onRefresh={onRefresh}
+      fork={source}
+    />
+  );
+}
+
+function TrainingStudio({
+  user,
+  datasets,
+  capabilities,
+  onRefresh,
+  fork,
+}: {
+  user: StudioUser;
+  datasets: Dataset[];
+  capabilities: Capabilities;
+  onRefresh: () => void;
+  fork?: StudioForkSource;
+}) {
   const [draft, setDraft] = useState(() =>
-    restoreDraft(user.id, datasets, capabilities),
+    fork
+      ? { ...initialDraft, ...fork.settings }
+      : restoreDraft(user.id, datasets, capabilities),
   );
   const [stage, setStage] = useState(1);
   const [error, setError] = useState("");
@@ -312,6 +459,7 @@ function TrainingStudio({
   const navigate = useNavigate();
   const { mutateAsync } = useCustomMutation<{ id: string }>();
   useEffect(() => {
+    if (fork) return;
     try {
       localStorage.setItem(
         `training-draft-v3:${user.id}`,
@@ -320,12 +468,28 @@ function TrainingStudio({
     } catch {
       /* Keep the current draft usable when storage is unavailable. */
     }
-  }, [draft, user.id]);
+  }, [draft, user.id, fork]);
   useEffect(() => () => controller.current?.abort(), []);
   const mix = datasets
     .filter((dataset) => (draft.weights[dataset.id] || 0) > 0)
     .map((dataset) => ({ ...dataset, weight: draft.weights[dataset.id] }));
-  const points = mix.reduce((sum, dataset) => sum + dataset.weight / 5, 0);
+  const totalWeight = mix.reduce((sum, dataset) => sum + dataset.weight, 0);
+  const points = totalWeight / 5;
+  const launchIssue =
+    mix.length > 20
+      ? "Use no more than 20 datasets."
+      : Object.entries(draft.weights).some(
+            ([id, weight]) =>
+              weight > 0 && !datasets.some((dataset) => dataset.id === id),
+          )
+        ? "A selected dataset is no longer available. Restore access and refresh before launching."
+        : draft.compute === "runpod" &&
+            draft.max_runtime_seconds > capabilities.max_seconds
+          ? "Reduce the GPU time limit to the current server maximum."
+          : draft.compute === "cpu" &&
+              mix.reduce((sum, dataset) => sum + dataset.bytes, 0) > 100000000
+            ? "CPU training supports at most 100 MB of source data. Choose a smaller mix."
+            : "";
   const gpu = draft.compute === "runpod";
   const model = gpu ? capabilities.models[draft.model_size] : undefined;
   const parameters =
@@ -369,7 +533,16 @@ function TrainingStudio({
     Array.from({ length: dataset.weight / 5 }, () => dataset),
   );
   function update(patch: Partial<Draft>) {
-    setDraft((previous) => ({ ...previous, ...patch }));
+    setDraft((previous) => ({
+      ...previous,
+      ...patch,
+      ...(fork
+        ? {
+            model_size: fork.settings.model_size,
+            compute: fork.settings.compute,
+          }
+        : {}),
+    }));
   }
   function balance(id: string, value: number) {
     setDraft((previous) => {
@@ -383,7 +556,15 @@ function TrainingStudio({
         character: null,
         weights: {
           ...previous.weights,
-          [id]: Math.max(0, Math.min(Math.round(value), availablePoints)) * 5,
+          [id]: fork
+            ? Math.max(
+                0,
+                Math.min(
+                  Math.round(value * 5),
+                  Math.round(availablePoints * 5),
+                ),
+              )
+            : Math.max(0, Math.min(Math.round(value), availablePoints)) * 5,
         },
       };
     });
@@ -414,7 +595,8 @@ function TrainingStudio({
   }
   function moveTo(next: number) {
     if (stage === 2 && !setup.current?.reportValidity()) return;
-    if (next > 1 && points !== 20) return;
+    if (next > 1 && totalWeight !== 100) return;
+    if (next === 3 && launchIssue) return;
     if (stage === 2) update({ name: draft.name.trim() });
     setStage(next);
     setError("");
@@ -453,7 +635,7 @@ function TrainingStudio({
     }
   }
   async function launch() {
-    if (points !== 20 || launching) return;
+    if (stage !== 3 || totalWeight !== 100 || launchIssue || launching) return;
     setLaunching(true);
     setError("");
     try {
@@ -465,8 +647,8 @@ function TrainingStudio({
           steps: draft.budget_mode !== "manual" ? 100 : draft.steps,
           budget_mode: draft.budget_mode,
           early_stopping: draft.early_stopping,
-          patience: 20,
-          min_delta: 0.01,
+          patience: draft.patience,
+          min_delta: draft.min_delta,
           batch_size: draft.batch_size,
           learning_rate: draft.learning_rate,
           lr_schedule: draft.lr_schedule,
@@ -477,6 +659,12 @@ function TrainingStudio({
           compute: draft.compute,
           target_tokens: draft.target_tokens,
           max_runtime_seconds: draft.max_runtime_seconds,
+          ...(fork
+            ? {
+                parent_run_id: fork.parent.id,
+                checkpoint_id: fork.checkpoint.id,
+              }
+            : {}),
           mix: mix.map((dataset) => ({
             dataset_id: dataset.id,
             weight: dataset.weight,
@@ -518,11 +706,43 @@ function TrainingStudio({
     <>
       <div className="intro studio-intro">
         <div className="eyebrow">Training studio</div>
-        <h1>A model starts with a mix.</h1>
+        <h1>
+          {fork
+            ? "Fork from a saved checkpoint."
+            : "A model starts with a mix."}
+        </h1>
         <p className="muted">
-          Choose your data, train a model, and follow its progress live.
+          {fork
+            ? "Review the inherited recipe, adjust your next experiment, and explicitly launch when ready. Nothing starts automatically."
+            : "Choose your data, train a model, and follow its progress live."}
         </p>
       </div>
+      {fork && (
+        <div className="notice">
+          <b>Source checkpoint</b>
+          {" · "}
+          <Link to={`/run/${encodeURIComponent(fork.parent.id)}`}>
+            {fork.parent.name}
+          </Link>
+          <p>
+            Step {fmt(fork.checkpoint.step, 0)} · validation loss{" "}
+            {fork.checkpoint.val_loss === null
+              ? "—"
+              : fmt(fork.checkpoint.val_loss, 4)}{" "}
+            · {fork.checkpoint.is_best ? "best checkpoint" : "saved checkpoint"}
+          </p>
+          <small>
+            {fork.checkpoint.id} · Model shape and compute are locked for
+            compatibility. Model weights are inherited; optimizer, schedule, and
+            step counter start fresh.
+          </small>
+        </div>
+      )}
+      {launchIssue && (
+        <p className="error" role="alert">
+          {launchIssue}
+        </p>
+      )}
       <div className="steps studio-steps" aria-label="Training setup">
         {["Mix datasets", "Set up training", "Review & start"].map(
           (label, index) => (
@@ -552,91 +772,105 @@ function TrainingStudio({
         <section className="panel" id="workspace">
           {stage === 1 ? (
             <>
-              <section className="character" aria-labelledby="character-title">
-                <div className="eyebrow">Character development</div>
-                <h2 id="character-title">What should this model become?</h2>
-                <p className="muted">
-                  Spend exactly 20 character development points to shape the
-                  model’s training profile. Each point assigns 5% of the
-                  training mix to a dataset.
-                </p>
-                <div
-                  className="character-buttons"
-                  role="group"
-                  aria-label="Character development profile"
-                >
-                  {profiles.map((profile) => (
-                    <button
-                      key={profile.id}
-                      type="button"
-                      aria-pressed={draft.character === profile.id}
-                      onClick={() => applyProfile(profile)}
-                    >
-                      {profile.name}
-                    </button>
-                  ))}
+              {fork ? (
+                <div className="notice">
+                  <b>Inherited dataset mix</b>
+                  <p>
+                    The original dataset percentages are preserved exactly.
+                    Adjust shares in 1% increments; the total must remain 100%.
+                  </p>
+                  <p role="status">{100 - totalWeight}% remaining</p>
                 </div>
-                <div className="row" style={{ margin: "16px 0" }}>
-                  <b role="status" aria-live="polite">
-                    {20 - points} character development points remaining
-                  </b>
-                  <button
-                    className="secondary"
-                    onClick={() => {
-                      update({ weights: {}, character: null });
-                      setProfileMessage("");
-                    }}
+              ) : (
+                <section
+                  className="character"
+                  aria-labelledby="character-title"
+                >
+                  <div className="eyebrow">Character development</div>
+                  <h2 id="character-title">What should this model become?</h2>
+                  <p className="muted">
+                    Spend exactly 20 character development points to shape the
+                    model’s training profile. Each point assigns 5% of the
+                    training mix to a dataset.
+                  </p>
+                  <div
+                    className="character-buttons"
+                    role="group"
+                    aria-label="Character development profile"
                   >
-                    Reset points
-                  </button>
-                </div>
-                <div
-                  className="point-shelf"
-                  role="group"
-                  aria-label="20 character development points"
-                >
-                  {Array.from({ length: 20 }, (_, index) => {
-                    const book = books[index];
-                    return (
-                      <span
-                        key={index}
-                        className={`point-book${book ? "" : " empty"}`}
-                        style={
-                          book
-                            ? ({
-                                "--book-color": datasetColor(book),
-                              } as CSSProperties)
-                            : undefined
-                        }
-                        title={
-                          book
-                            ? `${book.name} · 1 point · 5%`
-                            : `Available point ${index + 1}`
-                        }
-                        role="img"
-                        aria-label={
-                          book
-                            ? `${book.name}: 1 point`
-                            : `Available point ${index + 1}`
-                        }
+                    {profiles.map((profile) => (
+                      <button
+                        key={profile.id}
+                        type="button"
+                        aria-pressed={draft.character === profile.id}
+                        onClick={() => applyProfile(profile)}
                       >
-                        {index + 1}
-                      </span>
-                    );
-                  })}
-                </div>
-                <p className="muted" role="status" aria-live="polite">
-                  {profileMessage ||
-                    (draft.character
-                      ? `${profiles.find((profile) => profile.id === draft.character)?.name} · Shares based on available text size (UTF-8 bytes).`
-                      : "Choose a profile or set a custom mix with the sliders. 1 book = 1 point = 5% of the mix.")}
-                </p>
-                <small>
-                  Profiles distribute points across available real corpus
-                  samples. Open any dataset to inspect its text and source.
-                  Sizes refer to the downloaded sample, not the full corpus.
-                </small>
-              </section>
+                        {profile.name}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="row" style={{ margin: "16px 0" }}>
+                    <b role="status" aria-live="polite">
+                      {20 - points} character development points remaining
+                    </b>
+                    <button
+                      className="secondary"
+                      onClick={() => {
+                        update({ weights: {}, character: null });
+                        setProfileMessage("");
+                      }}
+                    >
+                      Reset points
+                    </button>
+                  </div>
+                  <div
+                    className="point-shelf"
+                    role="group"
+                    aria-label="20 character development points"
+                  >
+                    {Array.from({ length: 20 }, (_, index) => {
+                      const book = books[index];
+                      return (
+                        <span
+                          key={index}
+                          className={`point-book${book ? "" : " empty"}`}
+                          style={
+                            book
+                              ? ({
+                                  "--book-color": datasetColor(book),
+                                } as CSSProperties)
+                              : undefined
+                          }
+                          title={
+                            book
+                              ? `${book.name} · 1 point · 5%`
+                              : `Available point ${index + 1}`
+                          }
+                          role="img"
+                          aria-label={
+                            book
+                              ? `${book.name}: 1 point`
+                              : `Available point ${index + 1}`
+                          }
+                        >
+                          {index + 1}
+                        </span>
+                      );
+                    })}
+                  </div>
+                  <p className="muted" role="status" aria-live="polite">
+                    {profileMessage ||
+                      (draft.character
+                        ? `${profiles.find((profile) => profile.id === draft.character)?.name} · Shares based on available text size (UTF-8 bytes).`
+                        : "Choose a profile or set a custom mix with the sliders. 1 book = 1 point = 5% of the mix.")}
+                  </p>
+                  <small>
+                    Profiles distribute points across available real corpus
+                    samples. Open any dataset to inspect its text and source.
+                    Sizes refer to the downloaded sample, not the full corpus.
+                  </small>
+                </section>
+              )}
               <h2>Your dataset library</h2>
               {datasets.map((dataset) => {
                 const weight = draft.weights[dataset.id] || 0;
@@ -681,8 +915,10 @@ function TrainingStudio({
                         type="button"
                         className="point-control"
                         disabled={!weight}
-                        aria-label={`Remove a point: ${dataset.name}`}
-                        onClick={() => balance(dataset.id, weight / 5 - 1)}
+                        aria-label={`Remove ${fork ? "1%" : "a point"}: ${dataset.name}`}
+                        onClick={() =>
+                          balance(dataset.id, weight / 5 - (fork ? 0.2 : 1))
+                        }
                       >
                         −
                       </button>
@@ -690,12 +926,15 @@ function TrainingStudio({
                         id={`slider-${dataset.id}`}
                         type="range"
                         min={0}
-                        max={20}
+                        max={fork ? 100 : 20}
                         step={1}
-                        value={weight / 5}
-                        aria-label={`${dataset.name} points`}
+                        value={fork ? weight : weight / 5}
+                        aria-label={`${dataset.name} ${fork ? "percentage" : "points"}`}
                         onChange={(event) =>
-                          balance(dataset.id, +event.target.value)
+                          balance(
+                            dataset.id,
+                            +event.target.value / (fork ? 5 : 1),
+                          )
                         }
                         style={{ accentColor: datasetColor(dataset) }}
                       />
@@ -703,8 +942,10 @@ function TrainingStudio({
                         type="button"
                         className="point-control"
                         disabled={points >= 20}
-                        aria-label={`Add a point: ${dataset.name}`}
-                        onClick={() => balance(dataset.id, weight / 5 + 1)}
+                        aria-label={`Add ${fork ? "1%" : "a point"}: ${dataset.name}`}
+                        onClick={() =>
+                          balance(dataset.id, weight / 5 + (fork ? 0.2 : 1))
+                        }
                       >
                         +
                       </button>
@@ -712,7 +953,9 @@ function TrainingStudio({
                         className="percent"
                         htmlFor={`slider-${dataset.id}`}
                       >
-                        {weight / 5} points · {weight}%
+                        {fork
+                          ? `${weight}%`
+                          : `${weight / 5} points · ${weight}%`}
                       </output>
                     </div>
                   </div>
@@ -764,7 +1007,10 @@ function TrainingStudio({
                   {fmt(parameters, 0)} parameters,{" "}
                   {model?.architecture.layers ||
                     (draft.model_size === "small" ? 3 : 2)}{" "}
-                  layers, {context}-byte context. Initialized from scratch.
+                  layers, {context}-byte context.{" "}
+                  {fork
+                    ? "Initialized from the selected checkpoint."
+                    : "Initialized from scratch."}
                 </p>
               </div>
               <form
@@ -778,6 +1024,7 @@ function TrainingStudio({
                 <label className="field">
                   <span>Model size</span>
                   <select
+                    disabled={Boolean(fork)}
                     value={draft.model_size}
                     onChange={(event) =>
                       update({ model_size: event.target.value })
@@ -799,8 +1046,9 @@ function TrainingStudio({
                     )}
                   </select>
                   <small>
-                    All models train from scratch on the selected compute. GPU
-                    models use a 512-byte context.
+                    {fork
+                      ? "The model shape is locked to the source checkpoint."
+                      : "All models train from scratch on the selected compute. GPU models use a 512-byte context."}
                   </small>
                 </label>
                 <label className="field">
@@ -895,9 +1143,11 @@ function TrainingStudio({
                         update({ batch_size: +event.target.value })
                       }
                     >
-                      {[1, 2, 4, 8, 16, 32].map((value) => (
-                        <option key={value}>{value}</option>
-                      ))}
+                      {[...new Set([1, 2, 4, 8, 16, 32, draft.batch_size])]
+                        .sort((a, b) => a - b)
+                        .map((value) => (
+                          <option key={value}>{value}</option>
+                        ))}
                     </select>
                     <small>
                       Each sequence uses the selected model’s context, shortened
@@ -914,7 +1164,7 @@ function TrainingStudio({
                         type="number"
                         min={0.0001}
                         max={0.1}
-                        step={0.0001}
+                        step="any"
                         required
                         value={draft.learning_rate}
                         onChange={(event) =>
@@ -965,9 +1215,40 @@ function TrainingStudio({
                         update({ early_stopping: event.target.checked })
                       }
                     />{" "}
-                    Early stopping · 20 validation checks without an improvement
-                    of 0.01
+                    Early stopping
                   </label>
+                  <div className="fields">
+                    <label className="field">
+                      <span>Early stopping patience</span>
+                      <input
+                        type="number"
+                        min={5}
+                        max={100}
+                        required
+                        value={draft.patience}
+                        onChange={(event) =>
+                          update({ patience: +event.target.value })
+                        }
+                      />
+                      <small>
+                        Validation checks without sufficient improvement.
+                      </small>
+                    </label>
+                    <label className="field">
+                      <span>Minimum validation improvement</span>
+                      <input
+                        type="number"
+                        min={0}
+                        max={1}
+                        step="any"
+                        required
+                        value={draft.min_delta}
+                        onChange={(event) =>
+                          update({ min_delta: +event.target.value })
+                        }
+                      />
+                    </label>
+                  </div>
                   <div style={{ marginTop: 16 }}>
                     <label>
                       <input
@@ -1065,6 +1346,17 @@ function TrainingStudio({
               <p className="muted">
                 Your data mix and settings will be saved with this run.
               </p>
+              {fork && (
+                <p className="notice">
+                  Lineage:{" "}
+                  <Link to={`/run/${encodeURIComponent(fork.parent.id)}`}>
+                    {fork.parent.name}
+                  </Link>{" "}
+                  → this run, from checkpoint {fork.checkpoint.id} at step{" "}
+                  {fmt(fork.checkpoint.step, 0)}. Launching creates a separate
+                  run; the parent is unchanged.
+                </p>
+              )}
               {[
                 ...(gpu
                   ? [
@@ -1082,7 +1374,7 @@ function TrainingStudio({
                 [
                   "Early stopping",
                   draft.early_stopping
-                    ? "On · 20 checks without improvement"
+                    ? `On · ${draft.patience} checks without improvement of ${draft.min_delta}`
                     : "Off · full step budget, subject to runtime limit",
                 ],
                 ["Saved model", "Lowest validation loss checkpoint"],
@@ -1123,10 +1415,16 @@ function TrainingStudio({
                 </button>
                 <button
                   className="primary"
-                  disabled={launching || points !== 20}
+                  disabled={
+                    launching || totalWeight !== 100 || Boolean(launchIssue)
+                  }
                   onClick={() => void launch()}
                 >
-                  {launching ? "Starting…" : "Start training ↗"}
+                  {launching
+                    ? "Starting…"
+                    : fork
+                      ? "Launch fork ↗"
+                      : "Start training ↗"}
                 </button>
               </div>
             </>
@@ -1136,7 +1434,7 @@ function TrainingStudio({
           <label className="field">
             <span>Compute</span>
             <select
-              disabled={launching}
+              disabled={launching || Boolean(fork)}
               value={draft.compute}
               onChange={(event) =>
                 update({
@@ -1157,7 +1455,7 @@ function TrainingStudio({
           {stage === 1 && (
             <button
               className="primary"
-              disabled={points !== 20}
+              disabled={totalWeight !== 100}
               onClick={() => moveTo(2)}
             >
               Training settings →
@@ -1166,8 +1464,10 @@ function TrainingStudio({
           <aside className="panel aside">
             <h3>Your recipe</h3>
             <small>
-              {mix.length} sources · {points} / 20 points · {points * 5}%
-              allocated
+              {mix.length} sources ·{" "}
+              {fork
+                ? `${totalWeight}% allocated`
+                : `${points} / 20 points · ${totalWeight}% allocated`}
             </small>
             <div className="stack" aria-label="Dataset mix">
               {mix.map((dataset) => (
@@ -1232,6 +1532,7 @@ function TrainingStudio({
                   {[8, 16, 32, 64, 128].map((value) => (
                     <button
                       key={value}
+                      disabled={Boolean(fork) && gpu}
                       aria-pressed={
                         gpu
                           ? draft.model_size === `${value}m`
