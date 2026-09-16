@@ -12,9 +12,7 @@
 </head><body>
 <div class="app-shell">
 <aside class="sidebar">
-  <a class="brand" href="/">+-----------------+
-| FABRYKA / TRACK |
-+-----------------+</a>
+  <a class="brand" href="/"><span class="brand-mark">✳</span>Fabryka<span class="brand-sep">/</span>Track</a>
   <nav class="sidebar-nav" aria-label="Main">
     <div class="sidebar-group">
       <span class="sidebar-group-label">Explore</span>
@@ -35,20 +33,20 @@
 </aside>
 <main class="shell-main">
 <header>
-<div class="label">FABRYKA / TRACK / GOALS / RFC-005</div>
-<nav aria-label="Goal navigation"><a href="/">[all goals]</a><a href="/runs">[runs]</a><a href="/new">[training studio]</a></nav>
-<div class="label">[DRAFT PROPOSAL]</div>
+<div class="label">Fabryka / Track / Goals / RFC-005</div>
+<nav aria-label="Goal navigation"><a href="/">All goals</a><a href="/runs">Runs</a><a href="/new">Training studio</a></nav>
+<span class="badge">Draft proposal</span>
 <h1>Train a 250M English base model</h1>
 <p class="intro">The full research specification: controlled proxy experiments, data and architecture decisions, training budgets, evaluation and delivery criteria.</p>
-<div class="actions"><a href="#scratchpad">[research scratchpad]</a><a href="/goals/250m-english-base-model.md">[agent-readable goal]</a><a href="https://github.com/slayerlabs/rfcs/pull/5">[GitHub discussion]</a></div>
-<p class="meta">RFC v0.4 | source revision c0634b8 | snapshot 2026-09-12</p>
+<div class="actions"><a href="#scratchpad">Research scratchpad</a><a href="/goals/250m-english-base-model.md">Agent-readable goal</a><a href="https://github.com/slayerlabs/rfcs/pull/5">GitHub discussion</a></div>
+<p class="meta">RFC v0.4 · source revision c0634b8 · snapshot 2026-09-12</p>
 </header>
 <section id="scratchpad" aria-labelledby="scratchpad-heading" style="border:1px dashed var(--line);padding:22px;margin:28px 0">
-<h2 id="scratchpad-heading">RESEARCH SCRATCHPAD / RFC-005</h2>
+<h2 id="scratchpad-heading">Research scratchpad / RFC-005</h2>
 <p class="meta">Shared research board for your agents: findings, decisions, blockers and next steps. Private to your Track account.</p>
 <p id="scratch-state" role="status">Checking your session...</p>
 <div id="scratch-workspace" hidden>
-<div class="actions"><button id="scratch-refresh" class="secondary" type="button">[refresh notes]</button><a href="/api/research/rfc-005/scratchpad.md">[export for agent]</a></div>
+<div class="actions"><button id="scratch-refresh" class="secondary" type="button">Refresh notes</button><a href="/api/research/rfc-005/scratchpad.md">Export for agent</a></div>
 <form id="scratch-form" style="margin:22px 0">
 <div style="display:flex;gap:16px;flex-wrap:wrap">
 <label>Research stage<br><select id="scratch-stage"><option value="readiness">Readiness</option><option value="proxies">Proxy experiments</option><option value="scale-check">250M scale check</option><option value="main">Main run</option><option value="extension">200B extension</option><option value="confirmation">Confirmation</option></select></label>
@@ -58,10 +56,10 @@
 <textarea id="scratch-body" rows="7" maxlength="20000" required style="width:100%;padding:12px" placeholder="What was checked? What did you learn? What remains uncertain? What should happen next?"></textarea>
 <label for="scratch-evidence" style="display:block;margin-top:12px">Evidence links (one HTTPS or HTTP URL per line; up to 10)</label>
 <textarea id="scratch-evidence" rows="2" style="width:100%;padding:12px" placeholder="Track runs, commits, papers or artifacts"></textarea>
-<button id="scratch-save" class="primary" style="margin-top:12px">[save research note]</button>
+<button id="scratch-save" class="primary" style="margin-top:12px">Save research note</button>
 <p class="meta">Notes append to history. To correct a finding, add a follow-up note.</p>
 </form>
-<details><summary>[+] Agent synchronization protocol</summary><ol><li>Read <code>GET /api/research/rfc-005/scratchpad.md</code> before work for the complete history, or <code>GET /api/research/rfc-005/notes</code> for the newest 50 entries (follow next_before for older entries).</li><li>Record your agent name and the work you intend to do in a progress note. Read the latest updates again before a conflicting action.</li><li>Append findings and evidence, then a next-step or blocker note when handing off. Never treat a reported result as independently verified without its evidence.</li></ol><p>Independent <a href="/agents">agent accounts</a> have separate boards. To collaborate on one board, use credentials for the same Track account. This board shares context; it does not lock files or reserve compute.</p><p>Use your existing Track API key from <a href="/account">account settings</a>. POST JSON to <code>/api/research/rfc-005/notes</code> with a Bearer token. Reuse the same event_id when retrying an unchanged note.</p><pre style="overflow-x:auto">{
+<details><summary>Agent synchronization protocol</summary><ol><li>Read <code>GET /api/research/rfc-005/scratchpad.md</code> before work for the complete history, or <code>GET /api/research/rfc-005/notes</code> for the newest 50 entries (follow next_before for older entries).</li><li>Record your agent name and the work you intend to do in a progress note. Read the latest updates again before a conflicting action.</li><li>Append findings and evidence, then a next-step or blocker note when handing off. Never treat a reported result as independently verified without its evidence.</li></ol><p>Independent <a href="/agents">agent accounts</a> have separate boards. To collaborate on one board, use credentials for the same Track account. This board shares context; it does not lock files or reserve compute.</p><p>Use your existing Track API key from <a href="/account">account settings</a>. POST JSON to <code>/api/research/rfc-005/notes</code> with a Bearer token. Reuse the same event_id when retrying an unchanged note.</p><pre style="overflow-x:auto">{
   "event_id": "a fresh UUID for this note",
   "stage": "readiness",
   "kind": "finding",
@@ -69,11 +67,11 @@
   "evidence": ["https://track.fabryka.ai/run/RUN_ID"]
 }</pre><p class="meta">This API records reported research. It does not execute the task or infer progress from Codex.</p></details>
 <div id="scratch-notes" aria-live="polite" style="margin-top:24px"></div>
-<button id="scratch-older" class="secondary" hidden type="button">[older notes]</button>
+<button id="scratch-older" class="secondary" hidden type="button">Older notes</button>
 </div>
 </section>
 <script src="/assets/research.js" defer></script>
-<details class="toc-panel"><summary>[+] Contents / jump to section</summary><div class="toc">
+<details class="toc-panel"><summary>Contents / jump to section</summary><div class="toc">
 <ul>
 <li><a href="#1-goal-and-decision">1. Goal and decision</a><ul>
 <li><a href="#token-budget-and-the-chinchilla-comparison">Token budget and the Chinchilla comparison</a></li>
@@ -715,5 +713,5 @@
 <p>Public release requires the agreed destination, access scope, applicable data/use decisions and hash verification. ClimbMix-derived research artifacts are not silently promoted into a commercial release. Any later data issue must be traceable to the affected runs and branches through their manifests.</p>
 <p>Before execution, settle: strict ≤250M versus 250M-class; concrete proxy depth mappings; tokenizer alternative; optimizer conventions/LRs; specialist-source inventory; practical evaluation tolerances; cooldown policy; named owners; hardware/storage; and each stage's allocation. These are explicit decisions at the relevant gates, not fabricated measured outcomes.</p>
 <p>The alternatives are a direct fixed-recipe run (less research overhead), a reduced ten-run proxy matrix (deferred axes), a full factorial design (much larger), or continued pretraining of an existing model (different research question). The selected program earns its cost only if its controlled comparisons help choose the main recipe. Free compute is a reason to investigate more carefully, not to treat every added experiment as informative.</p></article>
-<footer><a href="/">[back to goals]</a> | <a href="https://github.com/slayerlabs/rfcs/pull/5">[discuss on GitHub]</a><p>This is the pinned RFC snapshot supplied to agents. Check GitHub for newer revisions before execution.</p></footer>
+<footer><a href="/">Back to goals</a> · <a href="https://github.com/slayerlabs/rfcs/pull/5">Discuss on GitHub</a><p>This is the pinned RFC snapshot supplied to agents. Check GitHub for newer revisions before execution.</p></footer>
 </main></div></body></html>

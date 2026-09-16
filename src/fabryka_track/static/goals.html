@@ -4,14 +4,11 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Agent goals · Fabryka Track</title>
   <style>
-    :root{color-scheme:light;--ink:#242825;--muted:#69716b;--line:#dfe4df;--accent:#315c46}
-    *{box-sizing:border-box}body{margin:0;background:#f7f8f5;color:var(--ink);font:15px/1.6 system-ui,sans-serif}
-    header{background:#fff;border-bottom:1px solid var(--line);padding:18px 5%;display:flex;align-items:center;gap:35px;flex-wrap:wrap}
-    .brand{font-weight:750;color:var(--ink);text-decoration:none}nav{display:flex;gap:22px;flex-wrap:wrap}nav a{color:var(--muted);text-decoration:none}nav a[aria-current]{color:var(--accent);font-weight:700}
-    main{max-width:1120px;margin:50px auto;padding:0 24px 60px}h1{font-size:clamp(30px,5vw,46px);line-height:1.15;letter-spacing:-1.5px;margin:10px 0 18px}h2{font-size:19px;margin:0 0 14px}p{margin:8px 0 18px}.eyebrow{font-size:12px;text-transform:uppercase;letter-spacing:2px;color:var(--accent)}.muted,small{color:var(--muted)}
-    .grid{display:grid;grid-template-columns:minmax(0,2fr) minmax(250px,1fr);gap:22px;margin-top:28px}.card{background:white;border:1px solid var(--line);border-radius:14px;padding:26px;margin-bottom:22px}.row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:space-between}
-    label{display:block;font-weight:600;margin-bottom:8px}textarea,input,select{font:inherit;max-width:100%;width:100%;border:1px solid #bfcac2;background:white;border-radius:8px;padding:12px;color:var(--ink)}textarea{min-height:180px;resize:vertical}button,.button{font:inherit;display:inline-block;border:1px solid var(--accent);background:var(--accent);color:white;border-radius:8px;padding:10px 17px;cursor:pointer;text-decoration:none}button:disabled{opacity:.5;cursor:default}.secondary{background:white;color:var(--accent)}button:focus-visible,a:focus-visible,textarea:focus-visible{outline:3px solid #90bca0;outline-offset:3px}
-    .badge{background:#e9f2eb;border-radius:30px;padding:4px 12px;font-size:13px}.warning{background:#fff3d6;color:#715115}.objective{font-size:18px;white-space:pre-wrap;overflow-wrap:anywhere}.summary{white-space:pre-wrap;overflow-wrap:anywhere}.timeline{list-style:none;padding:0;margin:0}.timeline li{padding:16px 0 16px 20px;border-left:2px solid #d6e3d9;position:relative}.timeline li:before{content:'';position:absolute;left:-5px;top:25px;width:8px;height:8px;background:#6d9578;border-radius:50%}.timeline p{margin:5px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}.error{background:#fff0eb;color:#8c382b;padding:12px 16px;border-radius:8px;margin-bottom:20px}.empty{padding:25px 0;color:var(--muted)}.hidden,[hidden]{display:none!important}code{font-size:12px;overflow-wrap:anywhere}a{color:var(--accent)}details summary{cursor:pointer;font-weight:600}#connection{font-size:13px}#history{margin-top:10px}#credential{font-family:monospace;font-size:12px}footer{font-size:12px;color:var(--muted);margin-top:22px}
+    *{box-sizing:border-box}
+    main{max-width:1120px;margin:50px auto;padding:0 24px 60px}h1{font-size:clamp(28px,4.5vw,40px);line-height:1.15;letter-spacing:-.02em;margin:10px 0 18px;font-family:var(--sans)}h2{font-size:19px;margin:0 0 14px}p{margin:8px 0 18px}.eyebrow{font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--accent);font-family:var(--mono)}.muted,small{color:var(--muted)}
+    .grid{display:grid;grid-template-columns:minmax(0,2fr) minmax(250px,1fr);gap:22px;margin-top:28px}.card{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:26px;margin-bottom:22px;box-shadow:var(--shadow)}.row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:space-between}
+    label{display:block;font-weight:600;margin-bottom:8px}textarea,input,select{font:inherit;max-width:100%;width:100%;border:1px solid var(--line);background:var(--paper);border-radius:8px;padding:12px;color:var(--ink)}textarea{min-height:180px;resize:vertical}button,.button{font:inherit;display:inline-block;border:1px solid var(--accent);background:var(--accent);color:white;border-radius:8px;padding:10px 17px;cursor:pointer;text-decoration:none}button:disabled{opacity:.5;cursor:default}.secondary{background:var(--paper);color:var(--accent)}
+    .badge{background:var(--accent-tint);color:var(--accent-dark);border-radius:20px;padding:4px 12px;font-size:13px}.warning{background:var(--amber-tint);color:var(--amber)}.objective{font-size:18px;white-space:pre-wrap;overflow-wrap:anywhere}.summary{white-space:pre-wrap;overflow-wrap:anywhere}.timeline{list-style:none;padding:0;margin:0}.timeline li{padding:16px 0 16px 20px;border-left:2px solid var(--line);position:relative}.timeline li:before{content:'';position:absolute;left:-5px;top:25px;width:8px;height:8px;background:var(--accent);border-radius:50%}.timeline p{margin:5px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}.error{background:var(--red-tint);color:var(--red);padding:12px 16px;border-radius:8px;margin-bottom:20px}.empty{padding:25px 0;color:var(--muted)}.hidden,[hidden]{display:none!important}code{font-size:12px;overflow-wrap:anywhere}details summary{cursor:pointer;font-weight:600}#connection{font-size:13px}#history{margin-top:10px}#credential{font-family:var(--mono);font-size:12px}footer{font-size:12px;color:var(--muted);margin-top:22px}
     @media(max-width:760px){main{margin-top:28px;padding:0 16px 40px}.grid{grid-template-columns:1fr}.card{padding:20px}header{gap:15px}nav{gap:15px;font-size:13px}}
   </style>
   <script src="/assets/goals.js" defer></script>
@@ -23,9 +20,7 @@
 <body>
 <div class="app-shell">
 <aside class="sidebar">
-  <a class="brand" href="/">+-----------------+
-| FABRYKA / TRACK |
-+-----------------+</a>
+  <a class="brand" href="/"><span class="brand-mark">✳</span>Fabryka<span class="brand-sep">/</span>Track</a>
   <nav class="sidebar-nav" aria-label="Main">
     <div class="sidebar-group">
       <span class="sidebar-group-label">Explore</span>

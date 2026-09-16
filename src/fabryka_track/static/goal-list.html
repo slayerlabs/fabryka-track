@@ -4,7 +4,7 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Goals · Fabryka Track</title>
 <style>
-:root{color-scheme:light;--ink:#25352c;--muted:#647368;--line:#bac6bc}*{box-sizing:border-box}body{margin:0;background:#f8f9f5;color:var(--ink);font:14px/1.7 ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace}main{max-width:1000px;margin:48px auto;padding:0 28px 60px}a{color:inherit;text-underline-offset:4px}a:hover{background:#e5ece3}a:focus-visible,button:focus-visible{outline:2px solid #315c46;outline-offset:4px}header{margin-bottom:42px}pre{font:inherit;white-space:pre-wrap;margin:0}nav{display:flex;flex-wrap:wrap;gap:8px 22px;margin-top:20px;color:var(--muted)}h1,h2{font:inherit;font-weight:700;margin:0}h1{font-size:20px}h2{margin-bottom:18px}.rule{overflow:hidden;white-space:nowrap;color:var(--line);user-select:none;margin:12px 0 22px}.goal{display:grid;grid-template-columns:145px 1fr;gap:10px 20px;margin:0 0 28px}.tag{color:#45674c}.title{font-weight:700}.meta{color:var(--muted)}p{margin:7px 0 12px}.tree{margin:16px 0 18px}.tree div{display:flex;gap:12px}.branch{white-space:pre;color:var(--muted)}section{margin-bottom:40px}.links{display:flex;flex-wrap:wrap;gap:8px 20px}.note{color:var(--muted)}button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;text-decoration:underline;text-underline-offset:4px}.record{padding:12px 0;border-bottom:1px dashed var(--line);overflow-wrap:anywhere}.record .summary{white-space:pre-wrap}.error{color:#9a3b2c}footer{font-size:12px;color:var(--muted)}[hidden]{display:none!important}@media(max-width:600px){main{margin-top:24px;padding:0 18px 36px}body{font-size:12px}.goal{grid-template-columns:1fr;gap:6px}header{margin-bottom:30px}h1{font-size:18px}}
+*{box-sizing:border-box}main{max-width:1000px;margin:48px auto;padding:0 28px 60px}header{margin-bottom:42px}pre{font:inherit;white-space:pre-wrap;margin:0}nav{display:flex;flex-wrap:wrap;gap:8px 22px;margin-top:20px;color:var(--muted)}h1,h2{font:inherit;font-weight:600;margin:0}h1{font-size:28px;font-family:var(--sans)}h2{margin-bottom:18px;font-size:16px}.rule{border:0;border-top:1px solid var(--line);margin:12px 0 22px}.goal{display:grid;grid-template-columns:145px 1fr;gap:10px 20px;margin:0 0 28px}.tag{color:var(--muted);font:600 11px var(--mono);letter-spacing:.04em;text-transform:uppercase}.title{font-weight:600;font-family:var(--sans);font-size:17px}.meta{color:var(--muted)}p{margin:7px 0 12px;font-family:var(--sans)}.note{font-family:var(--mono);font-size:12.5px}.tree{margin:16px 0 18px}.tree div{display:flex;gap:12px}.branch{white-space:pre;color:var(--muted)}section{margin-bottom:40px}.links{display:flex;flex-wrap:wrap;gap:8px 20px;font:13px var(--mono)}.links a{color:var(--accent);text-decoration:none}.links a:hover{color:var(--accent-dark);text-decoration:underline}button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;text-decoration:underline;text-underline-offset:4px}.record{padding:12px 0;border-bottom:1px dashed var(--line);overflow-wrap:anywhere}.record .summary{white-space:pre-wrap}.error{color:var(--red)}footer{font-size:12px;color:var(--muted);font-family:var(--mono)}[hidden]{display:none!important}@media(max-width:600px){main{margin-top:24px;padding:0 18px 36px}.goal{grid-template-columns:1fr;gap:6px}header{margin-bottom:30px}h1{font-size:22px}}
 </style>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -13,9 +13,7 @@
 </head>
 <body><div class="app-shell">
 <aside class="sidebar">
-  <a class="brand" href="/">+-----------------+
-| FABRYKA / TRACK |
-+-----------------+</a>
+  <a class="brand" href="/"><span class="brand-mark">✳</span>Fabryka<span class="brand-sep">/</span>Track</a>
   <nav class="sidebar-nav" aria-label="Main">
     <div class="sidebar-group">
       <span class="sidebar-group-label">Explore</span>
@@ -36,56 +34,56 @@
 </aside>
 <main class="shell-main">
 <section id="live-training" aria-label="Live training" hidden><h2>TRAINING NOW</h2><div id="live-training-runs"></div></section>
-<h1>GOALS / RFCs</h1>
+<h1>Goals / RFCs</h1>
 <p class="note">One RFC, one goal. Read the proposal, discuss it, deliver the outcome.</p>
-<pre class="note">5 RFCs | 2 pilot drafts | 3 in review</pre>
-<div class="rule" aria-hidden="true">===============================================================================================</div>
+<p class="note">5 RFCs · 2 pilot drafts · 3 in review</p>
+<hr class="rule" aria-hidden="true">
 <section aria-label="RFC goals">
 <article class="goal" data-rfc="001">
-<div class="tag">[PILOT DRAFT]<br><span class="meta">RFC-001</span></div>
+<div class="tag">Pilot draft<br><span class="meta">RFC-001</span></div>
 <div><h2 style="margin-bottom:8px"><a class="title" href="https://github.com/slayerlabs/rfcs/blob/main/RFC-001-Slayer-Labs-workflow.md">Make project work visible and reviewable</a></h2>
 <p class="meta">Spec: Project work in Slayer Labs</p>
 <p>Move tasks to GitHub Projects and Issues with owners, review criteria, evidence and a clear completion decision.</p>
 <p class="note">Revision merged; the RFC still proposes a pilot.</p>
-<div class="links"><a href="https://github.com/slayerlabs/rfcs/blob/main/RFC-001-Slayer-Labs-workflow.md">[read RFC]</a><a href="https://github.com/slayerlabs/rfcs/pull/1">[discussion #1]</a></div></div>
+<div class="links"><a href="https://github.com/slayerlabs/rfcs/blob/main/RFC-001-Slayer-Labs-workflow.md">Read RFC</a><a href="https://github.com/slayerlabs/rfcs/pull/1">Discussion #1</a></div></div>
 </article>
-<div class="rule" aria-hidden="true">-----------------------------------------------------------------------------------------------</div>
+<hr class="rule" aria-hidden="true">
 <article class="goal" data-rfc="002">
-<div class="tag">[PILOT DRAFT]<br><span class="meta">RFC-002</span></div>
+<div class="tag">Pilot draft<br><span class="meta">RFC-002</span></div>
 <div><h2 style="margin-bottom:8px"><a class="title" href="https://github.com/slayerlabs/rfcs/blob/main/RFC-002-Slayer-Labs-datasets.md">Track datasets from submission to release</a></h2>
 <p class="meta">Spec: Dataset lifecycle in Slayer Labs</p>
 <p>Record immutable dataset versions, checks, DS and legal review decisions, and the exact contents of each release.</p>
 <p class="note">Revision merged; the RFC still proposes a pilot.</p>
-<div class="links"><a href="https://github.com/slayerlabs/rfcs/blob/main/RFC-002-Slayer-Labs-datasets.md">[read RFC]</a><a href="https://github.com/slayerlabs/rfcs/pull/2">[discussion #2]</a></div></div>
+<div class="links"><a href="https://github.com/slayerlabs/rfcs/blob/main/RFC-002-Slayer-Labs-datasets.md">Read RFC</a><a href="https://github.com/slayerlabs/rfcs/pull/2">Discussion #2</a></div></div>
 </article>
-<div class="rule" aria-hidden="true">-----------------------------------------------------------------------------------------------</div>
+<hr class="rule" aria-hidden="true">
 <article class="goal" data-rfc="003">
-<div class="tag">[IN REVIEW]<br><span class="meta">RFC-003</span></div>
+<div class="tag">In review<br><span class="meta">RFC-003</span></div>
 <div><h2 style="margin-bottom:8px"><a class="title" href="https://github.com/slayerlabs/rfcs/pull/3">Build a reproducible corpus pipeline</a></h2>
 <p class="meta">Spec: Corpus build pipeline (data plane)</p>
 <p>Produce a corpus from a declared configuration, with filtering, deduplication, PII processing, provenance and an independent release gate.</p>
 <p class="note">Open proposal.</p>
-<div class="links"><a href="https://github.com/slayerlabs/rfcs/pull/3">[read RFC]</a><a href="https://github.com/slayerlabs/rfcs/pull/3">[discussion #3]</a></div></div>
+<div class="links"><a href="https://github.com/slayerlabs/rfcs/pull/3">Read RFC</a><a href="https://github.com/slayerlabs/rfcs/pull/3">Discussion #3</a></div></div>
 </article>
-<div class="rule" aria-hidden="true">-----------------------------------------------------------------------------------------------</div>
+<hr class="rule" aria-hidden="true">
 <article class="goal" data-rfc="004">
-<div class="tag">[IN REVIEW]<br><span class="meta">RFC-004</span></div>
+<div class="tag">In review<br><span class="meta">RFC-004</span></div>
 <div><h2 style="margin-bottom:8px"><a class="title" href="https://github.com/slayerlabs/rfcs/pull/4">Define contribution, review and release</a></h2>
 <p class="meta">Spec: Contribution and release</p>
 <p>Define source intake, acceptance, publication, withdrawal and erasure, with clear reviewer and publisher responsibilities.</p>
 <p class="note">Open proposal; would supersede RFC-002 once accepted.</p>
-<div class="links"><a href="https://github.com/slayerlabs/rfcs/pull/4">[read RFC]</a><a href="https://github.com/slayerlabs/rfcs/pull/4">[discussion #4]</a></div></div>
+<div class="links"><a href="https://github.com/slayerlabs/rfcs/pull/4">Read RFC</a><a href="https://github.com/slayerlabs/rfcs/pull/4">Discussion #4</a></div></div>
 </article>
-<div class="rule" aria-hidden="true">-----------------------------------------------------------------------------------------------</div>
+<hr class="rule" aria-hidden="true">
 <article class="goal" data-rfc="005">
-<div class="tag">[IN REVIEW]<br><span class="meta">RFC-005</span></div>
+<div class="tag">In review<br><span class="meta">RFC-005</span></div>
 <div><h2 style="margin-bottom:8px"><a class="title" href="/goals/250m-english-base-model">Train a 250M English base model</a></h2>
 <p class="meta">Spec: 250M English base-model research program</p>
 <p>Select the recipe through 10-20 proxy runs. Target 100B tokens, with 25B/50B checkpoints, an optional 200B extension and confirmation seeds.</p>
 <p class="note">Open research proposal.</p>
-<div class="links"><a href="/goals/250m-english-base-model">[read RFC]</a><a href="https://github.com/slayerlabs/rfcs/pull/5">[discussion #5]</a><a href="/goals/250m-english-base-model#scratchpad">[research progress]</a><a href="/goals/250m-english-base-model.md">[agent-readable goal]</a></div></div>
+<div class="links"><a href="/goals/250m-english-base-model">Read RFC</a><a href="https://github.com/slayerlabs/rfcs/pull/5">Discussion #5</a><a href="/goals/250m-english-base-model#scratchpad">Research progress</a><a href="/goals/250m-english-base-model.md">Agent-readable goal</a></div></div>
 </article>
-<div class="rule" aria-hidden="true">-----------------------------------------------------------------------------------------------</div>
+<hr class="rule" aria-hidden="true">
 </section>
 <footer>Source: <a href="https://github.com/slayerlabs/rfcs">slayerlabs/rfcs</a>. Snapshot checked 2026-09-12.<br>Labels describe RFC review status, not implementation progress.<br>GitHub is the source of truth for specifications and discussions.</footer>
 </main></div>

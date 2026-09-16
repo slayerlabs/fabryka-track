@@ -9,8 +9,10 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 /* Sidebar shell — replaces the old flat top header/nav row on every page */
 .app-shell{display:grid;grid-template-columns:232px minmax(0,1fr);align-items:start;max-width:1440px;margin:0 auto}
 .sidebar{position:sticky;top:0;display:flex;flex-direction:column;gap:26px;padding:28px 18px;min-height:100vh;border-right:1px solid var(--line)}
-.sidebar .brand{font:600 13px/1.35 var(--mono);letter-spacing:0;text-transform:none;white-space:pre;text-decoration:none;color:var(--ink);padding:0 8px}
+.sidebar .brand{display:flex;align-items:baseline;gap:5px;font:600 14px/1 var(--mono);letter-spacing:.01em;text-decoration:none;color:var(--ink);padding:4px 8px 18px}
 .sidebar .brand:hover{color:var(--accent)}
+.brand-mark{color:var(--accent);font-size:16px}
+.brand-sep{color:var(--muted);font-weight:400;margin:0 1px}
 .sidebar-nav{display:flex;flex-direction:column;gap:20px}
 .sidebar-group{display:flex;flex-direction:column;gap:2px}
 .sidebar-group-label{font:600 10.5px/1.4 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);padding:6px 8px 6px}
