@@ -66,8 +66,11 @@ def test_campaign_can_only_be_claimed_by_target_runner(client,monkeypatch):
     monkeypatch.setattr(settings,'benchmark_runner_tokens',json.dumps({'simp':'s'*40,'other':'o'*40}))
     run=finished(client,launch(client).json()['id'])
     with SessionLocal() as db:
+        from fabryka_track.hf_publish import checkpoint_path
+        from fabryka_track.models import Run
+        digest=benchmarks.checkpoint_digest(checkpoint_path(db,db.get(Run,run['id'])))
         row=BenchmarkEvaluation(run_id=run['id'],mode='full',tasks=['piqa'],status='queued',
-            provenance={'checkpoint_sha256':'a'*64,'target_runner':'simp'})
+            provenance={'checkpoint_sha256':digest,'target_runner':'simp'})
         db.add(row);db.commit();eid=row.id
     prefix='/api/benchmark-runner/claim'
     assert client.post(prefix,headers={'Authorization':'Bearer '+'o'*40}).json()['job'] is None

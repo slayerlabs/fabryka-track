@@ -95,27 +95,39 @@ queues only the remainder. Smoke results are never substituted for full results.
 
 ## Runs dashboard and forks
 
-`/runs` groups owned runs by experiment and nests forks under their parent.
-Status, date and search filters apply to the table and summary cards; status-tab
-counts respect the date/search scope. Select 2–10 visible runs to open comparison.
-If a filter hides a parent, the fork identifies that parent without inventing a
-replacement baseline.
+`/runs` defaults to explicitly focused baseline/fork families. **All runs / archive**
+retains every owned run; nothing is deleted by archiving. New training runs persist
+focus, and queued/running/stopping runs keep their entire family visible. Existing
+inactive runs are not selected arbitrarily. Focus is a workspace choice, not a
+training concurrency limit. `PATCH /api/runs/{id}/focus` accepts
+`{"focused": true|false}` for any owned member and updates the whole family;
+archiving an active family returns 409.
 
-F1 is shown only when an F1 metric was logged. Parent deltas require the same
-metric key. GPU hours use recorded RunPod billing seconds, not CPU runtime or
-allocation estimates. Checkpoint storage is based on artifact sizes, counting each
-artifact once. Missing values remain unavailable. GPU activity counts recent
-running worker heartbeats; peak allocations are not presented as current VRAM.
-The owner-only `/api/dashboard` projection returns latest metrics and at most 40
-validation-loss points per run rather than transferring full metric histories.
+Status, date and search filters apply to the table and summary cards. Select 2–10
+visible runs for comparison charts. Families retain their root identity if filters
+hide a parent. Forks show changes in user-controlled settings, not source-artifact
+metadata. The primary target is sub-150M models and lower WikiText-2 BYTE_PPL:
+https://huggingface.co/spaces/Glint-Research/Tiny-ML-Leaderboard
 
-`/checkpoints` lists saved weights with run/best filters, steps, validation loss,
-creation times, recorded sizes and authenticated downloads. Fork on either page
-opens `/new?parent=<run-id>&checkpoint=<checkpoint-id>`; Retry uses the same reviewed
-warm-start flow for stopped/failed runs with a compatible saved checkpoint.
-Multiple checkpoints open a chooser, defaulting to the best available checkpoint.
-Missing or unsupported checkpoints are not offered as executable forks. Existing
-trainers require local checkpoint files; R2-only artifacts are not forkable here.
+Quality summaries use finished **full validation** evaluations with the same
+protocol. Training loss, smoke diagnostics and final-test evidence are separate.
+GPU hours use recorded RunPod billing seconds, not CPU runtime or allocation
+estimates. Run monitoring labels billed and estimated cost separately; unavailable
+values remain absent. GPU activity counts recent running worker heartbeats, not
+peak VRAM. `/api/dashboard` returns owned families, checkpoint evidence, latest
+metrics and at most 40 validation-loss samples per run. Progress is a 0–1 fraction.
+
+`/checkpoints?run=<id>` orders a run's snapshots chronologically. The page shows
+steps, exact logged token counts at each snapshot when available, training loss,
+artifact size, authenticated downloads and recorded evaluation SHA. The SHA
+identifies evaluated bytes; it does not attest to a later overwritten download.
+Native training tokens are UTF-8 bytes, not subword tokens.
+
+Fork opens `/new?parent=<run-id>&checkpoint=<checkpoint-id>`. Retry uses the same
+reviewed warm-start flow for stopped/failed runs. Multiple checkpoints open a
+chooser, defaulting to the best available training-loss checkpoint. Missing or
+unsupported weights are not offered as executable forks. Current trainers and
+evaluators require local files; R2-only artifacts are not executable here.
 
 The fork draft restores the original accessible datasets and exact percentages,
 keeps model shape and compute fixed, and allows supported training-setting changes.
@@ -123,3 +135,43 @@ Missing datasets or incompatible model shapes block launch rather than substitut
 data or architecture. The review step shows lineage. **Launch fork** creates a new
 run initialized from saved weights; optimizer, schedule and step counter start fresh.
 The parent and normal saved studio draft remain unchanged.
+
+## Checkpoint-specific WikiText-2
+
+Owners explicitly submit `POST /api/runs/{id}/benchmarks` with
+`{"suite":"wikitext2","mode":"full","split":"validation","checkpoint_id":"<id>"}`.
+The snapshot must belong to the run and contain available native byte-model `.pt`
+weights. Periodic snapshots can be evaluated before training finishes. Omitting
+the checkpoint retains the existing finished-run final-model behavior.
+`mode:"smoke"` scores only ten documents and never ranks. `split:"test"` requires
+an explicit confirmation in the UI; freeze checkpoint choice rather than tuning
+repeatedly against that score. Opening pages or review dialogs queues nothing.
+
+`wikitext2-v1-lmeval0413-byte-rolling` pins lm-eval 0.4.13 and
+`EleutherAI/wikitext_document_level`, `wikitext-2-raw-v1`, revision
+`647234772b9554e208af6c826f23b99e3cac88c8`. It uses the official detokenizer and
+`get_rolling_token_windows(context_len=1)` block windows, bounded by model context.
+Every target UTF-8 byte is scored once, documents reset context, and the native
+model uses a space-byte prefix without EOS. Corpus BYTE_PPL is
+`exp(-sum(loglikelihood) / sum(original_page_utf8_bytes))`; the denominator is
+measured before detokenization. Bits per byte use the same aggregate divided by
+`ln(2)`. Results record byte/document counts and a corpus digest.
+
+This differs from the existing private Tiny-ML aggregate's maximal sliding-byte
+protocol; see [private Tiny-ML comparisons](private-tiny-ml.md). Do not combine or
+rank scores across the two protocols. External leaderboard entries are reported
+by their authors; matching a task name does not establish numerical parity.
+
+Queueing pins checkpoint ID, artifact ID/storage key and SHA. Claim, download and
+execution verify that identity; mutation fails instead of selecting newer weights.
+Only a completed evaluation with matching checkpoint, artifact, hash, protocol,
+split and mode can satisfy a WikiText request. Failed/cancelled WikiText work
+starts a new attempt; smoke, test and validation measurements are never reused
+across those boundaries. One evaluation per run may be queued/running at a time.
+Existing cancellation applies, and all WikiText results remain owner-only even
+when the source run is public.
+
+Deploy both API and existing benchmark worker source. Updated workers advertise
+the WikiText and Tiny-ML protocol IDs in the claim body's `protocols` list; old
+workers skip unsupported jobs. Preserve the worker's environment, idle-GPU
+admission policy and resource limits. Adding this workflow provisions no GPU.

@@ -411,26 +411,6 @@
 .runs-row-fork .runs-sparkline {
   color: #9985d8;
 }
-.runs-f1 {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  font-weight: 500;
-}
-.runs-delta {
-  font-size: 9px;
-  font-weight: 400;
-  white-space: nowrap;
-}
-.runs-delta-positive {
-  color: var(--green);
-}
-.runs-delta-negative {
-  color: var(--red);
-}
-.runs-delta-neutral {
-  color: var(--muted);
-}
 .runs-step {
   white-space: nowrap;
   color: #797f8f;
@@ -779,5 +759,332 @@
   }
   .dashboard-table {
     min-width: 820px;
+  }
+}
+
+/* A focused family is the workspace unit; evaluation evidence stays per snapshot. */
+.focus-intro {
+  margin-top: 24px;
+  padding: 20px 24px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fcfbff;
+}
+.focus-intro p,
+.checkpoint-protocol-note p,
+.checkpoint-context p,
+.checkpoint-action-recovery p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.7;
+}
+.focus-workspace-controls,
+.focus-family-header,
+.checkpoint-card-heading,
+.checkpoint-evaluation-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.focus-workspace-controls {
+  flex-wrap: wrap;
+  margin: 18px 0 12px;
+}
+.focus-toggle {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: white;
+}
+.focus-toggle button {
+  min-height: 38px;
+  padding: 8px 14px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+}
+.focus-toggle button[aria-pressed="true"] {
+  color: var(--accent-dark);
+  background: var(--accent-tint-2);
+  font-weight: 600;
+}
+.focus-family-header {
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--ink);
+  font-size: 13px;
+}
+.focus-family-header small {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 400;
+}
+.runs-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.focus-quality,
+.focus-quality > span,
+.focus-monitoring {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.focus-quality code {
+  max-width: 240px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  font-size: 9px;
+  color: var(--muted);
+}
+.focus-quality small,
+.focus-monitoring > span {
+  color: var(--muted);
+}
+.focus-monitoring {
+  min-width: 150px;
+}
+.focus-monitoring progress {
+  width: 100%;
+  max-width: 230px;
+  height: 6px;
+  accent-color: var(--accent);
+}
+.focus-config {
+  max-width: 340px;
+  margin-top: 7px;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
+}
+.focus-config summary {
+  cursor: pointer;
+  color: var(--accent-dark);
+}
+.focus-config dl {
+  padding: 10px;
+  background: #f8f7fc;
+  border-radius: 6px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.focus-config dt {
+  margin-top: 8px;
+  color: var(--ink);
+}
+.focus-config dd {
+  margin: 4px 0;
+}
+.focus-empty-actions,
+.checkpoint-actions,
+.checkpoint-family-links {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.focus-empty-actions {
+  justify-content: center;
+  margin-top: 18px;
+}
+.focused-dashboard .runs-table {
+  min-width: 1020px;
+}
+.focused-dashboard .runs-row > td,
+.focused-dashboard .runs-row > th {
+  vertical-align: top;
+  padding-top: 22px;
+  padding-bottom: 22px;
+}
+.focused-dashboard .runs-group-row > th {
+  padding: 18px 22px;
+  background: #f8f7fc;
+}
+.checkpoint-context,
+.checkpoint-protocol-note,
+.checkpoint-comparison,
+.checkpoint-action-recovery {
+  margin-bottom: 22px;
+  padding: 20px 24px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: white;
+}
+.checkpoint-context {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 260px);
+  gap: 24px;
+}
+.checkpoint-context h2,
+.checkpoint-comparison h2 {
+  margin: 0 0 12px;
+  font-size: 16px;
+}
+.checkpoint-context h2 .runs-status {
+  margin-left: 10px;
+}
+.checkpoint-context p + p,
+.checkpoint-family-links {
+  margin-top: 10px;
+}
+.checkpoint-family-links a {
+  font-size: 11px;
+}
+.checkpoint-protocol-note {
+  background: #fcfbff;
+  font-size: 13px;
+}
+.checkpoint-protocol-note p {
+  margin-top: 8px;
+}
+.checkpoint-chronology {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: white;
+  overflow: hidden;
+}
+.checkpoint-card {
+  padding: 24px;
+  border-bottom: 1px solid var(--line);
+}
+.checkpoint-card:last-child {
+  border-bottom: 0;
+}
+.checkpoint-card-heading {
+  align-items: flex-start;
+}
+.checkpoint-card-heading h3 {
+  margin: 0 0 7px;
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+.checkpoint-card-heading p,
+.checkpoint-card-heading time,
+.checkpoint-hint,
+.checkpoint-protocol,
+.checkpoint-id,
+.checkpoint-comparison p {
+  margin: 6px 0 12px;
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.checkpoint-artifact {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 24px;
+  padding: 16px;
+  background: #fafbfc;
+  border-radius: 7px;
+  font-size: 11px;
+}
+.checkpoint-artifact > div:last-child {
+  grid-column: 1 / -1;
+}
+.checkpoint-artifact dt,
+.checkpoint-metrics dt {
+  color: var(--muted);
+}
+.checkpoint-artifact dd {
+  margin: 5px 0 0;
+  overflow-wrap: anywhere;
+}
+.checkpoint-actions {
+  margin: 14px 0 8px;
+}
+.checkpoint-evaluations {
+  display: grid;
+  gap: 12px;
+  margin-top: 20px;
+}
+.checkpoint-evaluation {
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-left: 3px solid #b9a6e9;
+  border-radius: 7px;
+}
+.checkpoint-evaluation-test {
+  border-left-color: #c59639;
+  background: #fffefa;
+}
+.checkpoint-evaluation-heading {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 12px;
+}
+.checkpoint-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin: 18px 0;
+  font-size: 11px;
+}
+.checkpoint-metrics dd {
+  margin: 7px 0 0;
+  font-size: 19px;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.checkpoint-score-selection {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.checkpoint-protocol code,
+.checkpoint-id code {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.runs-status-finished {
+  color: var(--green);
+  background: var(--green-tint);
+}
+@media (max-width: 760px) {
+  .focus-intro,
+  .checkpoint-context,
+  .checkpoint-protocol-note,
+  .checkpoint-comparison,
+  .checkpoint-action-recovery,
+  .checkpoint-card {
+    padding: 18px;
+  }
+  .checkpoint-context,
+  .checkpoint-artifact {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .checkpoint-card-heading,
+  .checkpoint-comparison .focus-family-header,
+  .checkpoints-page .dashboard-heading {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .checkpoint-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .checkpoint-evaluation {
+    padding: 13px;
+  }
+  .runs-checkpoint-dialog .runs-dialog-actions {
+    flex-wrap: wrap;
+  }
+  .checkpoint-chronology .dashboard-table-heading {
+    flex-wrap: wrap;
+    gap: 8px;
   }
 }

@@ -6,6 +6,12 @@ import {
   type DashboardRun,
 } from "./DashboardData";
 import { fmt, RunError, useRunAction, useRunQuery } from "./RunData";
+import {
+  activeFamilyRun,
+  ChangedSettings,
+  RunMonitoring,
+  validationBests,
+} from "./FocusedMetrics";
 import { Icon } from "../Icons";
 
 type QueueItem = {
@@ -20,122 +26,70 @@ type QueueItem = {
   tasks: string[];
 };
 type Queue = { running: number; waiting: number; items: QueueItem[] };
-type Status =
-  | "all"
-  | "running"
-  | "done"
-  | "stopped"
-  | "queued"
-  | "failed"
-  | "cancelled"
-  | "interrupted";
-type DateScope = "all" | "7" | "30";
-type TreeRow = { run: DashboardRun; depth: number; parentVisible: boolean };
-type RunGroup = { name: string; rows: TreeRow[] };
-const statuses: { value: Status; label: string }[] = [
-  { value: "all", label: "All" },
-  { value: "running", label: "Running" },
-  { value: "done", label: "Done" },
-  { value: "stopped", label: "Stopped" },
-  { value: "queued", label: "Queued" },
-  { value: "failed", label: "Failed" },
-  { value: "cancelled", label: "Cancelled" },
-  { value: "interrupted", label: "Interrupted" },
+const statuses = [
+  "all",
+  "running",
+  "done",
+  "stopped",
+  "queued",
+  "failed",
+  "cancelled",
+  "interrupted",
 ];
-const f1Keys = [
-  "val/f1",
-  "val/f1_score",
-  "validation/f1",
-  "validation/f1_score",
-  "eval/f1",
-  "eval/f1_score",
-  "f1",
-  "f1_score",
-  "test/f1",
-  "test/f1_score",
-];
-
-function finite(value: number | null | undefined): value is number {
-  return typeof value === "number" && Number.isFinite(value);
-}
 function statusOf(state: string): string {
   if (["finished", "completed", "done"].includes(state)) return "done";
   if (["stopped", "stopping"].includes(state)) return "stopped";
-  if (state === "canceled") return "cancelled";
-  return state;
+  return state === "canceled" ? "cancelled" : state;
 }
-function statusLabel(state: string): string {
-  if (state === "stopping") return "Stopping";
-  const status = statusOf(state);
-  return statuses.find((item) => item.value === status)?.label ?? state;
-}
-function f1(run: DashboardRun) {
-  const key = f1Keys.find((candidate) => finite(run.latest_metrics[candidate]));
-  return key ? { key, value: run.latest_metrics[key] } : null;
-}
-function forkUrl(runId: string, checkpointId: string): string {
-  return `/new?parent=${encodeURIComponent(runId)}&checkpoint=${encodeURIComponent(checkpointId)}`;
-}
-function bytes(value: number): string {
-  if (value === 0) return "0 B";
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  const unit = Math.min(
-    Math.floor(Math.log(value) / Math.log(1024)),
-    units.length - 1,
-  );
-  return `${fmt(value / 1024 ** unit, 1)} ${units[unit]}`;
-}
-function runGroups(runs: DashboardRun[]): RunGroup[] {
-  const ordered = [...runs].sort((a, b) => {
-    const aTime = Date.parse(a.started_at);
-    const bTime = Date.parse(b.started_at);
-    return (
-      (Number.isFinite(bTime) ? bTime : 0) -
-        (Number.isFinite(aTime) ? aTime : 0) || a.id.localeCompare(b.id)
+function runGroups(runs: DashboardRun[], allRuns: DashboardRun[]) {
+  const families = new Map<string, DashboardRun[]>();
+  for (const run of runs) {
+    const members = families.get(run.family_id) ?? [];
+    members.push(run);
+    families.set(run.family_id, members);
+  }
+  const byId = new Map(allRuns.map((run) => [run.id, run]));
+  return [...families].map(([id, members]) => {
+    const visibleIds = new Set(members.map((run) => run.id));
+    const children = new Map<string, DashboardRun[]>();
+    const ordered = [...members].sort(
+      (a, b) =>
+        Date.parse(a.started_at) - Date.parse(b.started_at) ||
+        a.id.localeCompare(b.id),
     );
-  });
-  const byId = new Map(ordered.map((run) => [run.id, run]));
-  const children = new Map<string, DashboardRun[]>();
-  for (const run of ordered) {
-    if (
-      run.parent_run_id &&
-      run.parent_run_id !== run.id &&
-      byId.has(run.parent_run_id)
-    ) {
+    for (const run of ordered) {
+      if (!run.parent_run_id || run.parent_run_id === run.id) continue;
       const siblings = children.get(run.parent_run_id) ?? [];
       siblings.push(run);
       children.set(run.parent_run_id, siblings);
     }
-  }
-  const visited = new Set<string>();
-  const groups = new Map<string, RunGroup>();
-  function appendTree(root: DashboardRun) {
-    const name = root.experiment || root.project || "Ungrouped runs";
-    const group = groups.get(name) ?? { name, rows: [] };
-    groups.set(name, group);
-    const pending = [{ run: root, depth: 0 }];
-    while (pending.length) {
-      const current = pending.pop();
-      if (!current || visited.has(current.run.id)) continue;
-      visited.add(current.run.id);
-      group.rows.push({ ...current, parentVisible: current.depth > 0 });
-      const descendants = children.get(current.run.id) ?? [];
-      for (let index = descendants.length - 1; index >= 0; index--) {
-        pending.push({ run: descendants[index], depth: current.depth + 1 });
+    const rows: { run: DashboardRun; depth: number }[] = [];
+    const visited = new Set<string>();
+    function append(root: DashboardRun) {
+      const pending = [{ run: root, depth: 0 }];
+      while (pending.length) {
+        const current = pending.pop();
+        if (!current || visited.has(current.run.id)) continue;
+        visited.add(current.run.id);
+        rows.push(current);
+        const descendants = children.get(current.run.id) ?? [];
+        for (let index = descendants.length - 1; index >= 0; index--)
+          pending.push({ run: descendants[index], depth: current.depth + 1 });
       }
     }
-  }
-  for (const run of ordered) {
-    if (
-      !run.parent_run_id ||
-      !byId.has(run.parent_run_id) ||
-      run.parent_run_id === run.id
-    )
-      appendTree(run);
-  }
-  // Malformed cycles have no root. Render each remaining component once.
-  for (const run of ordered) if (!visited.has(run.id)) appendTree(run);
-  return [...groups.values()];
+    for (const run of ordered)
+      if (!run.parent_run_id || !visibleIds.has(run.parent_run_id)) append(run);
+    for (const run of ordered) if (!visited.has(run.id)) append(run);
+    const family = allRuns.filter((run) => run.family_id === id);
+    return {
+      id,
+      name: byId.get(id)?.name ?? members[0].name,
+      rows,
+      family,
+      focused: members[0].focused,
+      active: family.some(activeFamilyRun),
+    };
+  });
 }
 function LossSparkline({
   history,
@@ -143,7 +97,9 @@ function LossSparkline({
   history: DashboardRun["val_loss_history"];
 }) {
   const points = history
-    .filter((point) => finite(point.step) && finite(point.value))
+    .filter(
+      (point) => Number.isFinite(point.step) && Number.isFinite(point.value),
+    )
     .sort((a, b) => a.step - b.step);
   if (points.length < 2) return null;
   const minStep = points[0].step;
@@ -201,9 +157,6 @@ function CheckpointDialog({
       (checkpoint) => checkpoint.id === run.best_checkpoint_id,
     ) ??
     checkpoints.find((checkpoint) => checkpoint.is_best) ??
-    checkpoints.find(
-      (checkpoint) => checkpoint.id === run.latest_checkpoint_id,
-    ) ??
     checkpoints[0];
   const [chosen, setChosen] = useState(preferred?.id ?? "");
   const checkpoint = checkpoints.find((item) => item.id === chosen);
@@ -234,8 +187,8 @@ function CheckpointDialog({
         </button>
       </div>
       <p>
-        Fork {run.name} from saved weights. Review the training configuration
-        before explicitly launching a new run.
+        Fork {run.name} from saved weights only, not optimizer resume. Review
+        configuration before explicitly launching training.
       </p>
       <label className="runs-filter" htmlFor="runs-checkpoint-select">
         Checkpoint
@@ -248,8 +201,8 @@ function CheckpointDialog({
         {checkpoints.map((item) => (
           <option key={item.id} value={item.id}>
             Step {fmt(item.step, 0)}
-            {item.is_best ? " · Best" : ""} · Val loss {fmt(item.val_loss)} ·{" "}
-            {new Date(item.created_at).toLocaleString()}
+            {item.is_best ? " · Best val loss" : ""} · Val loss{" "}
+            {fmt(item.val_loss)} · {new Date(item.created_at).toLocaleString()}
           </option>
         ))}
       </select>
@@ -269,9 +222,9 @@ function CheckpointDialog({
         {checkpoint && (
           <Link
             className="runs-button runs-button-primary"
-            to={forkUrl(run.id, checkpoint.id)}
+            to={`/new?parent=${encodeURIComponent(run.id)}&checkpoint=${encodeURIComponent(checkpoint.id)}`}
           >
-            Review fork →
+            Review weights-only fork →
           </Link>
         )}
       </div>
@@ -284,9 +237,11 @@ export function RunsPage() {
   const dashboard = useDashboard();
   const queue = useRunQuery<Queue>("/api/benchmarks/queue", 5000);
   const action = useRunAction();
+  const focusAction = useRunAction();
+  const [workspace, setWorkspace] = useState<"focused" | "all">("focused");
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState<Status>("all");
-  const [dateScope, setDateScope] = useState<DateScope>("all");
+  const [status, setStatus] = useState("all");
+  const [dateScope, setDateScope] = useState("all");
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [message, setMessage] = useState("");
   const [forkRunId, setForkRunId] = useState<string | null>(null);
@@ -300,6 +255,7 @@ export function RunsPage() {
     const query = search.trim().toLowerCase();
     const scope = allRuns.filter(
       (run) =>
+        (workspace === "all" || run.focused) &&
         (dateScope === "all" || Date.parse(run.started_at) >= cutoff) &&
         [run.name, run.project, run.experiment, run.id].some((value) =>
           value.toLowerCase().includes(query),
@@ -309,68 +265,41 @@ export function RunsPage() {
       (run) => status === "all" || statusOf(run.state) === status,
     );
     const visibleIds = new Set(visible.map((run) => run.id));
-    const checkpoints = (data?.checkpoints ?? []).filter(
-      (checkpoint) =>
-        visibleIds.has(checkpoint.run_id) &&
-        (dateScope === "all" || Date.parse(checkpoint.created_at) >= cutoff),
+    const checkpoints = (data?.checkpoints ?? []).filter((checkpoint) =>
+      visibleIds.has(checkpoint.run_id),
     );
-    const metricKey = f1Keys.find((key) =>
-      visible.some((run) => finite(run.latest_metrics[key])),
-    );
-    let bestF1: { run: DashboardRun; value: number; key: string } | null = null;
-    let gpuSeconds = 0;
-    let measuredRuns = 0;
-    for (const run of visible) {
-      if (
-        metricKey &&
-        finite(run.latest_metrics[metricKey]) &&
-        (!bestF1 || run.latest_metrics[metricKey] > bestF1.value)
-      ) {
-        bestF1 = { run, value: run.latest_metrics[metricKey], key: metricKey };
-      }
-      if (finite(run.gpu_seconds)) {
-        gpuSeconds += run.gpu_seconds;
-        measuredRuns++;
-      }
-    }
-    let storedBytes = 0;
-    let measuredCheckpoints = 0;
-    const storedArtifacts = new Set<string>();
-    for (const checkpoint of checkpoints) {
-      if (finite(checkpoint.size)) {
-        const storageId = checkpoint.artifact_id ?? checkpoint.id;
-        if (!storedArtifacts.has(storageId)) {
-          storedBytes += checkpoint.size;
-          storedArtifacts.add(storageId);
-        }
-        measuredCheckpoints++;
-      }
-    }
-    const forkable = new Map<string, DashboardCheckpoint[]>();
+    const byRun = new Map<string, DashboardCheckpoint[]>();
     for (const checkpoint of data?.checkpoints ?? []) {
-      if (!checkpoint.can_fork) continue;
-      const items = forkable.get(checkpoint.run_id) ?? [];
+      const items = byRun.get(checkpoint.run_id) ?? [];
       items.push(checkpoint);
-      forkable.set(checkpoint.run_id, items);
+      byRun.set(checkpoint.run_id, items);
     }
-    for (const items of forkable.values())
+    for (const items of byRun.values())
       items.sort((a, b) => b.step - a.step || a.id.localeCompare(b.id));
+    const measured = visible.filter(
+      (run) =>
+        typeof run.gpu_seconds === "number" && Number.isFinite(run.gpu_seconds),
+    );
     return {
       allRuns,
       scope,
       visible,
       visibleIds,
-      groups: runGroups(visible),
+      groups: runGroups(visible, allRuns),
       checkpoints,
-      bestF1,
-      gpuSeconds,
-      measuredRuns,
-      storedBytes,
-      measuredCheckpoints,
-      forkable,
+      byRun,
+      bestValidation: validationBests(checkpoints),
+      measured,
+      gpuSeconds: measured.reduce(
+        (total, run) => total + (run.gpu_seconds ?? 0),
+        0,
+      ),
       byId: new Map(allRuns.map((run) => [run.id, run])),
+      focusedFamilies: new Set(
+        allRuns.filter((run) => run.focused).map((run) => run.family_id),
+      ).size,
     };
-  }, [data, dateScope, search, status]);
+  }, [data, dateScope, search, status, workspace]);
   useEffect(() => {
     setSelected((previous) => {
       const next = new Set(
@@ -382,22 +311,15 @@ export function RunsPage() {
   const visibleSelection = [...selected].filter((id) =>
     view.visibleIds.has(id),
   );
-  const tabs = statuses.filter(
-    (item, index) =>
-      index < 5 ||
-      view.scope.some((run) => statusOf(run.state) === item.value) ||
-      status === item.value,
-  );
   const forkRun = forkRunId ? view.byId.get(forkRunId) : undefined;
-
   return (
-    <div className="runs-dashboard">
+    <div className="runs-dashboard focused-dashboard">
       <header className="runs-header">
         <div>
-          <h1>My runs</h1>
+          <h1>Focused runs</h1>
           <p className="runs-subtitle">
-            Grouped by experiment. Forks sit under their parent, so the
-            comparison is structural, not manual.
+            One baseline, deliberate forks, measurable progress. Target:
+            sub-150M parameters and lower WikiText-2 BYTE_PPL.
           </p>
         </div>
       </header>
@@ -406,21 +328,66 @@ export function RunsPage() {
         retry={() => void dashboard.refetch()}
       />
       <RunError error={action.error} />
+      <RunError
+        error={focusAction.error}
+        retry={() => void dashboard.refetch()}
+      />
       {message && (
         <p className="runs-notice" role="status">
           {message}
         </p>
       )}
+      <section className="focus-intro" aria-label="Training objective">
+        <p>
+          <a
+            href="https://huggingface.co/spaces/Glint-Research/Tiny-ML-Leaderboard"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Glint Tiny-ML leaderboard ↗
+          </a>{" "}
+          · The native 150M preset has 149.63M parameters. Track's byte-model
+          protocol is recorded separately; external leaderboard scores have not
+          been reproduced.
+        </p>
+        <div className="focus-workspace-controls">
+          <div className="focus-toggle" aria-label="Workspace scope">
+            <button
+              type="button"
+              aria-pressed={workspace === "focused"}
+              onClick={() => setWorkspace("focused")}
+            >
+              Focused families
+            </button>
+            <button
+              type="button"
+              aria-pressed={workspace === "all"}
+              onClick={() => setWorkspace("all")}
+            >
+              All runs / archive
+            </button>
+          </div>
+          <Link className="runs-button runs-button-primary" to="/new">
+            Create training run
+          </Link>
+        </div>
+        <p>
+          {view.focusedFamilies} focused{" "}
+          {view.focusedFamilies === 1 ? "family" : "families"}. Keep a few
+          purposeful branches; focus is a workspace choice, not a concurrency
+          limit.
+        </p>
+      </section>
       <div className="runs-filters">
         <label className="runs-filter">
           <span>Status</span>
           <select
             value={status}
-            onChange={(event) => setStatus(event.target.value as Status)}
+            onChange={(event) => setStatus(event.target.value)}
           >
             {statuses.map((item) => (
-              <option key={item.value} value={item.value}>
-                {item.label === "All" ? "All statuses" : item.label}
+              <option key={item} value={item}>
+                {item === "all" ? "All statuses" : item}
               </option>
             ))}
           </select>
@@ -429,7 +396,7 @@ export function RunsPage() {
           <span>Date</span>
           <select
             value={dateScope}
-            onChange={(event) => setDateScope(event.target.value as DateScope)}
+            onChange={(event) => setDateScope(event.target.value)}
           >
             <option value="all">All time</option>
             <option value="7">Last 7 days</option>
@@ -454,28 +421,31 @@ export function RunsPage() {
         <article className="runs-summary-card">
           <span className="runs-summary-label">
             <Icon name="trend" />
-            Best F1
-            {dateScope === "7"
-              ? " · last 7 days"
-              : dateScope === "30"
-                ? " · last 30 days"
-                : ""}
+            Best WikiText-2 BYTE_PPL
           </span>
           <strong className="runs-summary-value">
-            {fmt(view.bestF1?.value, 4)}
+            {view.bestValidation.length === 1
+              ? fmt(view.bestValidation[0].evaluation.byte_perplexity, 4)
+              : "—"}
           </strong>
-          <span className="runs-summary-detail">
-            {view.bestF1 ? (
-              <>
-                <Link to={`/run/${encodeURIComponent(view.bestF1.run.id)}`}>
-                  {view.bestF1.run.name}
-                </Link>{" "}
-                · {view.bestF1.key}
-              </>
-            ) : (
-              "No F1 metric reported"
-            )}
-          </span>
+          <div className="runs-summary-detail">
+            {view.bestValidation.length
+              ? view.bestValidation.map(({ checkpoint, evaluation }) => (
+                  <div className="focus-quality" key={evaluation.protocol}>
+                    <Link
+                      to={`/checkpoints?run=${encodeURIComponent(checkpoint.run_id)}`}
+                    >
+                      {checkpoint.run_name} · step {fmt(checkpoint.step, 0)}
+                    </Link>
+                    {view.bestValidation.length > 1 && (
+                      <strong>{fmt(evaluation.byte_perplexity, 4)}</strong>
+                    )}
+                    <span>Full validation · lower is better</span>
+                    <code>{evaluation.protocol}</code>
+                  </div>
+                ))
+              : "No completed full validation evaluation. Smoke and test results do not rank here."}
+          </div>
         </article>
         <article className="runs-summary-card">
           <span className="runs-summary-label">
@@ -483,74 +453,35 @@ export function RunsPage() {
             GPU hours
           </span>
           <strong className="runs-summary-value">
-            {fmt(view.measuredRuns ? view.gpuSeconds / 3600 : undefined, 2)}
+            {fmt(view.measured.length ? view.gpuSeconds / 3600 : null, 2)}
           </strong>
           <span className="runs-summary-detail">
-            {view.measuredRuns
-              ? `${view.measuredRuns} of ${view.visible.length} runs measured${view.measuredRuns < view.visible.length ? " · partial total" : ""}`
+            {view.measured.length
+              ? `${view.measured.length} of ${view.visible.length} runs measured${view.measured.length < view.visible.length ? " · partial total" : ""}`
               : "No measured GPU usage"}
           </span>
         </article>
         <article className="runs-summary-card">
           <span className="runs-summary-label">
             <Icon name="database" />
-            Checkpoints stored
+            Saved checkpoints
           </span>
           <strong className="runs-summary-value">
             {data ? fmt(view.checkpoints.length, 0) : "—"}
           </strong>
           <span className="runs-summary-detail">
-            {data
-              ? `${view.measuredCheckpoints || view.checkpoints.length === 0 ? bytes(view.storedBytes) : "—"} stored${view.measuredCheckpoints < view.checkpoints.length ? " · size incomplete" : ""}`
-              : "Waiting for checkpoint data"}
+            Immutable evaluation evidence · weights-only forks reviewed before
+            launch
           </span>
         </article>
       </section>
-      <section className="runs-table-panel" aria-label="Training runs">
+      <section className="runs-table-panel" aria-label="Training families">
         <div className="runs-table-toolbar">
-          <div className="runs-tabs" role="tablist" aria-label="Run status">
-            {tabs.map((item, index) => (
-              <button
-                type="button"
-                className={`runs-tab${status === item.value ? " runs-tab-active" : ""}`}
-                key={item.value}
-                id={`runs-tab-${item.value}`}
-                role="tab"
-                aria-selected={status === item.value}
-                aria-controls="runs-table-content"
-                tabIndex={status === item.value ? 0 : -1}
-                onClick={() => setStatus(item.value)}
-                onKeyDown={(event) => {
-                  let next = index;
-                  if (event.key === "ArrowRight")
-                    next = (index + 1) % tabs.length;
-                  else if (event.key === "ArrowLeft")
-                    next = (index + tabs.length - 1) % tabs.length;
-                  else if (event.key === "Home") next = 0;
-                  else if (event.key === "End") next = tabs.length - 1;
-                  else return;
-                  event.preventDefault();
-                  setStatus(tabs[next].value);
-                  const buttons =
-                    event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>(
-                      "[role=tab]",
-                    );
-                  buttons?.[next]?.focus();
-                }}
-              >
-                {item.label}
-                <span className="runs-tab-count">
-                  {data
-                    ? view.scope.filter(
-                        (run) =>
-                          item.value === "all" ||
-                          statusOf(run.state) === item.value,
-                      ).length
-                    : "—"}
-                </span>
-              </button>
-            ))}
-          </div>
+          <strong>
+            {workspace === "focused"
+              ? "Focused families"
+              : "All runs / archive"}
+          </strong>
           <label className="runs-search">
             <Icon name="search" />
             <span className="runs-sr-only">Search runs</span>
@@ -562,29 +493,43 @@ export function RunsPage() {
             />
           </label>
         </div>
-        <div
-          id="runs-table-content"
-          role="tabpanel"
-          aria-labelledby={`runs-tab-${status}`}
-          className="runs-table-scroll"
-          aria-busy={dashboard.isLoading}
-        >
+        <div className="runs-table-scroll" aria-busy={dashboard.isLoading}>
           {dashboard.isLoading && (
             <p className="runs-empty" role="status">
               Loading runs…
             </p>
           )}
-          {data && view.allRuns.length === 0 ? (
+          {data && workspace === "focused" && !view.focusedFamilies ? (
+            <div className="runs-empty">
+              <h2>Choose a baseline to focus on.</h2>
+              <p>
+                No old runs are selected automatically. Browse the archive and
+                focus a family, or create a deliberate new training run.
+              </p>
+              <div className="focus-empty-actions">
+                <button
+                  type="button"
+                  className="runs-button runs-button-secondary"
+                  onClick={() => setWorkspace("all")}
+                >
+                  Browse existing baselines
+                </button>
+                <Link className="runs-button runs-button-primary" to="/new">
+                  Create training run
+                </Link>
+              </div>
+            </div>
+          ) : data && !view.allRuns.length ? (
             <div className="runs-empty">
               <h2>Your first experiment starts here.</h2>
               <p>
                 Create a training run to track real metrics and checkpoints.
               </p>
               <Link className="runs-button runs-button-primary" to="/new">
-                Create a training run →
+                Create training run →
               </Link>
             </div>
-          ) : data && view.visible.length === 0 ? (
+          ) : data && !view.visible.length ? (
             <div className="runs-empty">
               <p>No runs match these filters.</p>
               <button
@@ -607,43 +552,76 @@ export function RunsPage() {
                     <th scope="col" className="runs-selection">
                       <span className="runs-sr-only">Compare selection</span>
                     </th>
-                    <th scope="col">Run</th>
+                    <th scope="col">Baseline / fork</th>
                     <th scope="col">Status</th>
                     <th scope="col">Val loss</th>
-                    <th scope="col">F1</th>
-                    <th scope="col">Step</th>
-                    <th scope="col">
-                      <span className="runs-sr-only">Actions</span>
-                    </th>
+                    <th scope="col">WikiText-2 BYTE_PPL</th>
+                    <th scope="col">Training / GPU</th>
+                    <th scope="col">Actions</th>
                   </tr>
                 </thead>
                 {view.groups.map((group) => (
-                  <tbody key={group.name}>
+                  <tbody key={group.id}>
                     <tr className="runs-group-row">
                       <th scope="rowgroup" colSpan={7}>
-                        {group.name}
-                        <span>{group.rows.length} runs</span>
+                        <div className="focus-family-header">
+                          <span>
+                            {group.name}
+                            <small>
+                              Baseline + forks · {group.family.length} runs
+                              {group.focused ? " · focused" : " · archived"}
+                            </small>
+                            {group.active && group.focused && (
+                              <small>
+                                Archive available after active runs finish
+                              </small>
+                            )}
+                          </span>
+                          <button
+                            type="button"
+                            className="runs-button runs-button-secondary"
+                            disabled={
+                              focusAction.pending ||
+                              (group.focused && group.active)
+                            }
+                            title={
+                              group.focused && group.active
+                                ? "Queued, running or stopping families cannot be archived"
+                                : "Focus applies to this entire baseline and fork family"
+                            }
+                            onClick={async () => {
+                              const result = await focusAction.execute(
+                                `/api/runs/${encodeURIComponent(group.rows[0].run.id)}/focus`,
+                                { focused: !group.focused },
+                                "patch",
+                              );
+                              if (result)
+                                setMessage(
+                                  group.focused
+                                    ? "Family archived. Recover it in All runs / archive."
+                                    : "Family focused.",
+                                );
+                              await dashboard.refetch();
+                            }}
+                          >
+                            {group.focused ? "Archive family" : "Focus family"}
+                          </button>
+                        </div>
                       </th>
                     </tr>
-                    {group.rows.map(({ run, depth, parentVisible }) => {
-                      const score = f1(run);
+                    {group.rows.map(({ run, depth }) => {
                       const parent = run.parent_run_id
                         ? view.byId.get(run.parent_run_id)
                         : undefined;
-                      const baseline =
-                        score && parent
-                          ? parent.latest_metrics[score.key]
-                          : undefined;
-                      const delta =
-                        score && finite(baseline) && parent?.id !== run.id
-                          ? score.value - baseline
-                          : null;
+                      const checkpoints = view.byRun.get(run.id) ?? [];
+                      const forkable = checkpoints.filter(
+                        (checkpoint) => checkpoint.can_fork,
+                      );
+                      const scores = validationBests(checkpoints);
                       const loss =
                         run.latest_metrics["val/loss"] ??
                         run.latest_metrics["validation/loss"] ??
                         run.val_loss_history.at(-1)?.value;
-                      const checkpoints = view.forkable.get(run.id) ?? [];
-                      const canFork = run.can_fork && checkpoints.length > 0;
                       const retry =
                         [
                           "failed",
@@ -655,7 +633,7 @@ export function RunsPage() {
                       return (
                         <tr
                           key={run.id}
-                          className={`runs-row${parentVisible ? " runs-row-fork" : ""}`}
+                          className={`runs-row${depth ? " runs-row-fork" : ""}`}
                         >
                           <td className="runs-selection">
                             <input
@@ -687,10 +665,10 @@ export function RunsPage() {
                             <div
                               className="runs-run-name"
                               style={{
-                                paddingInlineStart: Math.min(depth, 6) * 22,
+                                paddingInlineStart: Math.min(depth, 6) * 18,
                               }}
                             >
-                              {parentVisible && (
+                              {depth > 0 && (
                                 <span
                                   className="runs-fork-branch"
                                   aria-hidden="true"
@@ -707,25 +685,24 @@ export function RunsPage() {
                                 </Link>
                                 <span className="runs-run-meta">
                                   {run.project} ·{" "}
-                                  <time dateTime={run.started_at}>
-                                    {new Date(
-                                      run.started_at,
-                                    ).toLocaleDateString(undefined, {
-                                      month: "short",
-                                      day: "numeric",
-                                      year: "numeric",
-                                    })}
-                                  </time>
+                                  {new Date(
+                                    run.started_at,
+                                  ).toLocaleDateString()}
                                 </span>
                                 {run.parent_run_id && (
                                   <span className="runs-parent-note">
-                                    {parentVisible
-                                      ? `Fork of ${parent?.name ?? run.parent_run_id}`
-                                      : parent
-                                        ? `Parent: ${parent.name} · outside this branch`
-                                        : "Fork · parent unavailable"}
+                                    Weights-only fork of{" "}
+                                    {parent?.name ?? run.parent_run_id}
                                   </span>
                                 )}
+                                <ChangedSettings run={run} parent={parent} />
+                                <Link
+                                  className="runs-run-meta"
+                                  to={`/checkpoints?run=${encodeURIComponent(run.id)}`}
+                                >
+                                  {run.checkpoint_count} checkpoints · monitor &
+                                  evaluate
+                                </Link>
                               </div>
                             </div>
                           </th>
@@ -737,7 +714,9 @@ export function RunsPage() {
                                 className="runs-status-dot"
                                 aria-hidden="true"
                               />
-                              {statusLabel(run.state)}
+                              {run.state === "stopping"
+                                ? "stopping"
+                                : statusOf(run.state)}
                             </span>
                           </td>
                           <td>
@@ -747,20 +726,38 @@ export function RunsPage() {
                             </div>
                           </td>
                           <td>
-                            <div className="runs-f1" title={score?.key}>
-                              <span>{fmt(score?.value, 4)}</span>
-                              {delta !== null && (
-                                <small
-                                  className={`runs-delta ${delta > 0 ? "runs-delta-positive" : delta < 0 ? "runs-delta-negative" : "runs-delta-neutral"}`}
-                                  title={`${score?.key} difference from ${parent?.name}`}
-                                >
-                                  {delta > 0 ? "+" : ""}
-                                  {fmt(delta, 4)} vs parent
-                                </small>
+                            <div className="focus-quality">
+                              {scores.length ? (
+                                scores.map(({ checkpoint, evaluation }) => (
+                                  <div
+                                    className="focus-quality"
+                                    key={evaluation.protocol}
+                                  >
+                                    <strong>
+                                      {fmt(evaluation.byte_perplexity, 4)}
+                                    </strong>
+                                    <small>
+                                      Full validation · step{" "}
+                                      {fmt(checkpoint.step, 0)}
+                                    </small>
+                                    <code>{evaluation.protocol}</code>
+                                  </div>
+                                ))
+                              ) : (
+                                <span>
+                                  —<small>No full validation score</small>
+                                </span>
                               )}
+                              <Link
+                                to={`/checkpoints?run=${encodeURIComponent(run.id)}`}
+                              >
+                                Validation / final test evidence
+                              </Link>
                             </div>
                           </td>
-                          <td className="runs-step">{fmt(run.step, 0)}</td>
+                          <td>
+                            <RunMonitoring run={run} />
+                          </td>
                           <td>
                             <div className="runs-row-actions">
                               <Link
@@ -768,36 +765,15 @@ export function RunsPage() {
                                 to={`/run/${encodeURIComponent(run.id)}`}
                               >
                                 Open
-                                <span className="runs-sr-only">
-                                  {" "}
-                                  {run.name}
-                                </span>
                               </Link>
-                              {canFork ? (
-                                checkpoints.length === 1 ? (
-                                  <Link
-                                    className="runs-button runs-button-secondary runs-fork-button"
-                                    to={forkUrl(run.id, checkpoints[0].id)}
-                                  >
-                                    {retry ? "Retry" : "Fork"}
-                                    <span className="runs-sr-only">
-                                      {" "}
-                                      {run.name} from checkpoint
-                                    </span>
-                                  </Link>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    className="runs-button runs-button-secondary runs-fork-button"
-                                    onClick={() => setForkRunId(run.id)}
-                                  >
-                                    {retry ? "Retry" : "Fork"}
-                                    <span className="runs-sr-only">
-                                      {" "}
-                                      {run.name} from checkpoint
-                                    </span>
-                                  </button>
-                                )
+                              {run.can_fork && forkable.length ? (
+                                <button
+                                  type="button"
+                                  className="runs-button runs-button-secondary runs-fork-button"
+                                  onClick={() => setForkRunId(run.id)}
+                                >
+                                  {retry ? "Retry fork" : "Fork weights"}
+                                </button>
                               ) : (
                                 <button
                                   type="button"
@@ -805,7 +781,7 @@ export function RunsPage() {
                                   disabled
                                   title="No compatible saved checkpoint available"
                                 >
-                                  {retry ? "Retry" : "Fork"}
+                                  Fork weights
                                 </button>
                               )}
                             </div>
@@ -821,7 +797,7 @@ export function RunsPage() {
         </div>
         {!!view.visible.length && (
           <div className="runs-table-footer">
-            <span>Select 2–10 runs to compare.</span>
+            <span>Select 2–10 runs for real comparison charts.</span>
             {visibleSelection.length > 0 && (
               <button
                 type="button"
@@ -832,7 +808,8 @@ export function RunsPage() {
               </button>
             )}
             <span>
-              Fork and Retry open a review step; they do not launch training.
+              Fork / retry uses saved weights, not optimizer resume. Review
+              before launch.
             </span>
           </div>
         )}
@@ -851,7 +828,9 @@ export function RunsPage() {
             (queue.data.items.length ? (
               queue.data.items.map((item) => (
                 <div className="runs-queue-item" key={item.id}>
-                  <Link to={`/run/${encodeURIComponent(item.run_id)}`}>
+                  <Link
+                    to={`/checkpoints?run=${encodeURIComponent(item.run_id)}`}
+                  >
                     {item.run_name}
                   </Link>
                   <span>
@@ -870,8 +849,10 @@ export function RunsPage() {
                         await action.execute(
                           `/api/runs/${encodeURIComponent(item.run_id)}/benchmarks/${encodeURIComponent(item.id)}/cancel`,
                         )
-                      )
+                      ) {
                         await queue.refetch();
+                        await dashboard.refetch();
+                      }
                     }}
                   >
                     Cancel
@@ -884,8 +865,8 @@ export function RunsPage() {
               ))
             ) : (
               <p>
-                No pending evaluations for your models. Open a finished run to
-                add benchmarks.
+                No pending evaluations. Open a run's checkpoints to explicitly
+                evaluate saved weights, including while training continues.
               </p>
             ))}
         </div>
@@ -894,7 +875,9 @@ export function RunsPage() {
         <CheckpointDialog
           key={forkRun.id}
           run={forkRun}
-          checkpoints={view.forkable.get(forkRun.id) ?? []}
+          checkpoints={(view.byRun.get(forkRun.id) ?? []).filter(
+            (checkpoint) => checkpoint.can_fork,
+          )}
           onClose={() => setForkRunId(null)}
         />
       )}

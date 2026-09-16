@@ -17,10 +17,10 @@ from sqlalchemy import update
 
 from .tiny_ml_suite import summarize_wikitext
 from .benchmark_model import ByteCheckpointLM
-from .benchmarks import TASKS
+from .benchmarks import TASKS, evaluation_checkpoint_path, checkpoint_digest
 from .database import SessionLocal
-from .hf_publish import checkpoint_path
-from .models import BenchmarkEvaluation, Run
+from .models import BenchmarkEvaluation
+from . import wikitext_suite
 from .leaderboard_suite import DATA, evaluate as evaluate_continuations, index_result
 
 
@@ -72,14 +72,19 @@ def run(eid, job=None, reporter=None):
         with SessionLocal() as db:
             row=db.get(BenchmarkEvaluation,eid)
             if not row or row.status not in ('queued','running'):return
-            path=checkpoint_path(db,db.get(Run,row.run_id))
+            path=evaluation_checkpoint_path(db,row)
             job={'provenance':dict(row.provenance),'tasks':list(row.tasks),'mode':row.mode,'results':dict(row.results)}
     else:
         path=Path(job['checkpoint'])
     provenance=dict(job['provenance']);tasks=job['tasks'];mode=job['mode']
-    if hashlib.sha256(path.read_bytes()).hexdigest()!=provenance['checkpoint_sha256']:
-        raise ValueError('Checkpoint changed')
-    payload=torch.load(path,map_location='cpu',weights_only=True)
+    with path.open('rb') as stream:
+        digest=hashlib.sha256()
+        for chunk in iter(lambda:stream.read(1024*1024),b''):
+            digest.update(chunk)
+        if digest.hexdigest()!=provenance['checkpoint_sha256']:
+            raise ValueError('Checkpoint changed')
+        stream.seek(0)
+        payload=torch.load(stream,map_location='cpu',weights_only=True)
     cfg=payload['config'];best_step=payload.get('best_step')
     length=min(cfg['context_length'],min(int(d['bytes']*.9)-1 for d in cfg['mix']))
     tokens=best_step*cfg['batch_size']*length if best_step is not None else None
@@ -91,7 +96,7 @@ def run(eid, job=None, reporter=None):
         torch.backends.cudnn.allow_tf32=False
         provenance.update(configure_cuda_budget(device))
     provenance.update(harness_version=version('lm-eval'),torch_version=torch.__version__,
-        checkpoint_step=best_step,training_tokens=tokens,token_unit='utf8_bytes',
+        checkpoint_step=provenance.get('checkpoint_step',best_step),training_tokens=tokens,token_unit='utf8_bytes',
         context_length=cfg['context_length'],parameters=cfg['parameters'],
         approximate_training_flops=6*cfg['parameters']*tokens if tokens is not None else None,
         flops_method='6*N*D estimate; excludes evaluation',
@@ -100,12 +105,25 @@ def run(eid, job=None, reporter=None):
         device=device,gpu=torch.cuda.get_device_name() if device.startswith('cuda') else None,
         scoring_implementation='bounded-fused-prefix-v2')
     save(status='running',provenance=provenance)
-    model=ByteCheckpointLM(path,device=device);manager=TaskManager();api=HfApi();results=dict(job.get('results',{}));failures=[]
+    model=ByteCheckpointLM(path,device=device,payload=payload,
+                           rolling_policy='harness' if tasks==['wikitext2'] else 'sliding')
+    del payload
+    manager=TaskManager() if any(name in TASKS and name!='wikitext2' for name in tasks) else None
+    api=HfApi();results=dict(job.get('results',{}));failures=[]
     for name in tasks:
         if name in results and not results[name].get('error'):continue
         save(current_task=name)
         task_started=time.monotonic()
         try:
+            if name=='wikitext2':
+                if provenance.get('protocol') != wikitext_suite.PROTOCOL:
+                    raise ValueError('Unsupported WikiText protocol')
+                results[name]=wikitext_suite.evaluate(model,mode,provenance['dataset_split'])
+                results[name]['elapsed_seconds']=time.monotonic()-task_started
+                provenance.update(scoring=wikitext_suite.CONTEXT_POLICY,
+                                  scoring_implementation='lm-eval-0.4.13-rolling-context1-byte-v1')
+                save(results=results,provenance=provenance)
+                continue
             if name in DATA or name=='int_index':
                 results[name]=index_result(results) if name=='int_index' else evaluate_continuations(name,model,mode)
                 results[name]['elapsed_seconds']=time.monotonic()-task_started
@@ -167,6 +185,8 @@ def run(eid, job=None, reporter=None):
             print(name,type(exc).__name__,str(exc),file=sys.stderr)
         provenance.update(context_limited_requests=job['provenance'].get('context_limited_requests',0)+model.truncated_requests,total_requests=job['provenance'].get('total_requests',0)+model.total_requests)
         save(results=results,provenance=provenance)
+    if checkpoint_digest(path)!=provenance['checkpoint_sha256']:
+        raise ValueError('Checkpoint changed during evaluation')
     if device.startswith('cuda'):
         provenance.update(cuda_peak_allocated_mb=torch.cuda.max_memory_allocated(device)/1024**2,
                           cuda_peak_reserved_mb=torch.cuda.max_memory_reserved(device)/1024**2)

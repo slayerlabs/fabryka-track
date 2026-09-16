@@ -32,10 +32,14 @@ const navigation: { label: string; links: [string, string, IconName][] }[] = [
     label: "Workspace",
     links: [
       ["/new", "Training studio", "flask"],
-      ["/runs", "My runs", "play"],
+      ["/runs", "Focused runs", "play"],
       ["/checkpoints", "Checkpoints", "layers"],
-      ["/benchmarks", "Benchmarks", "chart"],
-      ["/leaderboard", "Leaderboard", "trophy"],
+      ["/benchmarks", "Evaluation queue", "chart"],
+      [
+        "https://huggingface.co/spaces/Glint-Research/Tiny-ML-Leaderboard",
+        "Target leaderboard",
+        "trophy",
+      ],
     ],
   },
   {
@@ -45,6 +49,7 @@ const navigation: { label: string; links: [string, string, IconName][] }[] = [
       ["/status", "Status", "chart"],
       ["/agents", "Agent sign up", "users"],
       ["/benchmark-results", "Published results", "chart"],
+      ["/leaderboard", "Training results", "trophy"],
       ["/guide", "Training guide", "book"],
       ["https://github.com/slayerlabs/rfcs", "RFC repository", "book"],
     ],
@@ -102,7 +107,10 @@ export function App() {
                       <span>{label}</span>
                       {path === "/runs" && identity && dashboard.data && (
                         <span className="sidebar-count">
-                          {dashboard.data.runs.length}
+                          {
+                            dashboard.data.runs.filter((run) => run.focused)
+                              .length
+                          }
                         </span>
                       )}
                     </NavLink>

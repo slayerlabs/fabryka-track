@@ -18,7 +18,9 @@ from sqlalchemy import select, func
 from .accounts import require_user, current_user, owned_run
 from .database import SessionLocal, session_scope
 from .hf_publish import checkpoint_path
-from .models import Account, BenchmarkEvaluation, Run, RunLog
+from .models import Account, Artifact, BenchmarkEvaluation, Checkpoint, Run, RunLog
+from .settings import settings
+from . import wikitext_suite
 
 router = APIRouter(prefix='/api')
 from .tiny_ml_suite import PROTOCOL as TINY_ML_PROTOCOL, TASKS as TINY_ML_TASKS, REVISIONS as TINY_ML_REVISIONS, REFERENCE as TINY_ML_REFERENCE, scores as tiny_ml_scores
@@ -32,9 +34,11 @@ CORE = ['sciq','arc_easy','piqa','hellaswag','blimp']
 SUITES = {'tiny_ml':TINY_ML_TASKS, 'piqa':['piqa'], 'core':CORE, 'tinylm':CORE+['lambada_openai'],
           'extended':CORE+['lambada_openai','winogrande','boolq'],
           'polish': ['multiblimp_polish'], 'fast':[k for k in COMPONENTS if k!='fast_ewok'], 'fast_pl':['pl_lm','pl_multiblimp','pl_induction'],
-          'leaderboard':LEADERBOARD_TASKS, 'leaderboard_pl':LEADERBOARD_PL_TASKS}
+          'leaderboard':LEADERBOARD_TASKS, 'leaderboard_pl':LEADERBOARD_PL_TASKS,
+          'wikitext2':['wikitext2']}
 TASKS = {
     'wikitext': ('WikiText-2 byte perplexity','EleutherAI/wikitext_document_level'),
+    'wikitext2': ('WikiText-2 BYTE_PPL', wikitext_suite.DATASET),
     'sciq': ('SciQ','allenai/sciq'), 'arc_easy': ('ARC-Easy','allenai/ai2_arc'),
     'piqa': ('PIQA','baber/piqa'), 'hellaswag': ('HellaSwag','Rowan/hellaswag'),
     'blimp': ('BLiMP','nyu-mll/blimp'), 'lambada_openai': ('LAMBADA','EleutherAI/lambada_openai'),
@@ -126,15 +130,73 @@ def history(run_id:str,user=Depends(current_user),session=Depends(session_scope)
             if (user and run.owner_id==user.id) or row.provenance.get('visibility')!='private']
 
 
+def checkpoint_digest(path):
+    digest = hashlib.sha256()
+    with path.open('rb') as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b''):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def selected_checkpoint(session, run, checkpoint_id=None):
+    """Resolve native byte artifacts only; selected snapshots may belong to a live run."""
+    if checkpoint_id is None:
+        path = checkpoint_path(session, run)
+        artifact = session.scalar(select(Artifact).where(Artifact.run_id == run.id, Artifact.name == 'model.pt'))
+        checkpoint = session.scalar(select(Checkpoint).where(
+            Checkpoint.run_id == run.id, Checkpoint.artifact_id == artifact.id).order_by(Checkpoint.created_at.desc()))
+    else:
+        checkpoint = session.get(Checkpoint, checkpoint_id)
+        if not checkpoint or checkpoint.run_id != run.id:
+            raise HTTPException(404, 'Checkpoint not found')
+        artifact = session.get(Artifact, checkpoint.artifact_id) if checkpoint.artifact_id else None
+        if not artifact or artifact.run_id != run.id:
+            raise HTTPException(409, 'Checkpoint artifact is unavailable')
+        path = (settings.artifact_dir / artifact.storage_key).resolve()
+    if run.metadata_.get('engine') != 'tiny-transformer' or Path(artifact.name).suffix != '.pt':
+        raise HTTPException(409, 'Only native UTF-8 byte model .pt checkpoints are supported')
+    if not path.is_relative_to(settings.artifact_dir.resolve()) or not path.is_file():
+        raise HTTPException(409, 'Checkpoint artifact is unavailable')
+    return path, {'checkpoint_id': checkpoint.id if checkpoint else None, 'artifact_id': artifact.id,
+                  'checkpoint_storage_key': artifact.storage_key, 'checkpoint_sha256': checkpoint_digest(path),
+                  'checkpoint_step': checkpoint.step if checkpoint else None}
+
+
+def evaluation_checkpoint_path(session, row):
+    """Never re-resolve a selected checkpoint to the run's later final model."""
+    identity = row.provenance
+    if identity.get('artifact_id'):
+        artifact = session.get(Artifact, identity['artifact_id'])
+        if not artifact or artifact.run_id != row.run_id or artifact.storage_key != identity.get('checkpoint_storage_key'):
+            raise HTTPException(409, 'Pinned checkpoint artifact changed or disappeared')
+        if identity.get('checkpoint_id'):
+            checkpoint = session.get(Checkpoint, identity['checkpoint_id'])
+            if not checkpoint or checkpoint.run_id != row.run_id or checkpoint.artifact_id != artifact.id:
+                raise HTTPException(409, 'Pinned checkpoint identity changed or disappeared')
+        path = (settings.artifact_dir / artifact.storage_key).resolve()
+        if not path.is_relative_to(settings.artifact_dir.resolve()) or not path.is_file():
+            raise HTTPException(409, 'Pinned checkpoint artifact is unavailable')
+    else:
+        # Historical evaluations retain their final-checkpoint semantics.
+        path = checkpoint_path(session, session.get(Run, row.run_id))
+    if checkpoint_digest(path) != identity.get('checkpoint_sha256'):
+        raise HTTPException(409, 'Pinned checkpoint hash mismatch')
+    return path
+
+
 class EvaluationInput(BaseModel):
-    suite: Literal['tiny_ml','core','tinylm','extended','polish','fast','piqa','fast_pl','leaderboard','leaderboard_pl'] = 'tinylm'
+    suite: Literal['tiny_ml','core','tinylm','extended','polish','fast','piqa','fast_pl','leaderboard','leaderboard_pl','wikitext2'] = 'tinylm'
     mode: Literal['smoke','full'] = 'smoke'
+    checkpoint_id: str | None = Field(default=None, max_length=36)
+    split: Literal['validation','test'] = 'validation'
 
 
 @router.post('/runs/{run_id}/benchmarks',status_code=202)
 def start(run_id:str,body:EvaluationInput,user=Depends(require_user),session=Depends(session_scope)):
     run=owned_run(session,run_id,user)
-    path=checkpoint_path(session,run)
+    path, identity = selected_checkpoint(session, run, body.checkpoint_id)
+    if body.suite != 'wikitext2' and 'split' in body.model_fields_set:
+        raise HTTPException(422, 'Explicit split selection is supported only for WikiText-2')
     from .benchmark_remote import runners
     if importlib.util.find_spec('lm_eval') is None and not runners():
         raise HTTPException(503,'The benchmark worker is not installed on this server.')
@@ -142,16 +204,21 @@ def start(run_id:str,body:EvaluationInput,user=Depends(require_user),session=Dep
         active=session.scalar(select(BenchmarkEvaluation).where(BenchmarkEvaluation.run_id==run_id, BenchmarkEvaluation.status.in_(['queued','running'])))
         if active:
             raise HTTPException(409,'This run already has a queued or running evaluation.')
-        digest=hashlib.sha256(path.read_bytes()).hexdigest()
+        digest=identity['checkpoint_sha256']
         tasks=SUITES[body.suite]
-        protocol=TINY_ML_PROTOCOL if body.suite=='tiny_ml' else LEADERBOARD_PL_PROTOCOL if body.suite=='leaderboard_pl' else LEADERBOARD_PROTOCOL if body.suite=='leaderboard' else PL_PROTOCOL if body.suite=='fast_pl' else FAST_PROTOCOL if body.suite=='fast' else PROTOCOL
+        protocol=wikitext_suite.PROTOCOL if body.suite=='wikitext2' else TINY_ML_PROTOCOL if body.suite=='tiny_ml' else LEADERBOARD_PL_PROTOCOL if body.suite=='leaderboard_pl' else LEADERBOARD_PROTOCOL if body.suite=='leaderboard' else PL_PROTOCOL if body.suite=='fast_pl' else FAST_PROTOCOL if body.suite=='fast' else PROTOCOL
         previous=list(session.scalars(select(BenchmarkEvaluation).where(BenchmarkEvaluation.run_id==run_id,
             BenchmarkEvaluation.mode==body.mode).order_by(BenchmarkEvaluation.created_at.desc())))
         compatible=[r for r in previous if r.provenance.get('checkpoint_sha256')==digest and
                     r.provenance.get('protocol')==protocol and r.provenance.get('seed')==42 and
-                    r.provenance.get('fewshot')==0 and r.provenance.get('limit_per_subtask')==(10 if body.mode=='smoke' else None)]
+                    r.provenance.get('fewshot')==0 and r.provenance.get('limit_per_subtask')==(10 if body.mode=='smoke' else None) and
+                    ((r.provenance.get('checkpoint_id') == identity['checkpoint_id'] and
+                      r.provenance.get('artifact_id') == identity['artifact_id']) or
+                     (body.checkpoint_id is None and 'artifact_id' not in r.provenance)) and
+                    (body.suite != 'wikitext2' or r.provenance.get('dataset_split') == body.split)]
         # Reuse one coherent pinned evaluation; never mix smoke/full measurements.
-        source=max(compatible,key=lambda r:sum(k in r.results and not r.results[k].get('error') for k in tasks),default=None)
+        source=max((r for r in compatible if body.suite != 'wikitext2' or r.status == 'finished'),
+                   key=lambda r:sum(k in r.results and not r.results[k].get('error') for k in tasks),default=None)
         completed={k:v for k,v in (source.results.items() if source else []) if k in tasks and not v.get('error')}
         if source and set(source.tasks)==set(tasks) and len(completed)==len(tasks):
             return serialize(source,session)
@@ -168,6 +235,8 @@ def start(run_id:str,body:EvaluationInput,user=Depends(require_user),session=Dep
             provenance={k:v for k,v in (source.provenance.items() if source else []) if k not in ('runner','lease','heartbeat','worker_pid')}
             provenance.update(checkpoint_sha256=digest,protocol=protocol,fewshot=0,seed=42,
                               limit_per_subtask=10 if body.mode=='smoke' else None,reused_tasks=list(completed))
+            provenance.update(identity)
+            if body.suite=='wikitext2':provenance.update(wikitext_suite.provenance(body.split, body.mode), visibility='private')
             if body.suite=='tiny_ml':
                 provenance.update(dataset_revisions=dict(TINY_ML_REVISIONS), visibility='private', reference=dict(TINY_ML_REFERENCE), parameters=run.config.get('parameters'))
             if body.suite=='leaderboard':provenance['dataset_revisions']=dict(REVISIONS)

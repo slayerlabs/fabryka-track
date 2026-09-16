@@ -22,7 +22,7 @@ from sqlalchemy.orm import load_only
 
 from .accounts import require_user, current_user, owned_run
 from .database import SessionLocal, session_scope
-from .models import Account, Artifact, Checkpoint, Dataset, Metric, Project, Run, RunLog
+from .models import Account, Artifact, Checkpoint, Dataset, Metric, Project, Run, RunLog, RunAttribute
 from .settings import settings
 from .lr_schedule import learning_rate_at
 from .dataset_storage import content_response, content_bytes, dataset_path
@@ -233,6 +233,8 @@ def launch(body: TrainingInput, session=Depends(session_scope), user=Depends(req
         session.add(Run(id=run_id, owner_id=user.id, project_id=project.id, name=body.name.strip(), state="queued", is_public=True, config=config, metadata_=metadata,
                         parent_run_id=parent_run.id if parent_run else None,
                         forked_from_checkpoint_id=checkpoint.id if checkpoint else None))
+        session.flush()
+        session.add(RunAttribute(run_id=run_id, path="workspace/focused", value=True))
         if body.compute == "runpod":enqueue(session, session.get(Run, run_id))
         session.commit()
         if body.compute == "cpu":executor.submit(train, run_id)

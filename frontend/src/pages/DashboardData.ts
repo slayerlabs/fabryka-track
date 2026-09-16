@@ -1,10 +1,12 @@
-import { useRunQuery } from "./RunData";
+import { useRunQuery, type GPUStatus } from "./RunData";
 
 export interface DashboardRun {
   id: string;
   name: string;
   project: string;
   experiment: string;
+  family_id: string;
+  focused: boolean;
   state: string;
   started_at: string;
   ended_at: string | null;
@@ -15,6 +17,10 @@ export interface DashboardRun {
   step: number | null;
   val_loss_history: { step: number; value: number }[];
   gpu_seconds: number | null;
+  tokens_seen: number | null;
+  throughput: number | null;
+  progress: number | null;
+  gpu_status: GPUStatus | null;
   checkpoint_count: number;
   latest_checkpoint_id: string | null;
   best_checkpoint_id: string | null;
@@ -32,6 +38,26 @@ export interface DashboardCheckpoint {
   artifact_id: string | null;
   size: number | null;
   can_fork: boolean;
+  tokens_seen: number | null;
+  sha256: string | null;
+  evaluations: CheckpointEvaluation[];
+}
+
+export interface CheckpointEvaluation {
+  id: string;
+  status: string;
+  mode: "smoke" | "full";
+  split: "validation" | "test";
+  protocol: string;
+  checkpoint_id: string;
+  checkpoint_sha256: string;
+  byte_perplexity: number | null;
+  bits_per_byte: number | null;
+  num_bytes: number | null;
+  num_documents: number | null;
+  created_at: string;
+  ended_at: string | null;
+  error: string | null;
 }
 
 export interface Dashboard {
