@@ -22,7 +22,7 @@ from sqlalchemy.orm import load_only
 
 from .accounts import require_user, current_user, owned_run
 from .database import SessionLocal, session_scope
-from .models import Account, Artifact, Dataset, Metric, Project, Run, RunLog
+from .models import Account, Artifact, Checkpoint, Dataset, Metric, Project, Run, RunLog
 from .settings import settings
 from .lr_schedule import learning_rate_at
 from .dataset_storage import content_response, content_bytes, dataset_path
@@ -96,6 +96,8 @@ def training_manifest(run):
                   "architecture": {key: run.config.get(key) for key in ("context_length", "layers", "width", "heads")}},
         "training": {key: run.config.get(key) for key in ("steps", "batch_size", "learning_rate", "lr_schedule", "seed", "validation_split", "target_tokens", "budget_mode", "parameters", "training_context_length", "planned_training_tokens", "tokens_per_parameter", "chinchilla_target_tokens", "early_stopping", "patience", "min_delta", "available_training_bytes", "expected_max_source_reuse")},
         "result": run.metadata_.get("training_result"),
+        "warm_start_checkpoint_url": (f"/api/artifacts/{run.config['warm_start_checkpoint']['artifact_id']}"
+                                       if run.config.get("warm_start_checkpoint") else None),
         "tokenizer": {"name": "utf8-byte", "vocab_size": 256},
         "datasets": [{"id": item.get("id"), "name": item.get("name"), "sha256": item.get("sha256"),
                       "bytes": item.get("bytes"), "example": item.get("example", False), "weight": item.get("weight"), "validation": "last-10-percent",
@@ -153,6 +155,8 @@ class TrainingInput(BaseModel):
     patience: int = Field(default=20, ge=5, le=100)
     min_delta: float = Field(default=0.01, ge=0, le=1, allow_inf_nan=False)
     target_tokens: int = Field(default=100_000_000, ge=100_000, le=10_000_000_000)
+    parent_run_id: str | None = None
+    checkpoint_id: str | None = None
 
     @model_validator(mode="after")
     def validate_mix(self):
@@ -173,12 +177,23 @@ class TrainingInput(BaseModel):
 def launch(body: TrainingInput, session=Depends(session_scope), user=Depends(require_user)):
     from .gpu_training import allowed, enqueue
     from .models import GPUJob
+    from .benchmarks import visible_run
     if body.compute == 'runpod':
         if not allowed(user, session):raise HTTPException(403, 'RunPod access is not enabled for this account.')
         if body.max_runtime_seconds>settings.runpod_max_seconds:raise HTTPException(422, 'Requested duration exceeds the server GPU time limit.')
         if body.model_size in ('tiny','small'):raise HTTPException(422, 'Choose a GPU model from 8M to 128M.')
     elif body.model_size not in ('tiny','small'):
         raise HTTPException(422, 'Models 8M and larger require RunPod.')
+    parent_run = checkpoint = warm_start_checkpoint = None
+    if body.parent_run_id or body.checkpoint_id:
+        if not (body.parent_run_id and body.checkpoint_id):
+            raise HTTPException(422, 'Provide both parent_run_id and checkpoint_id to fork from a checkpoint.')
+        parent_run = visible_run(session, body.parent_run_id, user)
+        checkpoint = session.get(Checkpoint, body.checkpoint_id)
+        artifact = session.get(Artifact, checkpoint.artifact_id) if checkpoint and checkpoint.artifact_id else None
+        if not checkpoint or checkpoint.run_id != parent_run.id or not artifact:
+            raise HTTPException(404, 'Checkpoint not found')
+        warm_start_checkpoint = {"checkpoint_id": checkpoint.id, "artifact_id": artifact.id, "storage_key": artifact.storage_key}
     with launch_lock:
         if body.compute == 'runpod':
             pending = list(session.scalars(select(GPUJob).where(GPUJob.cleanup_done==False)))
@@ -207,13 +222,30 @@ def launch(body: TrainingInput, session=Depends(session_scope), user=Depends(req
             session.flush()
         run_id = str(uuid4())
         model_config = MODEL_PRESETS[body.model_size]
-        config = {**body.model_dump(exclude={"name", "mix"}), "mix": mix, "model": model_config["label"], "validation_split": 0.1, **model_config["architecture"]}
+        config = {**body.model_dump(exclude={"name", "mix", "parent_run_id", "checkpoint_id"}), "mix": mix, "model": model_config["label"], "validation_split": 0.1, **model_config["architecture"]}
         config.update(plan_training(body, mix))
-        session.add(Run(id=run_id, owner_id=user.id, project_id=project.id, name=body.name.strip(), state="queued", is_public=True, config=config, metadata_={"engine": "tiny-transformer", "device": "RunPod GPU" if body.compute=="runpod" else "CPU"}))
+        metadata = {"engine": "tiny-transformer", "device": "RunPod GPU" if body.compute=="runpod" else "CPU"}
+        if warm_start_checkpoint:
+            # Shallow top-level diff against the parent's config, computed once at fork time.
+            changed_keys = sorted(k for k, v in config.items() if parent_run.config.get(k) != v)
+            metadata["inherited_from"] = {"parent_run_id": parent_run.id, "checkpoint_id": checkpoint.id, "changed_keys": changed_keys}
+            config["warm_start_checkpoint"] = warm_start_checkpoint
+        session.add(Run(id=run_id, owner_id=user.id, project_id=project.id, name=body.name.strip(), state="queued", is_public=True, config=config, metadata_=metadata,
+                        parent_run_id=parent_run.id if parent_run else None,
+                        forked_from_checkpoint_id=checkpoint.id if checkpoint else None))
         if body.compute == "runpod":enqueue(session, session.get(Run, run_id))
         session.commit()
         if body.compute == "cpu":executor.submit(train, run_id)
         return {"id": run_id, "manifest_url": f"/api/training/{run_id}/manifest"}
+
+
+@router.get("/runs/{run_id}/checkpoints")
+def checkpoints(run_id: str, session=Depends(session_scope), user=Depends(current_user)):
+    from .benchmarks import visible_run
+    visible_run(session, run_id, user)
+    rows = session.scalars(select(Checkpoint).where(Checkpoint.run_id == run_id).order_by(Checkpoint.step))
+    return [{"id": c.id, "step": c.step, "val_loss": c.val_loss, "is_best": c.is_best,
+             "created_at": c.created_at, "artifact_id": c.artifact_id} for c in rows]
 
 
 @router.post("/training/{run_id}/stop")
@@ -365,6 +397,18 @@ def _holdout_split(source, seed, seen):
     return bytes(train), bytes(val)
 
 
+def _save_checkpoint(session, run_id, cfg, filename, state_dict, step, val_loss):
+    """Persist a model snapshot the same way for every checkpoint: periodic or final-best."""
+    folder = settings.artifact_dir / run_id
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / filename
+    torch.save({"format": "fabryka-transformer-v1", "config": cfg, "state_dict": state_dict, "best_step": step, "best_val_loss": val_loss}, path)
+    artifact = Artifact(run_id=run_id, name=path.name, storage_key=f"{run_id}/{path.name}", size=path.stat().st_size)
+    session.add(artifact)
+    session.flush()
+    return artifact
+
+
 def _train(run_id):
     torch.set_num_threads(1)
     with SessionLocal() as session:
@@ -378,6 +422,10 @@ def _train(run_id):
     torch.manual_seed(cfg["seed"])
     architecture = MODEL_PRESETS.get(cfg.get("model_size", "tiny"), MODEL_PRESETS["tiny"])["architecture"]
     model = TinyTransformer(**architecture)
+    warm_start = cfg.get("warm_start_checkpoint")
+    if warm_start:
+        parent_checkpoint = torch.load(settings.artifact_dir / warm_start["storage_key"], weights_only=True)
+        model.load_state_dict(parent_checkpoint["state_dict"])
     optimizer = torch.optim.AdamW(model.parameters(), lr=cfg["learning_rate"])
     holdout_seen = set()
     train_data, val_data = [], []
@@ -411,6 +459,8 @@ def _train(run_id):
     stale_checks = 0
     stop_reason = "step_limit"
     completed_steps = 0
+    # ~5 checkpoints across a run's lifetime, enough for a fork-from-checkpoint lineage.
+    checkpoint_every_steps = max(1, cfg["steps"] // 5)
     with SessionLocal() as session:
         session.add(Metric(run_id=run_id, key="val/loss", step=0, value=best_loss))
         session.add(Metric(run_id=run_id, key="val/perplexity", step=0, value=math.exp(best_loss)))
@@ -454,6 +504,10 @@ def _train(run_id):
             with SessionLocal() as session:
                 for key, value in values.items():
                     session.add(Metric(run_id=run_id, key=key, step=step, value=value))
+                if step % checkpoint_every_steps == 0 and step != cfg["steps"]:
+                    # Named distinctly from the final "model.pt" so lineage can fork mid-run.
+                    artifact = _save_checkpoint(session, run_id, cfg, f"checkpoint-{step}.pt", copy.deepcopy(model.state_dict()), step, val_loss)
+                    session.add(Checkpoint(run_id=run_id, step=step, val_loss=val_loss, is_best=False, artifact_id=artifact.id))
                 session.commit()
             if cfg.get("early_stopping", True) and stale_checks >= cfg.get("patience", 20):
                 stop_reason = "early_stopping"
@@ -471,14 +525,12 @@ def _train(run_id):
             "checkpoint_selection": "lowest_validation_loss",
         }}
         if final_state == "finished":
-            folder = settings.artifact_dir / run_id
-            folder.mkdir(parents=True, exist_ok=True)
-            checkpoint = folder / "model.pt"
-            torch.save({"format": "fabryka-transformer-v1", "config": cfg, "state_dict": best_state, "best_step": best_step, "best_val_loss": best_loss}, checkpoint)
-            manifest = folder / "recipe.json"
+            model_artifact = _save_checkpoint(session, run_id, cfg, "model.pt", best_state, best_step, best_loss)
+            manifest = settings.artifact_dir / run_id / "recipe.json"
             manifest.write_text(json.dumps(training_manifest(run), indent=2))
-            for path in (checkpoint, manifest):
-                session.add(Artifact(run_id=run_id, name=path.name, storage_key=f"{run_id}/{path.name}", size=path.stat().st_size))
+            session.add(Artifact(run_id=run_id, name=manifest.name, storage_key=f"{run_id}/{manifest.name}", size=manifest.stat().st_size))
+            # The run's canonical checkpoint: lowest validation loss seen, same selection as before.
+            session.add(Checkpoint(run_id=run_id, step=best_step, val_loss=best_loss, is_best=True, artifact_id=model_artifact.id))
         run.state = final_state
         run.ended_at = datetime.now(timezone.utc)
         session.add(RunLog(run_id=run_id, message=f"Training complete ({stop_reason}) after {completed_steps} updates. Saved best validation checkpoint from step {best_step} (loss {best_loss:.4f})." if final_state == "finished" else "Training stopped."))

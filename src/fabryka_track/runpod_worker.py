@@ -1,6 +1,7 @@
 """Standalone CUDA worker shipped as a SHA-256 pinned bundle into DMPod 1.0."""
 import contextlib
 import hashlib
+import io
 import json
 import math
 import os
@@ -115,6 +116,10 @@ def train(remote,manifest):
     model=TinyTransformer(**{k:cfg[k] for k in ('width','layers','heads','context_length')}).to(device)
     count=sum(p.numel() for p in model.parameters())
     if count!=cfg['parameters']:raise RuntimeError('Model parameter count differs from recipe')
+    if cfg.get('warm_start_checkpoint'):
+        remote.progress(0,message='Loading warm-start checkpoint from parent run.')
+        parent=torch.load(io.BytesIO(remote.call('GET','/warm-start-checkpoint').content),map_location=device,weights_only=True)
+        model.load_state_dict(parent['state_dict'])
     optimizer=torch.optim.AdamW(model.parameters(),lr=cfg['learning_rate'])
     use_bf16=torch.cuda.is_bf16_supported()
     def precision():return torch.autocast('cuda',dtype=torch.bfloat16) if use_bf16 else contextlib.nullcontext()
@@ -136,6 +141,7 @@ def train(remote,manifest):
             losses=[F.cross_entropy(model(x).reshape(-1,256),y.reshape(-1)).float().item() for x,y in vbatches]
         return sum(losses)/len(losses)
     torch.cuda.reset_peak_memory_stats()
+    checkpoint_every_steps=max(1,cfg['steps']//5)
     best=validate();best_step=0;best_state={k:v.detach().cpu().clone() for k,v in model.state_dict().items()}
     patience_best=best;stale=0;seen=0;step=0;state='finished';reason='step_limit';start=time.monotonic();last_report=start
     remote.progress(0,message=f'Training {count:,} parameters on {torch.cuda.get_device_name(0)}; budget {cfg["planned_training_tokens"]:,} byte tokens.')
@@ -159,6 +165,11 @@ def train(remote,manifest):
             values={'gpu/peak_allocated_mb':torch.cuda.max_memory_allocated()/1e6,'gpu/peak_reserved_mb':torch.cuda.max_memory_reserved()/1e6,'train/learning_rate':lr,'train/loss':loss.item(),'val/loss':val,'val/perplexity':math.exp(min(val,80)),
                     'throughput/tokens_sec':seen/max(time.monotonic()-start,.001),'progress':100*step/cfg['steps'],'training/tokens_seen':seen}
             stop=remote.progress(step,values);last_report=time.monotonic()
+            if step%checkpoint_every_steps==0 and step!=cfg['steps']:
+                # Named distinctly from the final "model.pt" so lineage can fork mid-run.
+                ckpt_state={k:v.detach().cpu().clone() for k,v in model.state_dict().items()}
+                torch.save({'format':'fabryka-transformer-v1','config':cfg,'state_dict':ckpt_state,'best_step':step,'best_val_loss':val},f'checkpoint-{step}.pt')
+                remote.upload(f'checkpoint-{step}.pt')
             if stop:state='cancelled';reason='cancelled';break
             if cfg.get('early_stopping',True) and stale>=cfg.get('patience',20):reason='early_stopping';break
     torch.save({'format':'fabryka-transformer-v1','config':cfg,'state_dict':best_state,'best_step':best_step,'best_val_loss':best},'model.pt')

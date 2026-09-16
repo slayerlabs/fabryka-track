@@ -8,6 +8,7 @@ import hashlib
 import io
 import json
 import math
+import re
 import secrets
 import threading
 import time
@@ -24,7 +25,7 @@ from sqlalchemy import select, update, func
 
 from .accounts import require_user
 from .database import SessionLocal, session_scope
-from .models import Artifact, Dataset, GPUJob, Metric, Run, RunLog
+from .models import Artifact, Checkpoint, Dataset, GPUJob, Metric, Run, RunLog
 from .settings import settings
 from .dataset_storage import content_response
 
@@ -36,6 +37,12 @@ DISPATCH_LOCK = threading.Lock()
 TICK_LOCK = threading.Lock()
 METRICS = {'gpu/peak_allocated_mb','gpu/peak_reserved_mb','train/learning_rate','train/loss','val/loss','val/perplexity','throughput/tokens_sec','progress','training/tokens_seen'}
 FILES = {'model.pt','recipe.json','metrics.jsonl','training.log','result.json'}
+CHECKPOINT_NAME = re.compile(r'^checkpoint-(\d+)\.pt$')
+
+
+def allowed_artifact(name):
+    """Fixed runner files, plus periodic checkpoint-<step>.pt lineage snapshots."""
+    return name in FILES or bool(CHECKPOINT_NAME.match(name))
 SIZES = {'8m':(256,10,8),'16m':(384,9,8),'32m':(512,10,8),'64m':(640,13,10),'128m':(768,18,12)}
 PRESETS = {}
 for key,(width,layers,heads) in SIZES.items():
@@ -152,6 +159,18 @@ def get_data(run_id,dataset_id,job=Depends(job_auth),session=Depends(session_sco
     return content_response(d)
 
 
+@router.get('/runner/{run_id}/warm-start-checkpoint')
+def get_warm_start_checkpoint(run_id,job=Depends(job_auth),session=Depends(session_scope)):
+    # Job-token scoped: works regardless of the parent run's owner/visibility,
+    # since launch() already checked that at fork time.
+    run=session.get(Run,run_id)
+    warm_start=(run.config or {}).get('warm_start_checkpoint')
+    if not warm_start:raise HTTPException(404,'No warm-start checkpoint for this run')
+    path=settings.artifact_dir/warm_start['storage_key']
+    if not path.is_file():raise HTTPException(404,'Warm-start checkpoint unavailable')
+    return FileResponse(path,media_type='application/octet-stream')
+
+
 class Progress(BaseModel):
     step: int = Field(ge=0)
     values: dict[str,float] = Field(default_factory=dict,max_length=10)
@@ -181,7 +200,7 @@ def progress(run_id,body:Progress,job=Depends(job_auth),session=Depends(session_
 
 @router.put('/runner/{run_id}/artifacts/{name}')
 async def upload(run_id,name,request:Request,x_content_sha256:str=Header(default=''),job=Depends(job_auth),session=Depends(session_scope)):
-    if name not in FILES or len(x_content_sha256)!=64:raise HTTPException(422,'Invalid artifact')
+    if not allowed_artifact(name) or len(x_content_sha256)!=64:raise HTTPException(422,'Invalid artifact')
     folder=settings.artifact_dir/run_id;folder.mkdir(parents=True,exist_ok=True)
     path=folder/name;tmp=folder/(name+'.'+secrets.token_hex(6)+'.upload');size=0;digest=hashlib.sha256()
     try:
@@ -198,7 +217,13 @@ async def upload(run_id,name,request:Request,x_content_sha256:str=Header(default
             j.files={**j.files,name:{'sha256':digest.hexdigest(),'bytes':size}}
             a=session.scalar(select(Artifact).where(Artifact.run_id==run_id,Artifact.name==name))
             if a:a.size=size
-            else:session.add(Artifact(run_id=run_id,name=name,size=size,storage_key=f'{run_id}/{name}'))
+            else:a=Artifact(run_id=run_id,name=name,size=size,storage_key=f'{run_id}/{name}');session.add(a);session.flush()
+            checkpoint_name=CHECKPOINT_NAME.match(name)
+            if checkpoint_name and not session.scalar(select(Checkpoint).where(Checkpoint.run_id==run_id,Checkpoint.step==int(checkpoint_name.group(1)),Checkpoint.is_best==False)):
+                step=int(checkpoint_name.group(1))
+                # Correlate with the most recent val/loss reported for this run at or before this step.
+                val_loss=session.scalar(select(Metric.value).where(Metric.run_id==run_id,Metric.key=='val/loss',Metric.step<=step).order_by(Metric.step.desc(),Metric.id.desc()))
+                session.add(Checkpoint(run_id=run_id,step=step,val_loss=val_loss,is_best=False,artifact_id=a.id))
             session.commit()
         return {'sha256':digest.hexdigest(),'bytes':size}
     finally:tmp.unlink(missing_ok=True)
@@ -221,7 +246,7 @@ def complete(run_id,body:Completed,job=Depends(job_auth),session=Depends(session
         if not required.issubset(body.files):raise HTTPException(409,'Artifacts not yet synchronized')
         for name,digest in body.files.items():
             path=settings.artifact_dir/run_id/name
-            if name not in FILES or job.files.get(name,{}).get('sha256')!=digest or not path.is_file():
+            if not allowed_artifact(name) or job.files.get(name,{}).get('sha256')!=digest or not path.is_file():
                 raise HTTPException(409,'Artifact verification incomplete')
         for key in ('best_val_loss','best_val_perplexity'):
             v=body.result.get(key)

@@ -162,6 +162,8 @@ def run_detail(run_id: str, session: Session = Depends(db), user=Depends(current
                 'started_at': item.started_at, 'ended_at': item.ended_at, 'config': cfg,
                 'metadata': {'engine': item.metadata_.get('engine'), 'training_result': result,
                              **({'tracking': item.metadata_.get('tracking', {})} if item.metadata_.get('engine') == 'external-training' else {})},
+                'parent_run_id': item.parent_run_id, 'forked_from_checkpoint_id': item.forked_from_checkpoint_id,
+                'inherited_from': item.metadata_.get('inherited_from'),
                 'note': '', 'conclusion': '', 'logs': [], 'artifacts': [],
                 'metrics': {k: v for k, v in series.items() if k in ('train/loss', 'val/loss', 'val/perplexity',
                             'progress', 'training/tokens_seen', 'throughput/tokens_sec') or
@@ -171,7 +173,9 @@ def run_detail(run_id: str, session: Session = Depends(db), user=Depends(current
     data = serialize_run(item)
     data["gpu_status"] = gpu_status(session,item)
     data.update(metrics=series, logs=[{"timestamp": x.timestamp, "level": x.level, "message": x.message} for x in logs],
-                artifacts=[{"id": x.id, "name": x.name, "size": x.size} for x in artifacts])
+                artifacts=[{"id": x.id, "name": x.name, "size": x.size} for x in artifacts],
+                parent_run_id=item.parent_run_id, forked_from_checkpoint_id=item.forked_from_checkpoint_id,
+                inherited_from=item.metadata_.get('inherited_from'))
     return data
 
 

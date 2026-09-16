@@ -45,6 +45,12 @@ def create_tables():
         gpu_columns={c['name'] for c in inspect(connection).get_columns('gpu_jobs')}
         for name,definition in {'allocation_deadline':'DATETIME','dispatch_attempts':'INTEGER NOT NULL DEFAULT 0','missing_checks':'INTEGER NOT NULL DEFAULT 0','next_retry_at':'DATETIME'}.items():
             if name not in gpu_columns:connection.execute(text(f'ALTER TABLE gpu_jobs ADD COLUMN {name} {definition}'))
+        run_columns={c['name'] for c in inspect(connection).get_columns('runs')}
+        if 'parent_run_id' not in run_columns:
+            connection.execute(text('ALTER TABLE runs ADD COLUMN parent_run_id VARCHAR(36)'))
+        connection.execute(text('CREATE INDEX IF NOT EXISTS ix_runs_parent_run_id ON runs (parent_run_id)'))
+        if 'forked_from_checkpoint_id' not in run_columns:
+            connection.execute(text('ALTER TABLE runs ADD COLUMN forked_from_checkpoint_id VARCHAR(36)'))
 
 
 def session_scope():

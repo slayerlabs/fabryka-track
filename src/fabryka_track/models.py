@@ -53,6 +53,8 @@ class Run(Base):
     conclusion: Mapped[str] = mapped_column(Text, default="")
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    parent_run_id: Mapped[str | None] = mapped_column(nullable=True)
+    forked_from_checkpoint_id: Mapped[str | None] = mapped_column(nullable=True)
     project: Mapped[Project] = relationship(back_populates="runs")
     metrics: Mapped[list["Metric"]] = relationship(cascade="all, delete-orphan")
 
@@ -99,6 +101,17 @@ class Artifact(Base):
     name: Mapped[str] = mapped_column(String(500))
     storage_key: Mapped[str] = mapped_column(String(1000))
     size: Mapped[int] = mapped_column(BigInteger)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class Checkpoint(Base):
+    __tablename__ = "checkpoints"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    run_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), ForeignKey("runs.id"), index=True)
+    step: Mapped[int] = mapped_column(BigInteger)
+    val_loss: Mapped[float | None] = mapped_column(Float, nullable=True)
+    is_best: Mapped[bool] = mapped_column(default=False)
+    artifact_id: Mapped[str | None] = mapped_column(Uuid(as_uuid=False), ForeignKey("artifacts.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
 
