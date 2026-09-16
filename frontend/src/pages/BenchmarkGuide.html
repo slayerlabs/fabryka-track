@@ -1,0 +1,61 @@
+<details class="panel benchmark-guide">
+  <summary><b>Benchmark guide · English fast ladder</b></summary>
+  <table>
+    <thead>
+      <tr>
+        <th>Component</th>
+        <th>Full-suite size</th>
+        <th>Metric</th>
+        <th>Weight</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Held-out LM</td>
+        <td>~1M UTF-8 byte tokens</td>
+        <td>NLL / BPB</td>
+        <td>40%</td>
+      </tr>
+      <tr>
+        <td>BLiMP-fast</td>
+        <td>8,509 pairs</td>
+        <td>Logprob margin + accuracy</td>
+        <td>35%</td>
+      </tr>
+      <tr>
+        <td>BLiMP Supplement</td>
+        <td>5,218 pairs</td>
+        <td>Margin + accuracy</td>
+        <td>10%</td>
+      </tr>
+      <tr>
+        <td>EWoK-fast</td>
+        <td>1,500 items · HF access pending</td>
+        <td>Preference margin</td>
+        <td>5%</td>
+      </tr>
+      <tr>
+        <td>ARC-Easy</td>
+        <td>1,000 items</td>
+        <td>MC logprob</td>
+        <td>10%</td>
+      </tr>
+    </tbody>
+  </table>
+  <p class="muted">
+    Four components are ready. EWoK requires approved Hugging Face access; the
+    combined FastScore remains unavailable until all five have results. BLiMP
+    uses the BabyLM 2024 vocabulary-filtered data. Smoke runs use 10 items per
+    component and 8,192 LM bytes.
+  </p>
+  <details>
+    <summary>Experimental FastScore normalization</summary>
+    <p>
+      LM: 1 − BPB / 8. Pair diagnostics: mean tanh of the logprob margin per
+      maximum candidate byte length, in bits. ARC-Easy: mean (P(correct) − 1/K)
+      / (1 − 1/K). Apply the weights above only when all components are present.
+      These are internal diagnostics, not official benchmark scores; raw metrics
+      remain visible.
+    </p>
+  </details>
+</details>

@@ -35,10 +35,6 @@ def test_published_reports_are_anonymous_and_keep_metric_identity(client):
     assert 'PRIVATE' not in response.text and '/private/' not in response.text
     assert 'lease' not in report['evidence'] and 'runner' not in report['evidence']
     assert client.get(report['source_url']).json() == report
-    page = client.get('/benchmark-results')
-    assert page.status_code == 200
-    assert 'Published benchmark results' in page.text and '<html lang="en">' in page.text
-    assert client.get('/assets/published-benchmarks.js').status_code == 200
 
 
 def test_public_report_filters_status_mode_and_current_run_visibility(client):

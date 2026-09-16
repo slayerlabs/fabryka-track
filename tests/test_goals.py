@@ -108,7 +108,3 @@ def test_goals_pages_and_asset(client):
     r=client.get('/goal', follow_redirects=False)
     assert r.status_code==307
     assert r.headers['location']=='https://github.com/slayerlabs/rfcs/pull/5'
-    r=client.get('/status')
-    assert r.status_code==200 and '<html lang="en">' in r.text
-    assert '/assets/goals.js' in r.text
-    assert client.get('/assets/goals.js').status_code==200

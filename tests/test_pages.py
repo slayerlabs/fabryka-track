@@ -1,18 +1,24 @@
-def test_document_routes(client):
-    for path, title in [('/leaderboard', 'Leaderboard'), ('/runs', 'My runs'),
-                        ('/new', 'Training studio'), ('/guide', 'Learning guide'),
-                        ('/account', 'Account'), ('/login', 'Sign in'),
-                        ('/benchmarks', 'Benchmarks'),
-                        ('/run/7caf2e37-e453-4e31-8a5d-2e4425f606d2', 'Run dashboard'),
-                        ('/compare/7caf2e37-e453-4e31-8a5d-2e4425f606d2?metric=val%2Floss', 'Compare runs')]:
+import re
+
+
+def test_document_routes_share_loadable_frontend_assets(client):
+    paths = ['/', '/status', '/agents', '/goals/250m-english-base-model',
+             '/benchmark-results', '/leaderboard', '/runs', '/new', '/guide',
+             '/account', '/login', '/register', '/benchmarks',
+             '/run/7caf2e37-e453-4e31-8a5d-2e4425f606d2',
+             '/compare/7caf2e37-e453-4e31-8a5d-2e4425f606d2?metric=val%2Floss']
+    bundles = set()
+    for path in paths:
         response = client.get(path)
         assert response.status_code == 200
-        assert f'<title>{title} · Fabryka Track</title>' in response.text
         assert response.headers['cache-control'] == 'no-cache'
-    for path in ['/missing-page', '/run/not-an-id', '/api/missing']:
+        scripts = re.findall(r'<script[^>]+src="([^"]+)"', response.text)
+        assert any(url.startswith('/assets/') and 'plotly' not in url for url in scripts)
+        bundles.update(scripts)
+    for url in bundles:
+        response = client.get(url)
+        assert response.status_code == 200
+        assert 'javascript' in response.headers['content-type']
+    for path in ['/missing-page', '/run/not-an-id', '/api/missing', '/assets/missing.js',
+                 '/assets/..%2Fsettings.py']:
         assert client.get(path).status_code == 404
-
-
-def test_public_dataset_import_asset_is_served(client):
-    assert client.get("/assets/hf-datasets.js").status_code == 200
-    assert '/assets/hf-datasets.js' in client.get("/new").text

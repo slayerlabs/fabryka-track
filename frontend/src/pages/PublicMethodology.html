@@ -1,0 +1,45 @@
+<section class="panel methodology" aria-labelledby="method-title">
+  <h2 id="method-title">Read the metric, then the score</h2>
+  <ul>
+    <li>
+      <strong>Accuracy and acc_norm are different.</strong> Accuracy chooses the
+      continuation with the highest total score. Length-normalized accuracy
+      adjusts for continuation length. A percentage from one metric cannot stand
+      in for the other.
+    </li>
+    <li>
+      <strong>Full applies to the selected task.</strong> A full PIQA result
+      does not mean every benchmark was evaluated. Missing scores are not
+      estimated. Smoke tests are listed separately.
+    </li>
+    <li>
+      <strong>Reports describe an exact checkpoint.</strong> Use the saved step,
+      SHA-256, dataset revisions, sample count and harness version when
+      comparing results. These are recorded Track evaluations, not independent
+      certifications.
+    </li>
+    <li>
+      <strong>INT Index requires all five component scores.</strong> The Open
+      SLM formula uses chance-normalized HellaSwag, mean ARC Easy/Challenge,
+      PIQA and ArithMark 3, with weights 1, 1, 1 and 0.65. BananaMind 1.1 Elo
+      uses that benchmark's fixed item ratings and weights.
+    </li>
+    <li>
+      <strong>ArithMark 3 has an option-position limitation.</strong> In the
+      pinned 1,000-item release, correct numeric answers are always one of the
+      two middle values. INT retains the published formula's nominal 25% chance
+      floor. Read it alongside the individual scores.
+    </li>
+    <li>
+      <strong>Native models predict UTF-8 bytes.</strong> Track scores every
+      answer byte with up to 512 bytes of context. Tokenizer and context
+      differences matter when comparing with model-card results from other
+      systems.
+    </li>
+  </ul>
+  <p class="muted">
+    Charts are drawn from the numeric records shown here. New completed
+    evaluations of public runs appear automatically. Making a run private
+    removes its reports from this page.
+  </p>
+</section>

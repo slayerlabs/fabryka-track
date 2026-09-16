@@ -44,6 +44,7 @@ historical score. The chart shows up to 12 checkpoints; tables paginate six repo
 at a time and preserve the complete returned evaluation history. Bits per byte are
 sorted ascending; accuracy is sorted descending. There is no aggregate across tasks.
 
-Implementation: `published_benchmarks.py`, `static/published-benchmarks.html` and
-`static/published-benchmarks.js`. Backend permission/serialization tests are in
-`tests/test_published_benchmarks.py`; comparison-group tests run with the website suite.
+Implementation: `published_benchmarks.py`, `frontend/src/pages/PublicPublished.tsx`
+and `frontend/src/pages/PublicBenchmarkModel.ts`. Backend permission/serialization
+tests are in `tests/test_published_benchmarks.py`; comparison-group regressions are
+in `tests/published-benchmarks.test.mjs` and `tests/pl-leaderboard.test.mjs`.

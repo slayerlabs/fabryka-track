@@ -307,21 +307,12 @@ def health(session: Session = Depends(db)):
 
 @app.get("/assets/{name}")
 def static_asset(name: str):
-    if name not in {"plotly-basic-3.1.0.min.js", "run-charts.js", "hf-datasets.js", "goals.js", "ascii.css", "research.js", "published-benchmarks.js"}:
+    if name == "plotly-basic-3.1.0.min.js":
+        return FileResponse(Path(__file__).parent / "static" / name, media_type="text/javascript")
+    asset = Path(__file__).parent / "web" / "assets" / name
+    if not asset.is_file():
         raise HTTPException(404, "Asset not found")
-    return FileResponse(Path(__file__).parent / "static" / name, media_type="text/css" if name.endswith(".css") else "text/javascript")
-
-
-@app.get("/", response_class=HTMLResponse, include_in_schema=False)
-def goal_list_page():
-    return HTMLResponse((Path(__file__).parent / "static" / "goal-list.html").read_text(),
-                        headers={"Cache-Control": "no-cache"})
-
-
-@app.get("/goals/250m-english-base-model", response_class=HTMLResponse, include_in_schema=False)
-def training_goal_page():
-    return HTMLResponse((Path(__file__).parent / "static" / "goal-250m.html").read_text(),
-                        headers={"Cache-Control": "no-cache"})
+    return FileResponse(asset, headers={"Cache-Control": "public, max-age=31536000, immutable"})
 
 
 @app.get("/goals/250m-english-base-model.md", include_in_schema=False)
@@ -331,34 +322,20 @@ def training_goal_document():
                         headers={"Cache-Control": "no-cache"})
 
 
-@app.get("/agents", response_class=HTMLResponse, include_in_schema=False)
-def agent_accounts_page():
-    return HTMLResponse((Path(__file__).parent / "static" / "agents.html").read_text(), headers={"Cache-Control":"no-cache"})
-
-
 @app.get("/goal", include_in_schema=False)
 def goal_rfc_page():
     return RedirectResponse("https://github.com/slayerlabs/rfcs/pull/5", status_code=307,
                             headers={"Cache-Control": "no-store"})
 
 
-@app.get("/status", response_class=HTMLResponse)
-def goal_page():
-    return HTMLResponse((Path(__file__).parent / "static" / "goals.html").read_text(),
-                        headers={"Cache-Control": "no-cache"})
-
-
-@app.get('/benchmark-results', response_class=HTMLResponse)
-def benchmark_results_page():
-    return HTMLResponse((Path(__file__).parent / 'static' / 'published-benchmarks.html').read_text(),
-                        headers={'Cache-Control': 'no-cache'})
-
-
 @app.get("/{path:path}", response_class=HTMLResponse)
 def web(path: str = ""):
-    pages = {"": "Training studio", "new": "Training studio", "runs": "My runs",
+    pages = {"": "Goals / RFCs", "new": "Training studio", "runs": "My runs",
              "benchmarks": "Benchmarks", "leaderboard": "Leaderboard", "guide": "Learning guide",
-             "login": "Sign in", "register": "Sign in", "account": "Account"}
+             "login": "Sign in", "register": "Sign in", "account": "Account",
+             "status": "Goal status", "agents": "Agent sign up",
+             "benchmark-results": "Published benchmarks",
+             "goals/250m-english-base-model": "250M English base model"}
     path = path.rstrip("/")
     title = pages.get(path)
     if title is None:
@@ -374,7 +351,10 @@ def web(path: str = ""):
         except ValueError:
             raise HTTPException(404, "Page not found")
         title = "Run dashboard" if kind == "run" else "Compare runs"
-    content = (Path(__file__).parent / "static" / "index.html").read_text()
+    entry = Path(__file__).parent / "web" / "index.html"
+    if not entry.is_file():
+        raise HTTPException(503, "Frontend build missing. Run npm ci && npm run build in frontend/.")
+    content = entry.read_text()
     import re
     content = re.sub(r"<title>.*?</title>", f"<title>{title} · Fabryka Track</title>", content, count=1)
     return HTMLResponse(content, headers={"Cache-Control": "no-cache"})

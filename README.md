@@ -4,9 +4,15 @@ A minimal training studio: mix text datasets with sliders, run a tiny transforme
 smoke test, and watch real metrics. Includes experiment tracking, run comparison,
 logs, checkpoints, and notes.
 
+The entire website uses React 19, [Refine Core](https://refine.dev/core), and React
+Router. Refine queries and mutations connect to the existing same-origin FastAPI
+API; session authentication, CSRF protection, and authorization remain server-owned.
+
 ## Start locally
 
 ```bash
+npm --prefix frontend ci
+npm --prefix frontend run build
 uv sync --extra test
 uv run fabryka-track
 ```
@@ -14,6 +20,35 @@ uv run fabryka-track
 Open <http://localhost:8000>. Local development uses SQLite and filesystem artifact
 storage. For production, copy `.env.example`, start PostgreSQL with
 `docker compose up -d`, and configure Cloudflare R2 variables if desired.
+
+Node.js 22+ is required to build the website. Vite writes the production bundle to
+`src/fabryka_track/web/`; the Python wheel includes it. Build before installing or
+packaging Python. GitHub CI builds and packages the same frontend for deployment;
+the release script retains the previous release and backs up SQLite before restart.
+
+For frontend hot reload, start the API on port 8131 and Vite in a second terminal:
+
+```bash
+uv run uvicorn fabryka_track.api:app --host 127.0.0.1 --port 8131
+npm --prefix frontend run dev
+```
+
+Use Vite's displayed URL; it proxies API requests to port 8131. Frontend source is
+in `frontend/src/`, including React page components, scoped styles and inert
+authored RFC content. `scripts/render_training_goal.py` regenerates the RFC content;
+`scripts/update_corpus_catalog.py` updates the catalog imported from
+`docs/corpus-samples.json`. Neither script rewrites an executable HTML application.
+
+Frontend checks: `npm --prefix frontend run build` and
+`node --experimental-strip-types --test tests/*.test.mjs`. Browser smoke checks
+must cover authenticated training/run workflows as well as anonymous public pages.
+
+### Frontend migration — 2026-09-16
+
+Replaced the standalone HTML/JavaScript application with a full React + Refine
+frontend, including public RFCs, research notes, accounts, training, run workspaces,
+comparison, benchmarks and leaderboards. Existing document URLs, the `/goal`
+redirect, agent-readable Markdown and API contracts are preserved.
 
 ## Track a run
 

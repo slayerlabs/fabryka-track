@@ -14,3 +14,5 @@ backups/
 .DS_Store
 
 corpus-samples/
+frontend/node_modules/
+src/fabryka_track/web/
