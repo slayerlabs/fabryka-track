@@ -101,6 +101,18 @@ test('benchmark dashboard renders history with Fast Ladder in its real lexical s
 });
 
 const published = require('../src/fabryka_track/static/published-benchmarks.js');
+test('external training status reports stale feeds and token progress without claiming validation',()=>{
+  const context=vm.createContext({esc:String,fmt:(v,n)=>Number(v).toFixed(n),duration:s=>s+'s'});
+  vm.runInContext(between('      function externalTrainingStatus(r)', '      function operationalStatus(r)')+'\nglobalThis.render=externalTrainingStatus;',context);
+  const run={state:'running',config:{planned_training_tokens:3000000000},metadata:{tracking:{tokens_seen:300000000,step:1000,
+    received_at:new Date().toISOString(),source_updated_at:new Date().toISOString(),process_alive:true}},metrics:{}};
+  assert.match(context.render(run),/Training in progress · live/);
+  assert.match(context.render(run),/10.00%/);
+  assert.match(context.render(run),/tokenizer tokens/);
+  assert.match(context.render(run),/No validation measurements have been reported yet/);
+  run.metadata.tracking.received_at='2020-01-01T00:00:00Z';
+  assert.match(context.render(run),/Progress feed delayed/);
+});
 const benchmarkFixture = (id, value, overrides={}) => ({id,run_id:id,run_name:id,created_at:'2026-09-15',mode:'full',
   checkpoint:{checkpoint_sha256:id.repeat(64).slice(0,64)},
   evidence:{protocol:'v1',harness_version:'0.4.13',scoring_implementation:'causal',fewshot:0,seed:42},

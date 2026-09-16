@@ -25,6 +25,7 @@ from .hf_datasets import router as hf_datasets_router, start_importer, stop_impo
 from .goals import router as goals_router
 from .research import router as research_router
 from .agents import router as agents_router
+from .external_training import router as external_training_router, is_shared_live, PUBLIC_METRICS
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
@@ -59,6 +60,7 @@ app.include_router(namespace_router)
 app.include_router(goals_router)
 app.include_router(research_router)
 app.include_router(agents_router)
+app.include_router(external_training_router)
 from .generation import router as generation_router
 app.include_router(generation_router)
 from .benchmark_remote import router as benchmark_remote_router
@@ -132,26 +134,38 @@ def runs(name: str, state: str | None = None, search: str | None = None,
 def run_detail(run_id: str, session: Session = Depends(db), user=Depends(current_user)):
     item = session.get(Run, run_id)
     owner = bool(item and user and item.owner_id == user.id)
-    if not owner and not (item and item.is_public and item.state == 'finished'):
+    if not owner and not (item and item.is_public and (item.state == 'finished' or is_shared_live(item))):
         raise HTTPException(404 if user else 401, 'Run not found' if user else 'Sign in to view this run.')
     metrics = session.execute(select(Metric.key, Metric.step, Metric.timestamp, Metric.value).where(Metric.run_id == run_id).order_by(Metric.step, Metric.id)).all()
     series: dict[str, list] = {}
     for key, step, timestamp, value in metrics:
         series.setdefault(key, []).append({"step": step, "timestamp": timestamp, "value": value})
+    if item.metadata_.get('engine') == 'external-training':
+        token_steps = {p['step']: p['value'] for p in series.get('training/tokens_seen', [])}
+        token_steps.update({p['step']: p['value'] for p in series.get('checkpoint/tokens', [])})
+        for points in series.values():
+            for point in points:
+                # These source logs have no event timestamps. Do not turn import
+                # receipt times into fabricated historical elapsed-time curves.
+                point['timestamp'] = None
+                point['tokens'] = token_steps.get(point['step'])
     if not owner:
         cfg = {k: item.config.get(k) for k in ('model', 'model_size', 'steps', 'batch_size', 'learning_rate', 'lr_schedule', 'seed',
                'compute', 'context_length', 'layers', 'width', 'heads', 'parameters', 'validation_split', 'early_stopping',
-               'budget_mode', 'planned_training_tokens', 'tokens_per_parameter')}
+               'budget_mode', 'planned_training_tokens', 'tokens_per_parameter', 'token_unit',
+               'tokenizer_vocab_size', 'optimizer', 'activation', 'kv_heads', 'classification')}
         cfg['mix'] = [{'name': d.get('name') if d.get('example') else 'Private dataset', 'weight': d.get('weight')}
                       for d in item.config.get('mix', [])]
         result = item.metadata_.get('training_result', {})
         result = {k: result.get(k) for k in ('best_step', 'best_val_loss', 'best_val_perplexity', 'completed_steps', 'tokens_seen', 'stop_reason')}
         return {'id': item.id, 'name': item.name, 'state': item.state, 'is_public': True, 'read_only': True,
                 'started_at': item.started_at, 'ended_at': item.ended_at, 'config': cfg,
-                'metadata': {'engine': item.metadata_.get('engine'), 'training_result': result},
+                'metadata': {'engine': item.metadata_.get('engine'), 'training_result': result,
+                             **({'tracking': item.metadata_.get('tracking', {})} if item.metadata_.get('engine') == 'external-training' else {})},
                 'note': '', 'conclusion': '', 'logs': [], 'artifacts': [],
                 'metrics': {k: v for k, v in series.items() if k in ('train/loss', 'val/loss', 'val/perplexity',
-                            'progress', 'training/tokens_seen', 'throughput/tokens_sec')}}
+                            'progress', 'training/tokens_seen', 'throughput/tokens_sec') or
+                            (item.metadata_.get('engine') == 'external-training' and k in PUBLIC_METRICS)}}
     logs = session.scalars(select(RunLog).where(RunLog.run_id == run_id).order_by(RunLog.timestamp)).all()
     artifacts = session.scalars(select(Artifact).where(Artifact.run_id == run_id)).all()
     data = serialize_run(item)

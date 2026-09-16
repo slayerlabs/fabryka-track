@@ -19,7 +19,7 @@
   <nav class="sidebar-nav" aria-label="Main">
     <div class="sidebar-group">
       <span class="sidebar-group-label">Explore</span>
-      <a href="/" aria-current="page">Goals</a><a href="/status">Status</a><a href="/agents">Agent sign up</a>
+      <a href="/" aria-current="page">Goals</a><a href="/status">Status</a><a href="/agents">Agent sign up</a><a href="https://github.com/slayerlabs/rfcs">RFC repository</a>
     </div>
     <div class="sidebar-group">
       <span class="sidebar-group-label">Build</span>
@@ -35,6 +35,7 @@
   <a href="/login" id="nav-account">Sign in</a>
 </aside>
 <main class="shell-main">
+<section id="live-training" aria-label="Live training" hidden><h2>TRAINING NOW</h2><div id="live-training-runs"></div></section>
 <h1>GOALS / RFCs</h1>
 <p class="note">One RFC, one goal. Read the proposal, discuss it, deliver the outcome.</p>
 <pre class="note">5 RFCs | 2 pilot drafts | 3 in review</pre>
@@ -87,4 +88,22 @@
 <div class="rule" aria-hidden="true">-----------------------------------------------------------------------------------------------</div>
 </section>
 <footer>Source: <a href="https://github.com/slayerlabs/rfcs">slayerlabs/rfcs</a>. Snapshot checked 2026-09-12.<br>Labels describe RFC review status, not implementation progress.<br>GitHub is the source of truth for specifications and discussions.</footer>
-</main></div></body></html>
+</main></div>
+<script>
+async function refreshTraining(){
+  const section=document.getElementById('live-training'), list=document.getElementById('live-training-runs');
+  try{
+    const response=await fetch('/api/external-training/live');if(!response.ok)throw new Error('unavailable');
+    const runs=await response.json();list.replaceChildren();section.hidden=!runs.length;
+    for(const run of runs){
+      const t=run.tracking, item=document.createElement('article'),link=document.createElement('a'),text=document.createElement('p');
+      item.className='record';link.href='/run/'+encodeURIComponent(run.id);link.textContent=run.name+' → training plots';
+      const recent=Date.now()-new Date(t.received_at||0)<60000&&Date.now()-new Date(t.source_updated_at||0)<120000&&t.process_alive;
+      text.textContent=`${run.state==='running'?(recent?'Live':'Progress feed delayed'):run.state} · ${((t.tokens_seen||0)/1e6).toFixed(1)}M / ${(run.target_tokens/1e9).toFixed(1)}B tokens · ${(100*(t.tokens_seen||0)/run.target_tokens).toFixed(1)}%`;
+      item.append(link,text);list.append(item);
+    }
+  }catch(e){if(!section.hidden){list.textContent='Training progress is temporarily unavailable. Retrying…';}}
+  setTimeout(refreshTraining,15000);
+}
+refreshTraining();
+</script></body></html>
