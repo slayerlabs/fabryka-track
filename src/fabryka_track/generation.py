@@ -1,8 +1,10 @@
 """Bounded checkpoint sampling for owners and signed-in public-run viewers."""
 import json
+import os
 import subprocess
 import sys
 import threading
+from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from .accounts import require_user
@@ -31,8 +33,16 @@ def generate(run_id: str, body: GenerationInput, user=Depends(require_user), ses
     if not _slot.acquire(blocking=False):
         raise HTTPException(429, 'Another sample is being generated. Try again shortly.')
     try:
+        # The published SDK wheel intentionally contains only ``fabryka``.  The
+        # hosted tracker runs the backend from ``src``; make that source tree
+        # visible to the worker subprocess as well when tests or a packaged
+        # install invoke this endpoint.
+        source_root = str(Path(__file__).resolve().parents[1])
+        pythonpath = os.pathsep.join(filter(None, (source_root, os.environ.get('PYTHONPATH', ''))))
+        worker_env = {**os.environ, 'PYTHONPATH': pythonpath}
         result = subprocess.run([sys.executable, '-m', 'fabryka_track.generation_worker', str(path)],
-                                input=body.model_dump_json(), text=True, capture_output=True, timeout=90)
+                                input=body.model_dump_json(), text=True, capture_output=True,
+                                timeout=90, env=worker_env)
         if result.returncode:
             raise HTTPException(503, 'Checkpoint generation failed. Try a shorter sample.')
         return json.loads(result.stdout)
