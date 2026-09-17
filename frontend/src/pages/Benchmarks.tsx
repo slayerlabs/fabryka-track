@@ -4,6 +4,7 @@ import { useCustom, useCustomMutation } from "@refinedev/core";
 import { request } from "../provider";
 import { MetricHelp } from "./BenchmarkHelp";
 import guide from "./BenchmarkGuide.html?raw";
+import { compareBenchmarkValues, type BenchmarkSort } from "./BenchmarkSort";
 interface TaskResult {
   accuracy?: number;
   byte_perplexity?: number;
@@ -45,6 +46,14 @@ interface SavedRun {
 interface EvaluationPage {
   items: Evaluation[];
   total: number;
+}
+function evaluationSortValue(evaluation: Evaluation, key: string) {
+  if (key === "model") return evaluation.run_name;
+  if (key === "status") return evaluation.status;
+  if (key === "mode") return evaluation.mode;
+  if (key === "started") return Date.parse(evaluation.created_at);
+  if (key === "tiny_score") return evaluation.tiny_score;
+  return evaluation.results[key.slice(5)]?.accuracy;
 }
 const percent = (value?: number) =>
   Number.isFinite(value) ? (value! * 100).toFixed(1) + "%" : "—";
@@ -155,7 +164,7 @@ function EvaluationDetails({
 }
 export function BenchmarksPage() {
   const [offset, setOffset] = useState(0),
-    [order, setOrder] = useState<"asc" | "desc" | null>(null),
+    [sort, setSort] = useState<BenchmarkSort | null>(null),
     [expanded, setExpanded] = useState<Set<string>>(new Set()),
     [runId, setRunId] = useState(""),
     [suite, setSuite] = useState("tiny_ml"),
@@ -207,10 +216,10 @@ export function BenchmarksPage() {
     url: "/api/benchmarks/evaluations?limit=20&offset=" + offset,
     method: "get",
     queryOptions: {
-      queryKey: ["benchmark-history", offset, order],
+      queryKey: ["benchmark-history", offset, sort],
       refetchInterval: 5000,
       queryFn: async ({ signal }) => {
-        if (!order)
+        if (!sort)
           return {
             data: await request<EvaluationPage>(
               "/api/benchmarks/evaluations?limit=20&offset=" + offset,
@@ -228,14 +237,8 @@ export function BenchmarksPage() {
           );
           all.items.push(...page.items);
         }
-        all.items.sort((a, b) => {
-          const av = Number.isFinite(a.tiny_score),
-            bv = Number.isFinite(b.tiny_score);
-          if (av !== bv) return av ? -1 : 1;
-          return av
-            ? (order === "desc" ? -1 : 1) * (a.tiny_score! - b.tiny_score!)
-            : 0;
-        });
+        all.items.sort((a, b) => compareBenchmarkValues(
+          evaluationSortValue(a, sort.key), evaluationSortValue(b, sort.key), sort.direction));
         return {
           data: { ...all, items: all.items.slice(offset, offset + 20) },
         };
@@ -255,6 +258,19 @@ export function BenchmarksPage() {
   async function refresh() {
     await Promise.all([queue.query.refetch(), history.query.refetch()]);
   }
+  const activeSort = sort ?? { key: "started", direction: "desc" };
+  const columns: { key: string; label: string; direction: BenchmarkSort["direction"] }[] = [
+    { key: "model", label: "Model", direction: "asc" },
+    { key: "status", label: "Status", direction: "asc" },
+    { key: "mode", label: "Mode", direction: "asc" },
+    { key: "tiny_score", label: "TinyScore", direction: "desc" },
+    ...(catalog?.core ?? []).map(key => ({
+      key: "task:" + key,
+      label: catalog?.tasks.find(task => task.id === key)?.name || key,
+      direction: "desc" as const,
+    })),
+    { key: "started", label: "Started", direction: "desc" },
+  ];
   return (
     <>
       <div className="compare-heading">
@@ -460,37 +476,23 @@ export function BenchmarksPage() {
               <table className="benchmark-history-table">
                 <thead>
                   <tr>
-                    <th>Model</th>
-                    <th>Status</th>
-                    <th>Mode</th>
-                    <th
-                      aria-sort={
-                        order === "desc"
-                          ? "descending"
-                          : order === "asc"
-                            ? "ascending"
-                            : "none"
-                      }
-                    >
-                      <button
-                        className="secondary"
-                        title="Sort all evaluations by TinyScore"
-                        onClick={() => {
-                          setOrder(order === "desc" ? "asc" : "desc");
-                          setOffset(0);
-                        }}
-                      >
-                        TinyScore{" "}
-                        {order === "desc" ? "↓" : order === "asc" ? "↑" : "↕"}
-                      </button>
-                    </th>
-                    {catalog.core.map((key) => (
-                      <th className="metric-column" key={key}>
-                        {catalog.tasks.find((task) => task.id === key)?.name ||
-                          key}
+                    {columns.map(column => (
+                      <th key={column.key}
+                        className={column.key.startsWith("task:") ? "metric-column" : undefined}
+                        aria-sort={activeSort.key === column.key
+                          ? (activeSort.direction === "asc" ? "ascending" : "descending") : "none"}>
+                        <button type="button" className="secondary"
+                          title={"Sort all evaluations by " + column.label}
+                          onClick={() => {
+                            setSort({ key: column.key, direction: activeSort.key === column.key
+                              ? (activeSort.direction === "asc" ? "desc" : "asc") : column.direction });
+                            setOffset(0);
+                          }}>
+                          {column.label} {activeSort.key === column.key
+                            ? (activeSort.direction === "asc" ? "↑" : "↓") : "↕"}
+                        </button>
                       </th>
                     ))}
-                    <th>Started</th>
                     <th>Details</th>
                   </tr>
                 </thead>
