@@ -58,7 +58,7 @@ export function TinyMLBoard() {
     <details><summary>Scoring and reproducibility</summary><p>ACI is Attention Clarity Index (0–100), measured with gradient-times-attention on the native byte model using the pinned ACI-Bench test set. Native context limits can truncate items; inspect each evaluation for samples, skips, truncation and dataset revisions.</p>
       <p>Secondary scores: Overall = mean of BLiMP accuracy, raw ARC-Easy accuracy and log-normalized WikiText-2 byte perplexity, on a 0–100 scale. Efficiency adds a log-parameter size bonus from 1× to 1.5×; it does not measure GPU cost. ACI does not enter either formula.</p>
       <p>Frozen bounds: Wiki byte PPL 1.86–500; parameters 1,000–150,000,000. Zero-shot lm-eval 0.4.13 for language metrics, pinned dataset revisions, byte-level sliding context. BLiMP averages all 67 subtasks. ARC acc_norm is shown separately and does not enter the aggregate.</p>
-      <p>These evaluations stay private even when a run is public. <a href="https://huggingface.co/spaces/Glint-Research/Tiny-ML-Leaderboard" target="_blank" rel="noreferrer">Glint reference leaderboard</a> · reference revision 3fce60372675.</p>
+      <p>These evaluations stay private even when a run is public. This is the Fabryka Tiny-ML board with a pinned protocol and reproducible local scoring.</p>
     </details>
   </section>;
 }

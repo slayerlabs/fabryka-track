@@ -339,16 +339,9 @@ export function RunsPage() {
       )}
       <section className="focus-intro" aria-label="Training objective">
         <p>
-          <a
-            href="https://huggingface.co/spaces/Glint-Research/Tiny-ML-Leaderboard"
-            target="_blank"
-            rel="noreferrer"
-          >
-            Glint Tiny-ML leaderboard ↗
-          </a>{" "}
+          <a href="/leaderboard">Fabryka Tiny-ML leaderboard</a>{" "}
           · The native 150M preset has 149.63M parameters. Track's byte-model
-          protocol is recorded separately; external leaderboard scores have not
-          been reproduced.
+          protocol is recorded separately and evaluated on its own pinned board.
         </p>
         <div className="focus-workspace-controls">
           <div className="focus-toggle" aria-label="Workspace scope">

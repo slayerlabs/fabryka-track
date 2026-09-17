@@ -53,20 +53,20 @@ component scores, dataset revision/checksum and runtime provenance, never item
 text or answers. Context-limited coverage must be considered when comparing
 models; unavailable ACI is never replaced with an unrelated score.
 
-## Glint reference
+## Methodology reference
 
-The reference is the public Space revision
-`3fce6037267585847b2a1d9f5556c8fd82f7c4ca`:
-https://huggingface.co/spaces/Glint-Research/Tiny-ML-Leaderboard/tree/3fce6037267585847b2a1d9f5556c8fd82f7c4ca
+Fabryka maintains its own pinned Tiny-ML protocol and leaderboard. The board is
+inspired by public small-model evaluation work, but its scores, ownership and
+evaluation history are maintained by Track and do not depend on an external
+leaderboard page.
 
 Secondary Overall is the average of percentage BLiMP accuracy, percentage raw ARC-Easy
 accuracy and normalized Wiki byte perplexity. Wiki normalization is
 `100 * clip(1 - ln(min(ppl, 500)/1.86)/ln(500/1.86), 0, 1)`.
 Efficiency multiplies Overall by
 `1 + 0.5 * clip(ln(150000000/parameters)/ln(150000000/1000), 0, 1)`.
-These bounds are frozen from the reference cohort so your earlier scores remain
-stable as your board grows. Glint recalculates bounds from its live cohort;
-Track does not. Efficiency measures a size adjustment, not hardware cost.
+These bounds are frozen for the Fabryka board so scores remain stable as the
+cohort grows. Efficiency measures a size adjustment, not hardware cost.
 ACI is measured independently and is not included in either secondary formula.
 
 The Space contains reported model scores and scoring formulas, not a single

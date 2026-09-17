@@ -35,11 +35,7 @@ const navigation: { label: string; links: [string, string, IconName][] }[] = [
       ["/runs", "Focused runs", "play"],
       ["/checkpoints", "Checkpoints", "layers"],
       ["/benchmarks", "Evaluation queue", "chart"],
-      [
-        "https://huggingface.co/spaces/Glint-Research/Tiny-ML-Leaderboard",
-        "Target leaderboard",
-        "trophy",
-      ],
+      ["/leaderboard", "Fabryka leaderboard", "trophy"],
     ],
   },
   {

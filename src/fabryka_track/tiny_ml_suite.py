@@ -1,4 +1,4 @@
-"""Private Tiny-ML task suite with frozen Glint reference normalization."""
+"""Fabryka private Tiny-ML task suite with frozen board normalization."""
 import math
 import hashlib
 
