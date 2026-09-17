@@ -25,13 +25,17 @@ export const validShare = (value: number) =>
   Math.abs(value * 100 - Math.round(value * 100)) < 1e-8;
 
 export function findRecipeDataset(source: RecipeSource, datasets: Dataset[]) {
-  return datasets.find(({ source: stored, bytes }) =>
-    bytes >= 4096 && stored?.kind === "huggingface" &&
-    stored.repo === source.repo && stored.config === source.config &&
-    stored.split === source.split && stored.text_column === source.text_column &&
-    !stored.contains && !stored.excludes &&
-    (!Array.isArray(stored.rules) || stored.rules.length === 0),
-  );
+  let best: Dataset | undefined;
+  for (const dataset of datasets) {
+    const { source: stored, bytes } = dataset;
+    if (bytes >= 4096 && stored?.kind === "huggingface" &&
+      stored.repo === source.repo && stored.config === source.config &&
+      stored.split === source.split && stored.text_column === source.text_column &&
+      !stored.contains && !stored.excludes &&
+      (!Array.isArray(stored.rules) || stored.rules.length === 0) &&
+      (!best || bytes > best.bytes)) best = dataset;
+  }
+  return best;
 }
 
 export function ivmeWeights(datasets: Dataset[]): Record<string, number> | null {

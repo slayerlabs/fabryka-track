@@ -28,6 +28,19 @@ test('a recipe cannot silently substitute missing, filtered or wrong-subset text
   assert.equal(findRecipeDataset(ivmeSources[0], datasets), undefined);
 });
 
+test('the recipe chooses the largest eligible import instead of an older starter sample', () => {
+  const datasets = library();
+  const larger = { ...datasets[0], id: 'larger-source', bytes: 94000000 };
+  const filtered = { ...larger, id: 'filtered-source', bytes: 1000000000,
+    source: { ...larger.source, contains: 'narrow slice' } };
+  const available = [...datasets, larger, filtered];
+  const weights = ivmeWeights(available);
+  assert.equal(weights['larger-source'], 46.67);
+  assert.equal(weights['source-0'], undefined);
+  assert.equal(weights['filtered-source'], undefined);
+  assert.equal(findRecipeDataset(ivmeSources[0], available.toReversed()).id, 'larger-source');
+});
+
 test('centi-percent sums tolerate floating-point noise but reject malformed shares', () => {
   assert.equal(totalShares([46.67, 27.78, 8.89, 7.78, 5.56, 3.32]), 100);
   assert.equal(validShare(46.67), true);
