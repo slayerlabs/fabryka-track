@@ -331,10 +331,14 @@ are under `/opt/fabryka-track/backups/remove-legacy-20260908-113443/`.
 
 ## TinyLM evaluation
 
-In **Benchmarks**, click the **TinyScore** column header to sort all evaluation
-history from highest to lowest; click again for lowest to highest. Missing scores
-stay last. Sorting persists across pagination and automatic refreshes. The client
-fetches all history pages when sorting, using the existing owner-scoped API.
+In **Benchmarks**, click any data-column header in the private Tiny-ML board or
+evaluation history to sort; click again to reverse direction. Headers show the
+active direction and support keyboard activation. Names use natural numeric
+ordering; missing scores stay last in either direction. Scores default to highest
+first, while parameters and Wiki byte perplexity default to lowest first.
+The board's **Rank by** selector stays synchronized with header sorting. History
+sorting covers every page, resets to the first page when changed, and persists
+through pagination and refreshes using the existing owner-scoped API.
 
 Install the pinned evaluator with `uv sync --extra eval` (or add
 `lm-eval==0.4.13` to the server environment). Finished studio run details have a
