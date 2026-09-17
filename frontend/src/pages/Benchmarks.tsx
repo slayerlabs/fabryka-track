@@ -5,15 +5,12 @@ import { request } from "../provider";
 import { MetricHelp } from "./BenchmarkHelp";
 import guide from "./BenchmarkGuide.html?raw";
 import { compareBenchmarkValues, type BenchmarkSort } from "./BenchmarkSort";
-interface TaskResult {
-  accuracy?: number;
-  byte_perplexity?: number;
+import { TinyMLDetails, tinyMLMetrics, tinyMLValue, formatTinyML, isTinyML, type TinyMLMeasurement } from "./TinyMLMetrics";
+interface TaskResult extends TinyMLMeasurement {
   bpb?: number;
   nll?: number;
-  samples?: number;
   mean_margin_nats?: number;
   mean_correct_probability?: number;
-  error?: string;
 }
 interface Evaluation {
   id: string;
@@ -27,6 +24,7 @@ interface Evaluation {
   results: Record<string, TaskResult>;
   tiny_score?: number;
   fast_score?: number;
+  tiny_ml_score?: { overall: number; efficiency: number } | null;
   protocol?: string;
   created_at: string;
   error?: string;
@@ -52,8 +50,10 @@ function evaluationSortValue(evaluation: Evaluation, key: string) {
   if (key === "status") return evaluation.status;
   if (key === "mode") return evaluation.mode;
   if (key === "started") return Date.parse(evaluation.created_at);
-  if (key === "tiny_score") return evaluation.tiny_score;
-  return evaluation.results[key.slice(5)]?.accuracy;
+  if (key === "tiny_score") return isTinyML(evaluation.protocol) ? undefined : evaluation.tiny_score;
+  const task = key.slice(5);
+  const metric = tinyMLMetrics.find(metric => metric.key === task);
+  return tinyMLValue(evaluation.results[task], metric?.field ?? "accuracy");
 }
 const percent = (value?: number) =>
   Number.isFinite(value) ? (value! * 100).toFixed(1) + "%" : "—";
@@ -68,7 +68,17 @@ function EvaluationDetails({
 }) {
   return (
     <>
-      {e.protocol === "fast-en-v1" ? (
+      {isTinyML(e.protocol) ? (
+        <>
+          <TinyMLDetails evaluation={e} />
+          <details>
+            <summary>Protocol, dataset revisions &amp; all metrics</summary>
+            <pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
+              {JSON.stringify({ protocol: e.protocol, results: e.results }, null, 2)}
+            </pre>
+          </details>
+        </>
+      ) : e.protocol === "fast-en-v1" ? (
         <section className="panel" style={{ padding: 16, margin: "12px 0" }}>
           <b>
             {e.mode === "smoke" ? "Smoke " : ""}FastScore EN:{" "}
@@ -259,16 +269,20 @@ export function BenchmarksPage() {
     await Promise.all([queue.query.refetch(), history.query.refetch()]);
   }
   const activeSort = sort ?? { key: "started", direction: "desc" };
+  const historyTasks = [
+    ...tinyMLMetrics.map(metric => metric.key),
+    ...(catalog?.core ?? []).filter(key => !tinyMLMetrics.some(metric => metric.key === key)),
+  ];
   const columns: { key: string; label: string; direction: BenchmarkSort["direction"] }[] = [
     { key: "model", label: "Model", direction: "asc" },
     { key: "status", label: "Status", direction: "asc" },
     { key: "mode", label: "Mode", direction: "asc" },
-    { key: "tiny_score", label: "TinyScore", direction: "desc" },
-    ...(catalog?.core ?? []).map(key => ({
+    ...historyTasks.map(key => ({
       key: "task:" + key,
-      label: catalog?.tasks.find(task => task.id === key)?.name || key,
-      direction: "desc" as const,
+      label: tinyMLMetrics.find(metric => metric.key === key)?.label || catalog?.tasks.find(task => task.id === key)?.name || key,
+      direction: key === "wikitext" ? "asc" as const : "desc" as const,
     })),
+    { key: "tiny_score", label: "Core TinyScore", direction: "desc" },
     { key: "started", label: "Started", direction: "desc" },
   ];
   return (
@@ -358,7 +372,7 @@ export function BenchmarksPage() {
                 onChange={(e) => setSuite(e.target.value)}
               >
                 {[
-                  ["tiny_ml", "Tiny-ML · private BLiMP + ARC-Easy + WikiText-2"],
+                  ["tiny_ml", "Tiny-ML · private WikiText-2 BYTE_PPL + BLiMP + ARC-Easy + ACI"],
                   ["fast", "Fast ladder EN · 4 ready / EWoK pending"],
                   [
                     "fast_pl",
@@ -515,14 +529,15 @@ export function BenchmarksPage() {
                             {e.queue_position ? " #" + e.queue_position : ""}
                           </td>
                           <td>{e.mode}</td>
+                          {historyTasks.map((key) => {
+                            const metric = tinyMLMetrics.find(metric => metric.key === key);
+                            return <td key={key}>
+                              {metric ? formatTinyML(tinyMLValue(e.results[key], metric.field), metric.field) : percent(tinyMLValue(e.results[key], "accuracy"))}
+                            </td>;
+                          })}
                           <td>
-                            <b>{percent(e.tiny_score)}</b>
+                            <b>{isTinyML(e.protocol) ? "—" : percent(e.tiny_score)}</b>
                           </td>
-                          {catalog.core.map((key) => (
-                            <td key={key}>
-                              {percent(e.results[key]?.accuracy)}
-                            </td>
-                          ))}
                           <td title={new Date(e.created_at).toLocaleString()}>
                             {new Date(e.created_at).toLocaleString(undefined, {
                               month: "short",
@@ -554,7 +569,7 @@ export function BenchmarksPage() {
                           id={"eval-details-" + e.id}
                           hidden={!expanded.has(e.id)}
                         >
-                          <td colSpan={catalog.core.length + 6}>
+                          <td colSpan={columns.length + 1}>
                             <EvaluationDetails
                               evaluation={e}
                               catalog={catalog}
@@ -565,7 +580,7 @@ export function BenchmarksPage() {
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={catalog.core.length + 6}>
+                      <td colSpan={columns.length + 1}>
                         No measurements yet. Add a saved model to the queue
                         above.
                       </td>
@@ -575,9 +590,11 @@ export function BenchmarksPage() {
               </table>
             </div>
             <p className="muted" style={{ fontSize: 11 }}>
-              Task columns show accuracy. TinyScore averages chance-normalized
-              scores across the five core tasks. Smoke results use small
-              samples; compare full evaluations for quality.
+              WikiText-2 shows BYTE_PPL (lower is better); ACI is a 0–100
+              Attention Clarity Index (higher is better). Other task columns
+              show accuracy. Core TinyScore is separate from Tiny-ML.
+              Smoke, partial and legacy results remain in history; only complete
+              full evaluations under the current four-metric protocol enter the private ranking.
             </p>
           </>
         ) : (

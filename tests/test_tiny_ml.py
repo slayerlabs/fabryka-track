@@ -11,7 +11,8 @@ from fabryka_track.tiny_ml_suite import scores, summarize_wikitext, REVISIONS, P
 
 def measurements():
     return {'blimp': {'accuracy': .8128}, 'arc_easy': {'accuracy': .5707, 'acc_norm': .9},
-            'wikitext': {'byte_perplexity': 1.86, 'bpb': math.log2(1.86)}}
+            'wikitext': {'byte_perplexity': 1.86, 'bpb': math.log2(1.86)},
+            'aci': {'aci_score': 62.5, 'samples': 5000}}
 
 
 def test_frozen_reference_matches_glint_and_rejects_partial_scores():
@@ -26,6 +27,16 @@ def test_frozen_reference_matches_glint_and_rejects_partial_scores():
         assert scores(rows, 8_000_000) is None
     rows = measurements(); rows['arc_easy']['error'] = 'failed'
     assert scores(rows, 8_000_000) is None
+    for invalid in (float('nan'), float('inf'), -1, 101, True):
+        rows = measurements(); rows['aci']['aci_score'] = invalid
+        assert scores(rows, 8_000_000) is None
+    rows = measurements(); rows['aci']['samples'] = 0
+    assert scores(rows, 8_000_000) is None
+    rows = measurements(); del rows['aci']
+    assert scores(rows, 8_000_000) is None
+    # ACI gates eligibility but never alters the historical three-metric aggregate.
+    rows = measurements(); rows['aci']['aci_score'] = 0
+    assert scores(rows, 125_000_000) == result
 
 
 def test_wiki_uses_byte_perplexity_not_word_perplexity():
@@ -38,12 +49,12 @@ def test_wiki_uses_byte_perplexity_not_word_perplexity():
 
 
 def test_private_suite_cannot_leak_through_public_run_or_reports(client):
-    run = finished(client, launch(client).json()['id'])
+    run = finished(client, launch(client, auto_benchmark=False).json()['id'])
     url = '/api/runs/' + run['id'] + '/benchmarks'
     response = client.post(url, json={'suite': 'tiny_ml', 'mode': 'full'})
     assert response.status_code == 202, response.text
     entry = response.json(); eid = entry['id']
-    assert entry['tasks'] == ['blimp', 'arc_easy', 'wikitext']
+    assert entry['tasks'] == ['wikitext', 'blimp', 'arc_easy', 'aci']
     assert entry['provenance']['dataset_revisions'] == REVISIONS
     assert entry['provenance']['visibility'] == 'private'
     with SessionLocal() as db:
@@ -63,7 +74,7 @@ def test_private_suite_cannot_leak_through_public_run_or_reports(client):
 
 
 def test_smoke_is_never_ranked(client):
-    run = finished(client, launch(client).json()['id'])
+    run = finished(client, launch(client, auto_benchmark=False).json()['id'])
     entry = client.post('/api/runs/' + run['id'] + '/benchmarks',
                         json={'suite': 'tiny_ml', 'mode': 'smoke'}).json()
     with SessionLocal() as db:
@@ -75,7 +86,7 @@ def test_smoke_is_never_ranked(client):
 def test_worker_capability_and_private_provenance_are_enforced(client):
     from fabryka_track.api import app
     from fabryka_track import benchmark_remote
-    run = finished(client, launch(client).json()['id'])
+    run = finished(client, launch(client, auto_benchmark=False).json()['id'])
     entry = client.post('/api/runs/' + run['id'] + '/benchmarks',
                         json={'suite': 'tiny_ml', 'mode': 'full'}).json()
     app.dependency_overrides[benchmark_remote.worker] = lambda: 'fixture-worker'
@@ -92,3 +103,18 @@ def test_worker_capability_and_private_provenance_are_enforced(client):
             assert row.provenance['protocol'] == PROTOCOL
     finally:
         app.dependency_overrides.pop(benchmark_remote.worker, None)
+
+
+def test_old_protocol_is_history_not_new_suite_eligibility(client):
+    run = finished(client, launch(client, auto_benchmark=False).json()['id'])
+    url = '/api/runs/' + run['id'] + '/benchmarks'
+    entry = client.post(url, json={'suite': 'tiny_ml', 'mode': 'full'}).json()
+    with SessionLocal() as db:
+        row = db.get(BenchmarkEvaluation, entry['id'])
+        row.provenance = {**row.provenance, 'protocol': 'tiny-ml-en-v1-byte-sliding'}
+        row.results = measurements(); row.status = 'finished'
+        db.commit()
+    assert client.get('/api/benchmarks/tiny-ml').json()['items'] == []
+    history = client.get(url).json()
+    assert history[0]['id'] == entry['id']
+    assert history[0]['tiny_ml_score'] is None

@@ -512,5 +512,10 @@ Filtered or mismatched subsets remain ineligible; existing datasets are preserve
 
 ## Private Tiny-ML leaderboard
 
-Compare your checkpoints at `/benchmarks` with private BLiMP, ARC-Easy and
-WikiText-2 byte perplexity evaluations. See [protocol and worker setup](docs/private-tiny-ml.md).
+New training defaults to full automatic **WikiText-2 BYTE_PPL, BLiMP, ARC-Easy and
+ACI** evaluations. Compare the four private metrics at `/benchmarks`; ACI is
+the real gradient-times-attention Attention Clarity Index, not an aggregate or
+ARC normalized accuracy. Saved legacy default drafts/forks migrate once, while
+explicit opt-outs and new suite choices remain supported. Prior PIQA or Core
+evaluations do not satisfy this suite. See [protocol and worker setup](docs/private-tiny-ml.md)
+for pinned data, native context limits, coverage and private-result handling.

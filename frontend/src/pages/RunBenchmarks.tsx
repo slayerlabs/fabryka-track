@@ -1,12 +1,9 @@
 import { fmt, pct, RunError, useRunAction, useRunQuery } from "./RunData";
+import { TinyMLDetails, isTinyML, type TinyMLMeasurement } from "./TinyMLMetrics";
 
-type Measurement = {
-  error?: string;
-  accuracy?: number;
-  byte_perplexity?: number;
+type Measurement = TinyMLMeasurement & {
   random_baseline?: number;
   normalized?: number;
-  samples?: number;
   bpb?: number;
   nll?: number;
   mean_margin_nats?: number;
@@ -28,6 +25,7 @@ type Evaluation = {
   error?: string;
   tiny_score: number | null;
   fast_score?: number;
+  tiny_ml_score?: { overall: number; efficiency: number } | null;
   tasks: string[];
   results: Record<string, Measurement>;
 };
@@ -113,7 +111,7 @@ export function RunBenchmarks({
           </a>
         </p>
       </div>
-      <h2>TinyLM benchmarks</h2>
+      <h2>Model benchmarks</h2>
       <p className="muted">
         English · zero-shot · saved model checkpoint. Short-context byte models
         may score near chance. Smoke tests check the evaluation pipeline: with
@@ -121,10 +119,14 @@ export function RunBenchmarks({
         evaluations to compare quality.
       </p>
       <p>
-        TinyScore = mean (accuracy − random) / (1 − random) across SciQ,
-        ARC-Easy, PIQA, HellaSwag and BLiMP. Negative values are retained.
-        LAMBADA is reported separately: it has no fixed multiple-choice random
-        baseline.
+        Tiny-ML measures WikiText-2 BYTE_PPL, BLiMP, ARC-Easy and Attention
+        Clarity Index (ACI). Lower BYTE_PPL is better; the other three metrics
+        are higher-is-better. ACI is a 0–100 score, not accuracy.
+      </p>
+      <p className="muted">
+        Other suites may report TinyScore, the mean chance-normalized accuracy
+        across SciQ, ARC-Easy, PIQA, HellaSwag and BLiMP. TinyScore is not the
+        four-metric Tiny-ML suite.
       </p>
       {canEvaluate && (
         <form
@@ -138,7 +140,7 @@ export function RunBenchmarks({
             <label className="field">
               <span>Suite</span>
               <select name="suite">
-                <option value="tiny_ml">Tiny-ML · private BLiMP + ARC-Easy + WikiText-2</option>
+                <option value="tiny_ml">Tiny-ML · private WikiText-2 BYTE_PPL + BLiMP + ARC-Easy + ACI</option>
                 <option value="fast">
                   Fast ladder EN · 4 ready / EWoK pending
                 </option>
@@ -224,6 +226,7 @@ export function RunBenchmarks({
             step {e.provenance?.checkpoint_step ?? "—"} ·{" "}
             {fmt(e.provenance?.training_tokens, 0)} training byte tokens
           </p>
+          {isTinyML(e.protocol) && <TinyMLDetails evaluation={e} />}
           {e.protocol === "fast-en-v1" && (
             <section
               className="panel"
@@ -275,7 +278,7 @@ export function RunBenchmarks({
               {e.error}
             </p>
           )}
-          {e.protocol !== "fast-en-v1" && (
+          {!isTinyML(e.protocol) && e.protocol !== "fast-en-v1" && (
             <p>
               <b>
                 {e.mode === "smoke" ? "Smoke TinyScore" : "TinyScore"}:{" "}
@@ -284,7 +287,7 @@ export function RunBenchmarks({
               {e.tiny_score === null && " · Waiting for all five core tasks."}
             </p>
           )}
-          <div style={{ overflowX: "auto" }}>
+          {!isTinyML(e.protocol) && <div style={{ overflowX: "auto" }}>
             <table>
               <thead>
                 <tr>
@@ -313,7 +316,7 @@ export function RunBenchmarks({
                 })}
               </tbody>
             </table>
-          </div>
+          </div>}
           <details>
             <summary>Protocol, dataset revisions &amp; all metrics</summary>
             <pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
