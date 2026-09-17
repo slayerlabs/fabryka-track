@@ -502,6 +502,9 @@ public Hugging Face imports and exact 0.01% dataset shares. Applying it preserve
 the selected model and budget and never starts training. See
 [the recipe and contributor notes](docs/ivme-dataset-mix.md) for dataset subsets,
 byte-token sampling semantics, source matching and verification.
+When several eligible imports exist for a source, **Apply Ivme mix** selects the
+largest one, so an older starter sample does not override a larger prepared corpus.
+Filtered or mismatched subsets remain ineligible; existing datasets are preserved.
 
 ## Private Tiny-ML leaderboard
 
