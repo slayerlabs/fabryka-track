@@ -144,8 +144,9 @@ class TrainingInput(BaseModel):
     batch_size: int = Field(default=8, ge=1, le=32)
     learning_rate: float = Field(default=0.003, ge=0.0001, le=0.1, allow_inf_nan=False)
     lr_schedule: Literal["constant", "trapezoidal"] = "constant"
-    auto_benchmark: bool = False
-    auto_benchmark_suite: Literal['piqa', 'core', 'polish', 'fast_pl'] = 'piqa'
+    auto_benchmark: bool = True
+    auto_benchmark_suite: Literal['tiny_ml', 'piqa', 'core', 'polish', 'fast_pl'] = 'tiny_ml'
+    auto_benchmark_suite_version: Literal[1] = 1
     seed: int = Field(default=42, ge=0, le=2**32-1)
     model_size: Literal["tiny", "small", "8m", "16m", "32m", "64m", "128m", "150m"] = "tiny"
     compute: Literal["cpu", "runpod"] = "cpu"

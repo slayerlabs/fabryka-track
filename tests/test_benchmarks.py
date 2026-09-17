@@ -175,26 +175,144 @@ def test_piqa_only_queues_one_task(client, monkeypatch):
     assert benchmarks.tiny_score({'piqa': {'normalized': .1}}) is None
 
 
-def test_automatic_benchmark_only_after_completion_and_once(client, monkeypatch):
+@pytest.mark.parametrize('ended_status', ['failed', 'cancelled'])
+def test_automatic_benchmark_only_after_completion_and_once(client, monkeypatch, ended_status):
     monkeypatch.setattr(benchmarks, 'supervise', lambda eid: None)
-    run = finished(client, launch(client, auto_benchmark=True, auto_benchmark_suite='piqa').json()['id'])
+    run = finished(client, launch(client).json()['id'])
+    with SessionLocal() as db:
+        db.get(Run, run['id']).state = 'running'; db.commit()
+    benchmarks.enqueue_automatic()
+    with SessionLocal() as db:
+        assert db.scalar(select(BenchmarkEvaluation).where(BenchmarkEvaluation.run_id == run['id'])) is None
+        db.get(Run, run['id']).state = 'finished'; db.commit()
     benchmarks.enqueue_automatic()
     benchmarks.enqueue_automatic()
     with SessionLocal() as db:
         rows = list(db.scalars(select(BenchmarkEvaluation).where(BenchmarkEvaluation.run_id == run['id'])))
-        assert len(rows) == 1 and rows[0].tasks == ['piqa'] and rows[0].mode == 'full'
+        assert len(rows) == 1
+        assert rows[0].tasks == ['wikitext', 'blimp', 'arc_easy', 'aci']
+        assert rows[0].mode == 'full' and rows[0].provenance['protocol'] == benchmarks.TINY_ML_PROTOCOL
+        assert rows[0].provenance['visibility'] == 'private'
         assert db.get(Run, run['id']).metadata_['auto_benchmark_id'] == rows[0].id
-        rows[0].status = 'failed'; db.commit()
+        rows[0].status = ended_status; db.commit()
+        current = db.get(Run, run['id'])
+        current.metadata_ = {k: v for k, v in current.metadata_.items() if k != 'auto_benchmark_id'}
+        db.commit()
     benchmarks.enqueue_automatic()
     with SessionLocal() as db:
         assert db.get(Run, run['id']).state == 'finished'
         assert len(list(db.scalars(select(BenchmarkEvaluation).where(BenchmarkEvaluation.run_id == run['id'])))) == 1
-    stopped = finished(client, launch(client, auto_benchmark=True).json()['id'])
+
+
+@pytest.mark.parametrize('state, enabled', [('cancelled', True), ('finished', False)])
+def test_automatic_benchmark_respects_cancelled_training_and_opt_out(client, state, enabled):
+    run = finished(client, launch(client, auto_benchmark=enabled).json()['id'])
     with SessionLocal() as db:
-        r=db.get(Run,stopped['id']); r.state='cancelled'; db.commit()
+        db.get(Run, run['id']).state = state; db.commit()
     benchmarks.enqueue_automatic()
     with SessionLocal() as db:
-        assert db.scalar(select(BenchmarkEvaluation).where(BenchmarkEvaluation.run_id == stopped['id'])) is None
+        assert db.scalar(select(BenchmarkEvaluation).where(BenchmarkEvaluation.run_id == run['id'])) is None
+
+
+def test_automatic_benchmark_replaces_incompatible_piqa_marker_after_deferral(client):
+    run = finished(client, launch(client, auto_benchmark_suite='piqa').json()['id'])
+    benchmarks.enqueue_automatic()
+    with SessionLocal() as db:
+        previous = db.scalar(select(BenchmarkEvaluation).where(BenchmarkEvaluation.run_id == run['id']))
+        assert previous.tasks == ['piqa']
+        previous_id = previous.id
+        current = db.get(Run, run['id'])
+        current.config = {**current.config, 'auto_benchmark_suite': 'tiny_ml'}
+        db.commit()
+        assert benchmarks.auto_benchmark_summary(db, current) is None
+    # The old running/queued job still occupies this model's slot.
+    benchmarks.enqueue_automatic()
+    with SessionLocal() as db:
+        assert len(list(db.scalars(select(BenchmarkEvaluation).where(BenchmarkEvaluation.run_id == run['id'])))) == 1
+        db.get(BenchmarkEvaluation, previous_id).status = 'finished'; db.commit()
+    benchmarks.enqueue_automatic()
+    benchmarks.enqueue_automatic()
+    with SessionLocal() as db:
+        rows = list(db.scalars(select(BenchmarkEvaluation).where(BenchmarkEvaluation.run_id == run['id'])))
+        assert len(rows) == 2
+        linked = db.get(BenchmarkEvaluation, db.get(Run, run['id']).metadata_['auto_benchmark_id'])
+        assert linked.id != previous_id and linked.tasks == ['wikitext', 'blimp', 'arc_easy', 'aci']
+        assert linked.provenance['protocol'] == benchmarks.TINY_ML_PROTOCOL
+
+
+def test_automatic_benchmark_does_not_link_previous_protocol(client):
+    run = finished(client, launch(client).json()['id'])
+    with SessionLocal() as db:
+        previous = BenchmarkEvaluation(run_id=run['id'], mode='full', tasks=benchmarks.TINY_ML_TASKS,
+                                       status='finished', provenance={'protocol': 'tiny-ml-en-v1-byte-sliding'})
+        db.add(previous); db.flush()
+        current = db.get(Run, run['id'])
+        current.metadata_ = {**current.metadata_, 'auto_benchmark_id': previous.id}
+        db.commit(); previous_id = previous.id
+    benchmarks.enqueue_automatic()
+    with SessionLocal() as db:
+        linked = db.get(BenchmarkEvaluation, db.get(Run, run['id']).metadata_['auto_benchmark_id'])
+        assert linked.id != previous_id and linked.provenance['protocol'] == benchmarks.TINY_ML_PROTOCOL
+        assert db.get(BenchmarkEvaluation, previous_id).status == 'finished'
+
+
+def test_private_automatic_metrics_are_owner_only_on_public_run(client):
+    run = finished(client, launch(client).json()['id'])
+    rid = run['id']
+    client.patch(f'/api/training/{rid}/visibility', json={'is_public': True})
+    benchmarks.enqueue_automatic()
+    url = f'/api/runs/{rid}/benchmarks'
+    queued = client.get('/api/benchmarks/queue').json()['items']
+    assert queued[0]['tasks'] == ['wikitext', 'blimp', 'arc_easy', 'aci']
+    with SessionLocal() as db:
+        evaluation = db.get(BenchmarkEvaluation, db.get(Run, rid).metadata_['auto_benchmark_id'])
+        evaluation.results = {'aci': {'aci_score': 62.5}}
+        evaluation.current_task = 'aci'
+        db.commit()
+    assert client.get(url).json()[0]['results']['aci']['aci_score'] == 62.5
+    client.post('/api/auth/logout')
+    assert client.get(url).json() == []
+    models = [m for size in client.get('/api/leaderboard').json()['sizes'] for m in size['models']]
+    assert next(m for m in models if m['id'] == rid)['auto_benchmark'] is None
+    sign_in(client, 'second')
+    assert client.get(url).json() == []
+    assert client.get('/api/benchmarks/queue').json()['items'] == []
+    assert client.get('/api/benchmarks/evaluations').json()['items'] == []
+
+
+def test_automatic_benchmark_does_not_link_other_checkpoint(client):
+    run = finished(client, launch(client).json()['id'])
+    with SessionLocal() as db:
+        previous = BenchmarkEvaluation(run_id=run['id'], mode='full', tasks=benchmarks.TINY_ML_TASKS,
+                                       status='finished', provenance={'protocol': benchmarks.TINY_ML_PROTOCOL,
+                                                                      'checkpoint_sha256': 'other-checkpoint'})
+        db.add(previous); db.commit(); previous_id = previous.id
+    benchmarks.enqueue_automatic()
+    with SessionLocal() as db:
+        linked = db.get(BenchmarkEvaluation, db.get(Run, run['id']).metadata_['auto_benchmark_id'])
+        assert linked.id != previous_id
+        assert linked.provenance['checkpoint_sha256'] != 'other-checkpoint'
+
+
+def test_tiny_ml_remote_claim_requires_matching_protocol(client, monkeypatch):
+    from fabryka_track import benchmark_remote
+    monkeypatch.setattr(benchmark_remote, 'runners', lambda: {'worker': 'x' * 40})
+    run = finished(client, launch(client).json()['id'])
+    benchmarks.enqueue_automatic()
+    headers = {'Authorization': 'Bearer ' + 'x' * 40}
+    url = '/api/benchmark-runner/claim'
+    old_protocol = 'tiny-ml-en-v1-byte-sliding'
+    assert client.post(url, headers=headers, json={'protocols': [old_protocol]}).json()['job'] is None
+    with SessionLocal() as db:
+        row = db.get(BenchmarkEvaluation, db.get(Run, run['id']).metadata_['auto_benchmark_id'])
+        eid = row.id
+        row.provenance = {**row.provenance, 'protocol': old_protocol}; db.commit()
+    assert client.post(url, headers=headers, json={'protocols': [benchmarks.TINY_ML_PROTOCOL]}).json()['job'] is None
+    with SessionLocal() as db:
+        row = db.get(BenchmarkEvaluation, eid)
+        row.provenance = {**row.provenance, 'protocol': benchmarks.TINY_ML_PROTOCOL}; db.commit()
+    job = client.post(url, headers=headers, json={'protocols': [benchmarks.TINY_ML_PROTOCOL]}).json()['job']
+    assert job['id'] == eid and job['tasks'] == ['wikitext', 'blimp', 'arc_easy', 'aci']
 
 
 def test_leaderboard_surfaces_automatic_benchmark(client):

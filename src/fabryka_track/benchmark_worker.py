@@ -20,7 +20,7 @@ from .benchmark_model import ByteCheckpointLM
 from .benchmarks import TASKS, evaluation_checkpoint_path, checkpoint_digest
 from .database import SessionLocal
 from .models import BenchmarkEvaluation
-from . import wikitext_suite
+from . import aci_suite, wikitext_suite
 from .leaderboard_suite import DATA, evaluate as evaluate_continuations, index_result
 
 
@@ -108,13 +108,19 @@ def run(eid, job=None, reporter=None):
     model=ByteCheckpointLM(path,device=device,payload=payload,
                            rolling_policy='harness' if tasks==['wikitext2'] else 'sliding')
     del payload
-    manager=TaskManager() if any(name in TASKS and name!='wikitext2' for name in tasks) else None
+    manager=TaskManager() if any(name in TASKS and name not in ('wikitext2','aci') for name in tasks) else None
     api=HfApi();results=dict(job.get('results',{}));failures=[]
     for name in tasks:
         if name in results and not results[name].get('error'):continue
         save(current_task=name)
         task_started=time.monotonic()
         try:
+            if name=='aci':
+                results[name]=aci_suite.evaluate(model,mode)
+                results[name]['elapsed_seconds']=time.monotonic()-task_started
+                provenance['dataset_revisions'].update(results[name]['dataset_revisions'])
+                save(results=results,provenance=provenance)
+                continue
             if name=='wikitext2':
                 if provenance.get('protocol') != wikitext_suite.PROTOCOL:
                     raise ValueError('Unsupported WikiText protocol')
@@ -182,6 +188,8 @@ def run(eid, job=None, reporter=None):
             failures.append(name)
             import traceback; traceback.print_exc(file=sys.stderr)
             results[name]={'error':('GPU memory exhausted even at the minimum evaluation batch size. Retry on a worker with more free GPU memory.' if isinstance(exc,torch.OutOfMemoryError) else 'Dataset loading or evaluation failed ('+type(exc).__name__+'). Retry after checking dataset availability.')}
+            if isinstance(exc,aci_suite.NoValidItems):
+                results[name]={**exc.result,'error':str(exc)}
             print(name,type(exc).__name__,str(exc),file=sys.stderr)
         provenance.update(context_limited_requests=job['provenance'].get('context_limited_requests',0)+model.truncated_requests,total_requests=job['provenance'].get('total_requests',0)+model.total_requests)
         save(results=results,provenance=provenance)

@@ -2,13 +2,16 @@
 import math
 import hashlib
 
-PROTOCOL = 'tiny-ml-en-v1-byte-sliding'
-TASKS = ['blimp', 'arc_easy', 'wikitext']
+from .aci_suite import REPO as ACI_REPO, REVISION as ACI_REVISION
+
+PROTOCOL = 'tiny-ml-en-v2-byte-sliding-aci'
+TASKS = ['wikitext', 'blimp', 'arc_easy', 'aci']
 REFERENCE_REVISION = '3fce6037267585847b2a1d9f5556c8fd82f7c4ca'
 REVISIONS = {
     'nyu-mll/blimp': '877fba0801ffb7cbd8c39c1ff314a46f053f6036',
     'allenai/ai2_arc': '210d026faf9955653af8916fad021475a3f00453',
     'EleutherAI/wikitext_document_level': '647234772b9554e208af6c826f23b99e3cac88c8',
+    ACI_REPO: ACI_REVISION,
 }
 REFERENCE = {'revision': REFERENCE_REVISION, 'wiki_min': 1.86, 'wiki_max': 500,
              'parameters_min': 1000, 'parameters_max': 150_000_000, 'max_size_bonus': .5}
@@ -19,12 +22,16 @@ def finite(value):
 
 
 def scores(results, parameters):
-    """Percent-point score; require all three valid components from one evaluation."""
+    """Keep the original three-component aggregate; require valid ACI eligibility."""
     if any(results.get(task, {}).get('error') for task in TASKS):
         return None
     blimp = results.get('blimp', {}).get('accuracy')
     arc = results.get('arc_easy', {}).get('accuracy')
     wiki = results.get('wikitext', {}).get('byte_perplexity')
+    aci = results.get('aci', {}).get('aci_score')
+    samples = results.get('aci', {}).get('samples')
+    if not finite(aci) or not 0 <= aci <= 100 or not finite(samples) or samples <= 0:
+        return None
     if not all(finite(x) for x in (blimp, arc, wiki, parameters)):
         return None
     if not (0 <= blimp <= 1 and 0 <= arc <= 1 and wiki > 0 and parameters > 0):

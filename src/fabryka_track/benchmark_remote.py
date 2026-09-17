@@ -44,12 +44,12 @@ def claim(body: ClaimCapabilities | None = None, runner=Depends(worker),session=
         active=list(session.scalars(select(BenchmarkEvaluation).where(BenchmarkEvaluation.status=='running')))
         if any(r.provenance.get('runner')==runner for r in active):return {'job':None}
         queued=session.scalars(select(BenchmarkEvaluation).where(BenchmarkEvaluation.status=='queued').order_by(BenchmarkEvaluation.created_at,BenchmarkEvaluation.id))
-        from .tiny_ml_suite import PROTOCOL as tiny_protocol
         supported = body.protocols if body else []
         row=None
         for candidate in queued:
             if candidate.provenance.get('target_runner') not in (None,runner):continue
-            if candidate.provenance.get('protocol') in (tiny_protocol,wikitext_suite.PROTOCOL) and candidate.provenance['protocol'] not in supported:continue
+            protocol=candidate.provenance.get('protocol', '')
+            if (protocol.startswith('tiny-ml-') or protocol==wikitext_suite.PROTOCOL) and protocol not in supported:continue
             try:
                 evaluation_checkpoint_path(session,candidate)
             except HTTPException as exc:

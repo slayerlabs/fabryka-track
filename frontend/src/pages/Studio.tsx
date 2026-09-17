@@ -57,6 +57,7 @@ interface Draft {
   min_delta: number;
   auto_benchmark: boolean;
   auto_benchmark_suite: string;
+  auto_benchmark_suite_version: number;
   character: string | null;
   training_budget_version: number;
   point_budget_version: number;
@@ -79,7 +80,8 @@ const initialDraft: Draft = {
   patience: 20,
   min_delta: 0.01,
   auto_benchmark: true,
-  auto_benchmark_suite: "piqa",
+  auto_benchmark_suite: "tiny_ml",
+  auto_benchmark_suite_version: 1,
   character: null,
   training_budget_version: 1,
   point_budget_version: 1,
@@ -199,6 +201,8 @@ function restoreDraft(
       ),
     );
   if (saved.training_budget_version !== 1) draft.budget_mode = "chinchilla";
+  if (saved.auto_benchmark_suite_version !== 1 && draft.auto_benchmark_suite === "piqa")
+    draft.auto_benchmark_suite = "tiny_ml";
   if (!draft.name.trim()) draft.name = initialDraft.name;
   if (!draft.compute) {
     draft.compute = capabilities.runpod_available ? "runpod" : "cpu";
@@ -1278,6 +1282,9 @@ function TrainingStudio({
                           update({ auto_benchmark_suite: event.target.value })
                         }
                       >
+                        <option value="tiny_ml">
+                          Tiny-ML · WikiText-2 BYTE_PPL + BLiMP + ARC-Easy + ACI
+                        </option>
                         <option value="piqa">
                           PIQA · English physical commonsense
                         </option>
@@ -1393,7 +1400,9 @@ function TrainingStudio({
                 [
                   "Automatic benchmark",
                   draft.auto_benchmark
-                    ? `Full ${draft.auto_benchmark_suite}`
+                    ? draft.auto_benchmark_suite === "tiny_ml"
+                      ? "Full Tiny-ML · WikiText-2 BYTE_PPL + BLiMP + ARC-Easy + ACI"
+                      : `Full ${draft.auto_benchmark_suite}`
                     : "Off",
                 ],
                 ["Random seed", draft.seed],

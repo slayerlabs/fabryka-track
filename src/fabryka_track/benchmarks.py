@@ -13,7 +13,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import select, func
+from sqlalchemy import select, func, and_, or_
 
 from .accounts import require_user, current_user, owned_run
 from .database import SessionLocal, session_scope
@@ -36,9 +36,11 @@ SUITES = {'tiny_ml':TINY_ML_TASKS, 'piqa':['piqa'], 'core':CORE, 'tinylm':CORE+[
           'polish': ['multiblimp_polish'], 'fast':[k for k in COMPONENTS if k!='fast_ewok'], 'fast_pl':['pl_lm','pl_multiblimp','pl_induction'],
           'leaderboard':LEADERBOARD_TASKS, 'leaderboard_pl':LEADERBOARD_PL_TASKS,
           'wikitext2':['wikitext2']}
+AUTOMATIC_SUITES = ('tiny_ml', 'piqa', 'core', 'polish', 'fast_pl')
 TASKS = {
     'wikitext': ('WikiText-2 byte perplexity','EleutherAI/wikitext_document_level'),
     'wikitext2': ('WikiText-2 BYTE_PPL', wikitext_suite.DATASET),
+    'aci': ('Attention Clarity Index (ACI)', 'AxiomicLabs/ACI-Bench'),
     'sciq': ('SciQ','allenai/sciq'), 'arc_easy': ('ARC-Easy','allenai/ai2_arc'),
     'piqa': ('PIQA','baber/piqa'), 'hellaswag': ('HellaSwag','Rowan/hellaswag'),
     'blimp': ('BLiMP','nyu-mll/blimp'), 'lambada_openai': ('LAMBADA','EleutherAI/lambada_openai'),
@@ -74,6 +76,18 @@ def tiny_score(results):
     return sum(values)/len(values) if all(v is not None for v in values) else None
 
 
+def suite_protocol(suite):
+    return {'wikitext2': wikitext_suite.PROTOCOL, 'tiny_ml': TINY_ML_PROTOCOL,
+            'leaderboard_pl': LEADERBOARD_PL_PROTOCOL, 'leaderboard': LEADERBOARD_PROTOCOL,
+            'fast_pl': PL_PROTOCOL, 'fast': FAST_PROTOCOL}.get(suite, PROTOCOL)
+
+
+def matches_automatic_suite(evaluation, run, suite):
+    return (evaluation is not None and suite in SUITES and evaluation.run_id == run.id
+            and evaluation.mode == 'full' and set(evaluation.tasks) == set(SUITES[suite])
+            and evaluation.provenance.get('protocol') == suite_protocol(suite))
+
+
 def serialize(row, session=None):
     position=None
     if session is not None and row.status=='queued':
@@ -84,17 +98,19 @@ def serialize(row, session=None):
 
 
 def auto_benchmark_summary(session, run):
-    """Headline of a run's automatic benchmark for the leaderboard: suite, human label, state, and one score.
-    Single-task suites (polish, piqa) report the task accuracy; multi-task core reports the chance-normalized TinyScore."""
+    """Public leaderboard headline; private evaluations remain owner-only."""
     eid = (run.metadata_ or {}).get('auto_benchmark_id')
     if not eid:
         return None
     ev = session.get(BenchmarkEvaluation, eid)
-    if ev is None:
+    suite = run.config.get('auto_benchmark_suite', 'tiny_ml')
+    if not matches_automatic_suite(ev, run, suite) or ev.provenance.get('visibility') == 'private':
         return None
     results = ev.results or {}
     tasks = ev.tasks or []
-    if 'multiblimp_polish' in tasks:
+    if suite == 'tiny_ml':
+        label, score, is_percent = 'Tiny ML · BYTE_PPL / BLiMP / ARC-Easy / ACI', None, False
+    elif 'multiblimp_polish' in tasks:
         cell = results.get('multiblimp_polish') or {}
         label, score, is_percent = 'Polish MultiBLiMP', (None if cell.get('error') else cell.get('accuracy')), True
     elif any(t.startswith('pl_') for t in tasks):
@@ -106,7 +122,7 @@ def auto_benchmark_summary(session, run):
         label, score, is_percent = TASKS.get(tasks[0], (tasks[0],))[0], (None if cell.get('error') else cell.get('accuracy')), True
     else:
         label, score, is_percent = 'TinyScore', tiny_score(results), False
-    return {'suite': run.config.get('auto_benchmark_suite'), 'label': label, 'state': ev.status, 'score': score, 'is_percent': is_percent}
+    return {'suite': suite, 'label': label, 'state': ev.status, 'score': score, 'is_percent': is_percent}
 
 
 @router.get('/benchmarks/catalog')
@@ -206,7 +222,7 @@ def start(run_id:str,body:EvaluationInput,user=Depends(require_user),session=Dep
             raise HTTPException(409,'This run already has a queued or running evaluation.')
         digest=identity['checkpoint_sha256']
         tasks=SUITES[body.suite]
-        protocol=wikitext_suite.PROTOCOL if body.suite=='wikitext2' else TINY_ML_PROTOCOL if body.suite=='tiny_ml' else LEADERBOARD_PL_PROTOCOL if body.suite=='leaderboard_pl' else LEADERBOARD_PROTOCOL if body.suite=='leaderboard' else PL_PROTOCOL if body.suite=='fast_pl' else FAST_PROTOCOL if body.suite=='fast' else PROTOCOL
+        protocol=suite_protocol(body.suite)
         previous=list(session.scalars(select(BenchmarkEvaluation).where(BenchmarkEvaluation.run_id==run_id,
             BenchmarkEvaluation.mode==body.mode).order_by(BenchmarkEvaluation.created_at.desc())))
         compatible=[r for r in previous if r.provenance.get('checkpoint_sha256')==digest and
@@ -336,25 +352,41 @@ def enqueue_automatic():
     Full queues defer work; benchmark failure never changes training status.
     """
     with SessionLocal() as db:
-        pending = list(db.scalars(select(Run).where(Run.state == 'finished',
-            Run.config['auto_benchmark'].as_boolean() == True,
-            Run.metadata_['auto_benchmark_id'].as_string().is_(None)).order_by(Run.ended_at).limit(20)))
+        linked = select(BenchmarkEvaluation.id).where(
+            BenchmarkEvaluation.id == Run.metadata_['auto_benchmark_id'].as_string(),
+            BenchmarkEvaluation.run_id == Run.id, BenchmarkEvaluation.mode == 'full',
+            or_(*(and_(func.coalesce(Run.config['auto_benchmark_suite'].as_string(), 'tiny_ml') == suite,
+                       BenchmarkEvaluation.provenance['protocol'].as_string() == suite_protocol(suite),
+                       BenchmarkEvaluation.tasks == SUITES[suite]) for suite in AUTOMATIC_SUITES))).exists()
+        pending = db.scalars(select(Run).where(Run.state == 'finished',
+            Run.config['auto_benchmark'].as_boolean() == True, ~linked).order_by(Run.ended_at))
+        attempts = 0
         for run in pending:
-            suite = run.config.get('auto_benchmark_suite', 'piqa')
-            if suite not in ('piqa', 'core', 'polish', 'fast_pl'): continue
+            suite = run.config.get('auto_benchmark_suite', 'tiny_ml')
+            if suite not in AUTOMATIC_SUITES: continue
+            marker = (run.metadata_ or {}).get('auto_benchmark_id')
+            if marker and matches_automatic_suite(db.get(BenchmarkEvaluation, marker), run, suite): continue
+            if attempts >= 20: break
+            attempts += 1
             owner = db.get(Account, run.owner_id) if run.owner_id else None
             if not owner: continue
             existing = db.scalars(select(BenchmarkEvaluation).where(
                 BenchmarkEvaluation.run_id == run.id,
                 BenchmarkEvaluation.mode == 'full').order_by(BenchmarkEvaluation.created_at.desc())).all()
-            match = next((row for row in existing if set(row.tasks) == set(SUITES[suite])), None)
             try:
+                _, identity = selected_checkpoint(db, run)
+                match = next((row for row in existing if matches_automatic_suite(row, run, suite)
+                              and row.provenance.get('checkpoint_sha256') == identity['checkpoint_sha256']
+                              and (('artifact_id' not in row.provenance) or
+                                   (row.provenance.get('artifact_id') == identity['artifact_id'] and
+                                    row.provenance.get('checkpoint_id') == identity['checkpoint_id']))), None)
                 eid = match.id if match else start(run.id, EvaluationInput(suite=suite, mode='full'), user=owner, session=db)['id']
             except HTTPException as exc:
                 if exc.status_code in (409, 503): continue
                 run.metadata_ = {**run.metadata_, 'auto_benchmark_error': exc.detail}
                 db.commit(); continue
-            run.metadata_ = {**run.metadata_, 'auto_benchmark_id': eid}
+            run.metadata_ = {**{k: v for k, v in run.metadata_.items() if k != 'auto_benchmark_error'},
+                             'auto_benchmark_id': eid}
             db.add(RunLog(run_id=run.id, message=f'Automatic full {suite} benchmark linked to the background evaluation queue.'))
             db.commit()
 

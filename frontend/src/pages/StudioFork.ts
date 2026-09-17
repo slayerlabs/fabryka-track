@@ -146,12 +146,15 @@ export function hydrateFork(
     early_stopping: boolean("early_stopping", true),
     patience: number("patience", 20),
     min_delta: number("min_delta", 0.01),
-    auto_benchmark: boolean("auto_benchmark", false),
-    auto_benchmark_suite: choice(
-      "auto_benchmark_suite",
-      ["piqa", "core", "polish", "fast_pl"],
-      "piqa",
-    ),
+    auto_benchmark: boolean("auto_benchmark", true),
+    auto_benchmark_suite: config.auto_benchmark_suite_version !== 1 &&
+      config.auto_benchmark_suite === "piqa"
+      ? "tiny_ml"
+      : choice(
+          "auto_benchmark_suite",
+          ["tiny_ml", "piqa", "core", "polish", "fast_pl"],
+          "tiny_ml",
+        ),
   };
 }
 
