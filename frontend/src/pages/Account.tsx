@@ -230,10 +230,9 @@ export function AccountPage() {
         }}
       >
         <p className="muted">
-          Generating a key requires a Hugging Face sign-in within the last 5
-          minutes.
-        </p>
-        <Link to="/login">Sign in with Hugging Face again →</Link>
+            Your active Track session is enough. You do not need to sign in to
+            Hugging Face again to generate or rotate this key.
+          </p>
         <div className="actions">
           <button className="secondary" disabled={busy}>
             Generate API key

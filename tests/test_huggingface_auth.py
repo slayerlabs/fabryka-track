@@ -97,7 +97,7 @@ def test_profile_failure_and_no_username_takeover(client, monkeypatch):
         stored=db.get(AccountSession,digest(client.cookies.get(COOKIE)))
         stored.expires_at -= timedelta(minutes=6)
         db.commit()
-    assert client.post('/api/auth/api-key',json={}).status_code == 401
+    assert client.post('/api/auth/api-key',json={}).status_code == 200
     def fail(*args): raise ValueError('Bad provider response')
     monkeypatch.setattr(hf,'fetch_profile',fail)
     assert complete(client,begin(client)).status_code == 502

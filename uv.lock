@@ -826,25 +826,11 @@ wheels = [
 ]
 
 [[package]]
-name = "fabryka-track"
-version = "0.1.0"
+name = "fabryka"
+version = "0.3.0"
 source = { editable = "." }
 dependencies = [
-    { name = "argon2-cffi" },
-    { name = "datasets" },
-    { name = "fastapi" },
     { name = "httpx" },
-    { name = "huggingface-hub" },
-    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
-    { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
-    { name = "pydantic-settings" },
-    { name = "python-multipart" },
-    { name = "safetensors" },
-    { name = "sqlalchemy" },
-    { name = "tiktoken" },
-    { name = "torch" },
-    { name = "uvicorn" },
 ]
 
 [package.optional-dependencies]
@@ -860,6 +846,22 @@ postgres = [
 r2 = [
     { name = "boto3" },
 ]
+server = [
+    { name = "argon2-cffi" },
+    { name = "datasets" },
+    { name = "fastapi" },
+    { name = "huggingface-hub" },
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
+    { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "pydantic-settings" },
+    { name = "python-multipart" },
+    { name = "safetensors" },
+    { name = "sqlalchemy" },
+    { name = "tiktoken" },
+    { name = "torch" },
+    { name = "uvicorn" },
+]
 test = [
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -867,27 +869,27 @@ test = [
 
 [package.metadata]
 requires-dist = [
-    { name = "argon2-cffi", specifier = ">=23.1" },
+    { name = "argon2-cffi", marker = "extra == 'server'", specifier = ">=23.1" },
     { name = "boto3", marker = "extra == 'r2'", specifier = ">=1.35" },
-    { name = "datasets", specifier = ">=4,<5" },
-    { name = "fastapi", specifier = ">=0.115" },
+    { name = "datasets", marker = "extra == 'server'", specifier = ">=4,<5" },
+    { name = "fastapi", marker = "extra == 'server'", specifier = ">=0.115" },
     { name = "httpx", specifier = ">=0.27" },
-    { name = "huggingface-hub", specifier = ">=1.0,<2" },
+    { name = "huggingface-hub", marker = "extra == 'server'", specifier = ">=1.0,<2" },
     { name = "lm-eval", marker = "extra == 'eval'", specifier = "==0.4.13" },
-    { name = "numpy", specifier = ">=1.24" },
+    { name = "numpy", marker = "extra == 'server'", specifier = ">=1.24" },
     { name = "psycopg", extras = ["binary"], marker = "extra == 'postgres'", specifier = ">=3.2" },
     { name = "pyarrow", marker = "extra == 'corpus'", specifier = ">=15" },
-    { name = "pydantic-settings", specifier = ">=2.5" },
+    { name = "pydantic-settings", marker = "extra == 'server'", specifier = ">=2.5" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=8" },
     { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=0.24" },
-    { name = "python-multipart", specifier = ">=0.0.12" },
-    { name = "safetensors", specifier = ">=0.4" },
-    { name = "sqlalchemy", specifier = ">=2.0" },
-    { name = "tiktoken", specifier = ">=0.9,<1" },
-    { name = "torch", specifier = ">=2.4" },
-    { name = "uvicorn", specifier = ">=0.30" },
+    { name = "python-multipart", marker = "extra == 'server'", specifier = ">=0.0.12" },
+    { name = "safetensors", marker = "extra == 'server'", specifier = ">=0.4" },
+    { name = "sqlalchemy", marker = "extra == 'server'", specifier = ">=2.0" },
+    { name = "tiktoken", marker = "extra == 'server'", specifier = ">=0.9,<1" },
+    { name = "torch", marker = "extra == 'server'", specifier = ">=2.4" },
+    { name = "uvicorn", marker = "extra == 'server'", specifier = ">=0.30" },
 ]
-provides-extras = ["corpus", "postgres", "r2", "test", "eval"]
+provides-extras = ["server", "corpus", "postgres", "r2", "test", "eval"]
 
 [[package]]
 name = "fastapi"

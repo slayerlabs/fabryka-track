@@ -114,7 +114,6 @@ def confirm_credentials(request, session, user):
 @router.post("/api-key")
 def api_key(request: Request, user=Depends(require_user), session=Depends(session_scope)):
     throttle(request, user.username)
-    confirm_credentials(request, session, user)
     token = "ft_" + secrets.token_urlsafe(32)
     user.api_key_hash = digest(token)
     session.commit()

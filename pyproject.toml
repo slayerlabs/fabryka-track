@@ -3,27 +3,23 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "fabryka-track"
-version = "0.1.0"
-description = "Reliable, intentionally small experiment tracking"
+name = "fabryka"
+version = "0.3.0"
+description = "Fabryka SaaS experiment tracking SDK and self-hosted tracking server"
+readme = "README.sdk.md"
+license = {text = "MIT"}
+authors = [{name = "Fabryka Labs"}]
+keywords = ["experiment-tracking", "machine-learning", "llm", "training"]
 requires-python = ">=3.10"
-dependencies = [
-  "argon2-cffi>=23.1",
-  "fastapi>=0.115",
-  "httpx>=0.27",
-  "huggingface-hub>=1.0,<2",
-  "safetensors>=0.4",
-  "numpy>=1.24",
-  "pydantic-settings>=2.5",
-  "python-multipart>=0.0.12",
-  "sqlalchemy>=2.0",
-  "torch>=2.4",
-  "uvicorn>=0.30",
-  "datasets>=4,<5",
-  "tiktoken>=0.9,<1",
-]
+dependencies = ["httpx>=0.27"]
 
 [project.optional-dependencies]
+server = [
+  "argon2-cffi>=23.1", "fastapi>=0.115", "huggingface-hub>=1.0,<2",
+  "safetensors>=0.4", "numpy>=1.24", "pydantic-settings>=2.5",
+  "python-multipart>=0.0.12", "sqlalchemy>=2.0", "torch>=2.4",
+  "uvicorn>=0.30", "datasets>=4,<5", "tiktoken>=0.9,<1",
+]
 corpus = ["pyarrow>=15"]
 postgres = ["psycopg[binary]>=3.2"]
 r2 = ["boto3>=1.35"]
@@ -37,10 +33,7 @@ fabryka-track = "fabryka_track.cli:main"
 fabryka-goal-engine = "fabryka_track.goal_engine:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/fabryka_track"]
-
-[tool.hatch.build.targets.wheel.force-include]
-"src/fabryka_track/web" = "fabryka_track/web"
+packages = ["src/fabryka"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
