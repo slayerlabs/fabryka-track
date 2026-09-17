@@ -48,7 +48,7 @@ only when no valid linked pairs survive; zero valid items fails the task.
 Full mode attempts all 5,000 checksum-verified test items. Smoke samples 10 with
 seed 42. The reference's default limit is 256 tokens: for native byte models this
 means the first `min(256, checkpoint context length)` bytes, not 256 subword
-tokens. Reports retain valid/skipped counts, reasons, truncation, item IDs,
+tokens. Reports retain valid/skipped counts, reasons, truncation, a sample digest,
 component scores, dataset revision/checksum and runtime provenance, never item
 text or answers. Context-limited coverage must be considered when comparing
 models; unavailable ACI is never replaced with an unrelated score.

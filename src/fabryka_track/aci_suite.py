@@ -200,7 +200,7 @@ def evaluate(adapter, mode, rows=None):
               'selection': 'seeded random sample' if mode == 'smoke' else 'all items in dataset order',
               'sample_digest': hashlib.sha256(json.dumps([item.get('id') for item in items]).encode()).hexdigest(),
               'device': str(model.tokens.weight.device), 'dtype': str(model.tokens.weight.dtype),
-              'torch_version': torch.__version__, 'numpy_version': np.__version__, 'items': items}
+              'torch_version': torch.__version__, 'numpy_version': np.__version__}
     if not valid:
         raise NoValidItems(result)
     priority = float(np.mean([item['priority_score'] for item in valid]))

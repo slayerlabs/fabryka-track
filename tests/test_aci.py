@@ -119,5 +119,4 @@ def test_smoke_selection_is_reproducible_and_full_visits_every_item():
     assert smoke['sample_digest'] == repeated['sample_digest']
     assert smoke['aci_score'] == repeated['aci_score']
     assert full['samples'] == full['attempted'] == 12
-    assert [item['id'] for item in full['items']] == [item['id'] for item in rows]
     assert full['aci_score'] == pytest.approx((full['priority_score'] + full['linkage_score']) / 2)
