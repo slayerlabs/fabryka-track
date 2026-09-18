@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useCustom, useCustomMutation } from "@refinedev/core";
 import { Link, useSearchParams } from "react-router";
+import { useDashboard } from "./DashboardData";
 
 export interface StudioUser {
   id: string;
@@ -139,6 +140,7 @@ export function AccountPage() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const dashboard = useDashboard(Boolean(query.data?.data.user));
   async function action(kind: "generate" | "revoke" | "logout") {
     setBusy(true);
     setError("");
@@ -203,6 +205,40 @@ export function AccountPage() {
           Sign out
         </button>
       </div>
+      <div className="divider" />
+      <h2>Training runs</h2>
+      <p className="muted">
+        Your external GPU runs appear here as soon as their tracker event arrives.
+        Open a run to see live metrics, logs, checkpoints and artifacts.
+      </p>
+      {dashboard.error && (
+        <p className="error" role="alert">
+          Could not load training runs: {dashboard.error.message}
+        </p>
+      )}
+      {dashboard.data?.runs.length ? (
+        <div className="account-run-list">
+          {dashboard.data.runs.map((run) => {
+            const loss = run.latest_metrics["loss"] ?? run.latest_metrics["train/loss"];
+            return (
+              <Link className="account-run" to={`/run/${run.id}`} key={run.id}>
+                <span>
+                  <strong>{run.name}</strong>
+                  <small>{run.project} · {run.experiment || "training"}</small>
+                </span>
+                <span className="account-run-meta">
+                  <b>{run.state}</b>
+                  {run.step != null && <small>step {run.step}</small>}
+                  {loss != null && <small>loss {Number(loss).toFixed(4)}</small>}
+                </span>
+              </Link>
+            );
+          })}
+        </div>
+      ) : (
+        !dashboard.isLoading && <p className="muted">No training runs yet.</p>
+      )}
+      <p><Link to="/runs">Open the full run workspace →</Link></p>
       <div className="divider" />
       <h2>Hugging Face</h2>
       {user.huggingface_username ? (

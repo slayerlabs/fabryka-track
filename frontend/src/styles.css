@@ -249,6 +249,30 @@ small {
   border-top: 1px solid var(--line);
   margin: 20px 0;
 }
+
+.account-run-list {
+  display: grid;
+  gap: 10px;
+  margin: 14px 0;
+}
+
+.account-run {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 13px 15px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: inherit;
+  text-decoration: none;
+  background: var(--bg);
+}
+
+.account-run:hover { border-color: var(--accent); }
+.account-run small { display: block; color: var(--muted); margin-top: 3px; }
+.account-run-meta { text-align: right; white-space: nowrap; }
+.account-run-meta b { display: block; text-transform: capitalize; }
 .primary,
 .secondary {
   display: inline-flex;
