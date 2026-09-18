@@ -39,7 +39,7 @@ cp -a --reflink=auto "$venv_source" "$release/.venv"
 cat > "$release/start" <<EOF
 #!/bin/sh
 export FABRYKA_DEPLOY_SHA=$revision
-cd "$release"
+cd "$base"
 export PYTHONPATH="$release/src"
 exec "$release/.venv/bin/python" -m uvicorn fabryka_track.api:app --host 127.0.0.1 --port 8130
 EOF
