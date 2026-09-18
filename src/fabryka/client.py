@@ -43,7 +43,9 @@ class RunClient:
         if api_url:
             self.api_url = api_url.rstrip("/")
         self.spool_dir.mkdir(parents=True, exist_ok=True)
-        self.run_id = str(uuid.uuid4())
+        # Launchers may pre-register a shareable run URL and pass its id into
+        # the worker.  Normal SDK callers still get a fresh UUID per run.
+        self.run_id = os.getenv("FABRYKA_RUN_ID") or str(uuid.uuid4())
         metadata = {"hostname": socket.gethostname(), "python": sys.version.split()[0],
                     "command": " ".join(sys.argv), "started_at": datetime.now(timezone.utc).isoformat()}
         if os.getenv("FABRYKA_PUBLIC_LIVE_TRACKING") == "1":
