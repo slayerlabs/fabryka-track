@@ -42,7 +42,8 @@ class ProgressBatch(BaseModel):
 
 
 def is_shared_live(run):
-    return bool(run.is_public and run.metadata_.get('public_live_tracking') is True)
+    return bool(run.is_public and run.metadata_.get('public_live_tracking') is True
+                and run.metadata_.get('engine') in {'external-training', 'sdk'})
 
 
 @router.get('/live')

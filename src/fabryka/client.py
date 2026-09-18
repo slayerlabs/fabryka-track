@@ -46,6 +46,8 @@ class RunClient:
         self.run_id = str(uuid.uuid4())
         metadata = {"hostname": socket.gethostname(), "python": sys.version.split()[0],
                     "command": " ".join(sys.argv), "started_at": datetime.now(timezone.utc).isoformat()}
+        if os.getenv("FABRYKA_PUBLIC_LIVE_TRACKING") == "1":
+            metadata["public_live_tracking"] = True
         commit = _command("git", "rev-parse", "HEAD")
         if commit: metadata["git_commit"] = commit
         if experiment: metadata["experiment"] = experiment
