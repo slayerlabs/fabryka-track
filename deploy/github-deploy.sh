@@ -40,7 +40,7 @@ cat > "$release/start" <<EOF
 #!/bin/sh
 export FABRYKA_DEPLOY_SHA=$revision
 cd "$release"
-export PYTHONPATH="$release"
+export PYTHONPATH="$release/src"
 exec "$release/.venv/bin/python" -m uvicorn fabryka_track.api:app --host 127.0.0.1 --port 8130
 EOF
 chmod 700 "$release/start"
