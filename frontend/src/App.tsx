@@ -26,6 +26,7 @@ import { LeaderboardPage } from "./pages/Leaderboard";
 import { CheckpointsPage } from "./pages/Checkpoints";
 import { useDashboard } from "./pages/DashboardData";
 import { Icon, type IconName } from "./Icons";
+import { LandingPage } from "./pages/Landing";
 
 const navigation: { label: string; links: [string, string, IconName][] }[] = [
   {
@@ -41,7 +42,7 @@ const navigation: { label: string; links: [string, string, IconName][] }[] = [
   {
     label: "Research & resources",
     links: [
-      ["/", "Goals", "target"],
+      ["/goals", "Goals", "target"],
       ["/status", "Status", "chart"],
       ["/agents", "Agent sign up", "users"],
       ["/benchmark-results", "Published results", "chart"],
@@ -54,9 +55,6 @@ const navigation: { label: string; links: [string, string, IconName][] }[] = [
 
 export function App() {
   const location = useLocation();
-  const { data: identity } = useGetIdentity<Identity | null>();
-  const dashboard = useDashboard(Boolean(identity));
-  const memory = identity ? dashboard.data?.gpu_memory : undefined;
   useEffect(() => {
     const name =
       navigation
@@ -69,7 +67,10 @@ export function App() {
           : location.pathname.startsWith("/goals/")
             ? "250M English base model"
             : "Account");
-    document.title = `${name} · Fabryka Track`;
+    document.title =
+      location.pathname === "/"
+        ? "Fabryka Track · From training idea to evaluated model"
+        : `${name} · Fabryka Track`;
     if (location.hash)
       requestAnimationFrame(() =>
         document
@@ -78,6 +79,15 @@ export function App() {
       );
     else window.scrollTo(0, 0);
   }, [location.pathname, location.hash]);
+  if (location.pathname === "/") return <LandingPage />;
+  return <ApplicationShell />;
+}
+
+function ApplicationShell() {
+  const location = useLocation();
+  const { data: identity } = useGetIdentity<Identity | null>();
+  const dashboard = useDashboard(Boolean(identity));
+  const memory = identity ? dashboard.data?.gpu_memory : undefined;
   return (
     <>
       <div className="app-shell">
@@ -93,7 +103,12 @@ export function App() {
               <details
                 className="sidebar-group"
                 key={group.label}
-                open={group.label === "Workspace" ? true : undefined}
+                open={
+                  group.label === "Workspace" ||
+                  group.links.some(([path]) => path === location.pathname)
+                    ? true
+                    : undefined
+                }
               >
                 <summary className="sidebar-group-label">{group.label}</summary>
                 <div className="sidebar-links">
@@ -161,7 +176,7 @@ export function App() {
         </aside>
         <main className="shell-main" id="app">
           <Routes>
-            <Route path="/" element={<GoalsPage />} />
+            <Route path="/goals" element={<GoalsPage />} />
             <Route path="/status" element={<StatusPage />} />
             <Route path="/agents" element={<AgentsPage />} />
             <Route
@@ -226,7 +241,7 @@ export function App() {
               element={
                 <section className="panel">
                   <h1>Page not found</h1>
-                  <Link to="/">Return to goals</Link>
+                  <Link to="/goals">Return to goals</Link>
                 </section>
               }
             />

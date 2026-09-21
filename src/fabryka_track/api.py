@@ -332,7 +332,7 @@ def goal_rfc_page():
 
 @app.get("/{path:path}", response_class=HTMLResponse)
 def web(path: str = ""):
-    pages = {"": "Goals / RFCs", "new": "Training studio", "runs": "Focused runs",
+    pages = {"": "From training idea to evaluated model", "goals": "Goals / RFCs", "new": "Training studio", "runs": "Focused runs",
              "benchmarks": "Evaluation queue", "leaderboard": "Training results", "guide": "Learning guide",
              "login": "Sign in", "register": "Sign in", "account": "Account", "checkpoints": "Checkpoints",
              "status": "Goal status", "agents": "Agent sign up",

@@ -8,6 +8,7 @@ import { authProvider, dataProvider } from "./provider";
 import "./styles.css";
 import "./public.css";
 import "./dashboard.css";
+import "./landing.css";
 
 const legacy = window.location.hash.slice(1);
 if (
@@ -25,7 +26,7 @@ if (
           authProvider={authProvider}
           routerProvider={routerProvider}
           resources={[
-            { name: "goals", list: "/" },
+            { name: "goals", list: "/goals" },
             { name: "runs", list: "/runs", show: "/run/:id", create: "/new" },
             { name: "checkpoints", list: "/checkpoints" },
             { name: "benchmarks", list: "/benchmarks" },

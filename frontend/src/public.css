@@ -47,6 +47,10 @@
   margin: 0 0 28px;
 }
 .public-goals .tag {
+  display: block;
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
   color: var(--muted);
   font: 600 11px var(--mono);
   letter-spacing: 0.04em;
