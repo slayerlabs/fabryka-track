@@ -18,16 +18,18 @@ PYTHONPATH=current/src current/.venv/bin/python -m fabryka_track.external_traini
   --credential-file /root/TRAINING_RUN.env
 ```
 
-This explicitly enables public live progress for this run. Existing public runs
-remain inaccessible while running unless they separately opt in. The run-scoped
-token only authorizes this run's progress endpoint; account credentials are not
-rotated. Transfer the credential file to the sidecar host with mode 0600.
+This explicitly enables public live progress for this run. Pass `--private` for
+an owner-only dogfood run. Existing public runs remain inaccessible while
+running unless they separately opt in. The run-scoped token only authorizes this
+run's progress/control endpoints; account credentials are not rotated. Transfer
+the credential file to the sidecar host with mode 0600.
 
 Install `scripts/track_training_progress.py` with a pinned release and run:
 
 ```sh
 python3 track_training_progress.py --events /path/to/events.jsonl \
-  --state /path/to/sync-state.json --pid TRAINING_PID --run-id RUN_UUID
+  --state /path/to/sync-state.json --pid TRAINING_PID --run-id RUN_UUID \
+  --stop-file /path/to/TRACK_STOP
 ```
 
 Set `TRACK_TRAINING_TOKEN` through a protected systemd `EnvironmentFile`. Run as
@@ -36,6 +38,12 @@ an unprivileged user who can read the log, with `Restart=on-failure`, `Nice=10`,
 The service should be enabled at boot. No GPU or training service changes are
 needed. `--once` backfills and exits; the default stays running and retries
 network failures. Logs contain counts and error class names, never the token.
+
+For managed cancellation, the owner presses **Stop training** in Track. The
+sidecar polls its scoped control endpoint and atomically writes `--stop-file`.
+The trainer must observe that marker between updates, checkpoint safely, emit an
+`end` event with `status: "paused"`, and exit. Track does not send a blind kill
+to an external process.
 
 ## Source, refresh and publication
 

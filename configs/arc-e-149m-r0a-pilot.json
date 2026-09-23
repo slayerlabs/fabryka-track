@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "run_kind": "arc-e-149m-dogfood",
+  "phase": "r0a-fineweb-edu-control-pilot",
+  "planned_training_tokens": 1000000000,
+  "token_unit": "tokenizer_tokens",
+  "model": "Deep576-37L-149M",
+  "parameters_expected": 149863232,
+  "parameters_cap": 150000000,
+  "architecture": {
+    "layers": 37,
+    "hidden_size": 576,
+    "query_heads": 9,
+    "kv_heads": 3,
+    "head_dim": 64,
+    "intermediate_size": 1536,
+    "activation": "SwiGLU",
+    "normalization": "RMSNorm with QK-Norm",
+    "position_encoding": "RoPE",
+    "tie_word_embeddings": true,
+    "vocab_size": 32768,
+    "context_length": 2048
+  },
+  "optimizer": {
+    "name": "AdamW",
+    "betas": [0.9, 0.95],
+    "weight_decay": 0.1,
+    "gradient_clip_norm": 1.0,
+    "z_loss": 0.0001,
+    "learning_rate_candidates": [0.0003, 0.0006],
+    "schedule": "cosine",
+    "warmup_fraction": 0.02,
+    "final_lr_fraction": 0.1
+  },
+  "data": {
+    "candidate": "HuggingFaceFW/fineweb-edu sample-10BT",
+    "text_column": "text",
+    "required_before_launch": [
+      "resolved dataset revision",
+      "tokenizer artifact SHA-256",
+      "whole-document validation split manifest",
+      "exact and near-deduplication report",
+      "ARC exclusion audit"
+    ]
+  },
+  "runpod": {
+    "gpu_type": "NVIDIA GeForce RTX 5090",
+    "gpu_count": 1,
+    "precision": "bf16",
+    "max_hourly_usd": 0.99,
+    "pilot_budget_usd": 10
+  },
+  "tracking": {
+    "checkpoint_every_tokens": 100000000,
+    "report_every_seconds": 15,
+    "required_metrics": [
+      "loss",
+      "tokens_per_second",
+      "gradient_norm",
+      "learning_rate",
+      "bpb"
+    ]
+  },
+  "evaluation": {
+    "development_only": ["ARC-Easy validation", "independent science set", "validation BPB"],
+    "final_only": ["ARC-Easy test"],
+    "forbidden_training_content": ["all ARC-Easy and ARC-Challenge questions, choices, answers and paraphrases"]
+  },
+  "status": "preflight-required; not approved to launch"
+}

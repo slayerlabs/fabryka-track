@@ -45,7 +45,14 @@ def read_batch(path, state, maximum=200):
     return events, {**state, 'offset': offset, 'line': line}
 
 
-def sync_once(args, state, send):
+def signal_stop(path):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + '.tmp')
+    temporary.write_text('Track stop requested. Save a checkpoint, emit end: paused, and exit.\n')
+    temporary.replace(path)
+
+
+def sync_once(args, state, send, control=None):
     stat = args.events.stat()
     identity = [stat.st_dev, stat.st_ino]
     if state.get('file_identity', identity) != identity or stat.st_size < state.get('offset', 0):
@@ -58,6 +65,8 @@ def sync_once(args, state, send):
     payload = {'events': events, 'source_updated_at': datetime.fromtimestamp(stat.st_mtime, timezone.utc).isoformat(),
                'process_alive': current_process is not None and current_process == expected}
     send(payload)
+    if control is not None and control() and args.stop_file:
+        signal_stop(args.stop_file)
     return next_state, len(events) == 200 and next_state['offset'] < stat.st_size, len(events)
 
 
@@ -75,6 +84,7 @@ def main():
     p.add_argument('--pid', type=int, required=True)
     p.add_argument('--url', default='https://track.fabryka.ai')
     p.add_argument('--run-id', required=True)
+    p.add_argument('--stop-file', type=Path, help='Marker written after an owner presses Stop in Track.')
     p.add_argument('--interval', type=float, default=15)
     p.add_argument('--once', action='store_true')
     args = p.parse_args()
@@ -91,9 +101,15 @@ def main():
         with urllib.request.urlopen(request, timeout=30) as response:
             json.load(response)
 
+    def control():
+        request = urllib.request.Request(args.url.rstrip('/') + '/api/external-training/' + args.run_id + '/control',
+                  headers={'Authorization': 'Bearer ' + token})
+        with urllib.request.urlopen(request, timeout=30) as response:
+            return bool(json.load(response).get('stop'))
+
     while True:
         try:
-            state, more, count = sync_once(args, state, send)
+            state, more, count = sync_once(args, state, send, control)
             save_state(args.state, state)
             print(json.dumps({'synced_line': state['line'], 'events': count}), flush=True)
             if args.once and not more: return

@@ -80,6 +80,29 @@ def test_counters_completion_and_lost_process(client):
     assert client.post(url, headers=headers, json=payload([end], False)).json()['state'] == 'finished'
 
 
+def test_owner_stop_reaches_scoped_sidecar_control_without_reviving_run(client):
+    rid, headers = registered(client)
+    assert client.get(f'/api/external-training/{rid}/control', headers=headers).json() == {'stop': False}
+    assert client.post(f'/api/external-training/{rid}/stop').json() == {'state': 'stopping'}
+    assert client.get(f'/api/external-training/{rid}/control', headers=headers).json() == {'stop': True}
+    event = {'line': 2, 'kind': 'update', 'step': 1, 'tokens': 100, 'metrics': {'loss': 3.0}}
+    assert client.post(f'/api/external-training/{rid}/progress', headers=headers, json=payload([event])).json()['state'] == 'stopping'
+    paused = {'line': 3, 'kind': 'end', 'step': 1, 'tokens': 100, 'status': 'paused'}
+    assert client.post(f'/api/external-training/{rid}/progress', headers=headers, json=payload([paused], False)).json()['state'] == 'paused'
+
+
+def test_private_registration_is_not_publicly_discoverable(client):
+    rid, token = str(uuid4()), 'p' * 50
+    with SessionLocal() as db:
+        register_run(db, run_id=rid, token=token, owner='tester', name='Private 149M',
+                     started_at=datetime.now(timezone.utc), is_public=False,
+                     config={'planned_training_tokens': 1000, 'token_unit': 'tokenizer_tokens'})
+        db.commit()
+    client.cookies.clear()
+    assert client.get(f'/api/runs/{rid}').status_code == 401
+    assert all(row['id'] != rid for row in client.get('/api/external-training/live').json())
+
+
 def sidecar():
     spec = importlib.util.spec_from_file_location('sidecar', Path(__file__).parents[1]/'scripts/track_training_progress.py')
     module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
@@ -108,3 +131,13 @@ def test_sidecar_partial_write_retry_and_truncation(tmp_path, monkeypatch):
     assert received[-1]['process_alive'] is False
     p.write_text('')
     with pytest.raises(RuntimeError): m.sync_once(args, next_state, received.append)
+
+
+def test_sidecar_writes_stop_marker_only_after_scoped_control(tmp_path, monkeypatch):
+    m = sidecar(); events = tmp_path/'events.jsonl'; events.write_text('')
+    marker = tmp_path/'control'/'stop'
+    args = SimpleNamespace(events=events, pid=42, stop_file=marker)
+    monkeypatch.setattr(m, 'process_identity', lambda pid: 'identity')
+    state, _, _ = m.sync_once(args, {'process_identity': 'identity'}, lambda body: None, lambda: True)
+    assert state['line'] == 0
+    assert marker.read_text().startswith('Track stop requested')
