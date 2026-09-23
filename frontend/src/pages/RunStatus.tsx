@@ -47,6 +47,8 @@ export function RunStatus({ run: r }: { run: Run }) {
             ` · Latest local checkpoint: ${fmt(t.checkpoint.tokens / 1e6, 2)}M tokens (step ${t.checkpoint.step})`}
         </small>
         <p className="muted">
+          {r.state === "stopping" &&
+            "Track has requested a safe stop. The sidecar will create the trainer stop marker after its next successful synchronization. "}
           No validation measurements have been reported
           {r.metrics?.["validation/bpb"]?.length
             ? " for token loss or perplexity; held-out BPB appears below"

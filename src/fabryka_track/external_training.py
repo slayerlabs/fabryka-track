@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, FiniteFloat
 from sqlalchemy import select
 
-from .accounts import digest
+from .accounts import digest, owned_run, require_user
 from .database import SessionLocal, session_scope
 from .models import Account, IngestedEvent, Project, Run
 from .namespaces import append_series
@@ -56,13 +56,37 @@ def live_runs(session=Depends(session_scope)):
             for r in runs if is_shared_live(r) and r.metadata_.get('engine') == 'external-training'][:50]
 
 
-@router.post('/{run_id}/progress')
-def progress(run_id: str, body: ProgressBatch, request: Request, session=Depends(session_scope)):
+def authenticated_external_run(run_id, request, session):
     run = session.get(Run, run_id)
     token = request.headers.get('authorization', '').removeprefix('Bearer ')
     stored = run.metadata_.get('external_ingest_hash', '') if run else ''
     if not run or run.metadata_.get('engine') != 'external-training' or not stored or not hmac.compare_digest(stored, digest(token)):
         raise HTTPException(401, 'Invalid training-run credential.')
+    return run
+
+
+@router.get('/{run_id}/control')
+def control(run_id: str, request: Request, session=Depends(session_scope)):
+    """A scoped polling endpoint for a sidecar to turn Track Stop into a local marker."""
+    run = authenticated_external_run(run_id, request, session)
+    return {'stop': run.state == 'stopping'}
+
+
+@router.post('/{run_id}/stop')
+def stop(run_id: str, session=Depends(session_scope), user=Depends(require_user)):
+    run = owned_run(session, run_id, user)
+    if run.metadata_.get('engine') != 'external-training':
+        raise HTTPException(404, 'External training run not found')
+    if run.state == 'running':
+        run.state = 'stopping'
+        run.metadata_ = {**run.metadata_, 'stop_requested_at': datetime.now(timezone.utc).isoformat()}
+        session.commit()
+    return {'state': run.state}
+
+
+@router.post('/{run_id}/progress')
+def progress(run_id: str, body: ProgressBatch, request: Request, session=Depends(session_scope)):
+    run = authenticated_external_run(run_id, request, session)
     now = datetime.now(timezone.utc)
     tracking = dict(run.metadata_.get('tracking', {}))
     target = run.config['planned_training_tokens']
@@ -79,8 +103,9 @@ def progress(run_id: str, body: ProgressBatch, request: Request, session=Depends
             values = {v: event.metrics[k] for k, v in METRICS.items() if k in event.metrics}
             values.update({'training/tokens_seen': event.tokens, 'progress': min(100, 100 * event.tokens / target)})
             tracking.update(step=event.step, tokens_seen=event.tokens)
-            run.state = 'running'
-            run.ended_at = None
+            if run.state != 'stopping':
+                run.state = 'running'
+                run.ended_at = None
         elif event.kind == 'checkpoint':
             values = {'checkpoint/tokens': event.tokens, 'checkpoint/step': event.step}
             tracking['checkpoint'] = {'step': event.step, 'tokens': event.tokens, 'sha256': event.sha256}
@@ -106,7 +131,7 @@ def progress(run_id: str, body: ProgressBatch, request: Request, session=Depends
     return {'accepted_line': tracking.get('last_line', 0), 'state': run.state}
 
 
-def register_run(session, *, run_id, owner, name, config, started_at, token):
+def register_run(session, *, run_id, owner, name, config, started_at, token, is_public=True):
     """Operator registration; no training process or account credential changes."""
     if session.get(Run, run_id):
         raise ValueError('Run already exists; reuse its existing sidecar credentials.')
@@ -119,8 +144,8 @@ def register_run(session, *, run_id, owner, name, config, started_at, token):
     if not project:
         project = Project(name='rfc005'); session.add(project); session.flush()
     run = Run(id=run_id, owner_id=account.id, project_id=project.id, name=name, config=config,
-              state='running', is_public=True, started_at=started_at,
-              metadata_={'engine': 'external-training', 'public_live_tracking': True,
+              state='running', is_public=is_public, started_at=started_at,
+              metadata_={'engine': 'external-training', 'public_live_tracking': is_public,
                          'external_ingest_hash': digest(token), 'tracking': {}},
               note='Live metrics from the existing training process. Checkpoints remain on the training host.')
     session.add(run)
@@ -135,6 +160,7 @@ def main():
     p.add_argument('--config', required=True)
     p.add_argument('--started-at', required=True)
     p.add_argument('--credential-file', required=True)
+    p.add_argument('--private', action='store_true', help='Keep the run out of the public live feed.')
     args = p.parse_args()
     token = secrets.token_urlsafe(40)
     # O_EXCL prevents accidental replacement of a working sidecar credential.
@@ -143,7 +169,8 @@ def main():
         with SessionLocal() as session:
             register_run(session, run_id=str(args.run_id), owner=args.owner, name=args.name,
                          config=json.loads(Path(args.config).read_text()),
-                         started_at=datetime.fromisoformat(args.started_at), token=token)
+                         started_at=datetime.fromisoformat(args.started_at), token=token,
+                         is_public=not args.private)
             with os.fdopen(fd, 'w') as f:
                 f.write(f'TRACK_TRAINING_TOKEN={token}\n')
             session.commit()

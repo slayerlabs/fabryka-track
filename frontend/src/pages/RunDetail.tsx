@@ -375,6 +375,18 @@ function RunWorkspace({ id }: { id: string }) {
               Stop training
             </button>
           )}
+          {!readOnly && external && active && (
+            <button
+              className="secondary"
+              disabled={action.pending || r.state === "stopping"}
+              onClick={async () => {
+                if (await action.execute("/api/external-training/" + id + "/stop"))
+                  await query.refetch();
+              }}
+            >
+              {r.state === "stopping" ? "Stop requested" : "Stop training"}
+            </button>
+          )}
           {!readOnly && local && finished && (
             <>
               <button
