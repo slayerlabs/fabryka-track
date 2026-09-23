@@ -137,15 +137,16 @@ class MixItem(BaseModel):
     weight: float = Field(ge=0.01, le=100, multiple_of=0.01, allow_inf_nan=False)
 
 class TokenizedShard(BaseModel):
-    path: str = Field(pattern=r'^[A-Za-z0-9][A-Za-z0-9._/-]*\\.bin$')
+    path: str = Field(pattern=r'^[A-Za-z0-9][A-Za-z0-9._/-]*\.bin$')
     sha256: str = Field(pattern=r'^[a-f0-9]{64}$')
     tokens: int = Field(gt=2049)
+    split: Literal['train', 'validation'] = 'train'
 
 
 class TrainingInput(BaseModel):
     name: str = Field(min_length=8, max_length=120)
-    mix: list[MixItem] = Field(min_length=1, max_length=20)
-    steps: int = Field(default=100, ge=10, le=2000)
+    mix: list[MixItem] = Field(default_factory=list, max_length=20)
+    steps: int = Field(default=100, ge=10, le=500_000)
     batch_size: int = Field(default=8, ge=1, le=32)
     learning_rate: float = Field(default=0.003, ge=0.0001, le=0.1, allow_inf_nan=False)
     lr_schedule: Literal["constant", "trapezoidal"] = "constant"
@@ -173,10 +174,24 @@ class TrainingInput(BaseModel):
         generic = {"test", "run", "training", "new", "untitled", "trening", "nowy", "nazwa", "asdf", "qwerty"}
         if len(self.name) < 8 or len(letters) < 4 or len(set(letters)) < 2 or all(w in generic for w in words):
             raise ValueError("Use a descriptive run name (8–120 characters), including the model, dataset or experiment; for example: Polish GPT - Wikipedia baseline.")
-        if sum(round(d.weight * 100) for d in self.mix) != 10000:
-            raise ValueError("Dataset percentages must add up to 100.")
-        if len({d.dataset_id for d in self.mix}) != len(self.mix):
-            raise ValueError("Each dataset can only appear once.")
+        if self.model_size == 'qwen149m':
+            if self.mix:
+                raise ValueError("The 149M runner accepts an immutable tokenized-shard manifest, not Studio text datasets.")
+            if not self.tokenized_shards:
+                raise ValueError("The 149M runner requires at least one tokenized shard.")
+            if len({d.path for d in self.tokenized_shards}) != len(self.tokenized_shards):
+                raise ValueError("Each tokenized shard path can only appear once.")
+            if not any(d.split == 'train' for d in self.tokenized_shards) or not any(d.split == 'validation' for d in self.tokenized_shards):
+                raise ValueError("The 149M runner requires separate train and validation shard manifests.")
+        else:
+            if self.steps > 2000:
+                raise ValueError("Studio runs are limited to 2,000 steps.")
+            if not self.mix:
+                raise ValueError("Select at least one dataset.")
+            if sum(round(d.weight * 100) for d in self.mix) != 10000:
+                raise ValueError("Dataset percentages must add up to 100.")
+            if len({d.dataset_id for d in self.mix}) != len(self.mix):
+                raise ValueError("Each dataset can only appear once.")
         return self
 
 

@@ -17,6 +17,19 @@ class RMSNorm(nn.Module):
         return x * torch.rsqrt(x.float().pow(2).mean(-1, keepdim=True) + self.eps).to(x.dtype) * self.weight
 
 
+def apply_rope(x, base=10_000):
+    """Apply parameter-free rotary position embeddings to [B, H, T, D]."""
+    _, _, length, dim = x.shape
+    if dim % 2:
+        raise ValueError("RoPE requires an even head dimension")
+    positions = torch.arange(length, device=x.device, dtype=torch.float32)
+    frequencies = 1.0 / (base ** (torch.arange(0, dim, 2, device=x.device, dtype=torch.float32) / dim))
+    angles = torch.outer(positions, frequencies)
+    cos, sin = angles.cos().to(x.dtype)[None, None], angles.sin().to(x.dtype)[None, None]
+    even, odd = x[..., ::2], x[..., 1::2]
+    return torch.stack((even * cos - odd * sin, even * sin + odd * cos), dim=-1).flatten(-2)
+
+
 class Attention(nn.Module):
     def __init__(self, width=576, query_heads=9, kv_heads=3, head_dim=64):
         super().__init__()
@@ -33,6 +46,7 @@ class Attention(nn.Module):
         q = self.q_norm(self.q(x).view(b, t, self.query_heads, self.head_dim)).transpose(1, 2)
         k = self.k_norm(self.k(x).view(b, t, self.kv_heads, self.head_dim)).transpose(1, 2)
         v = self.v(x).view(b, t, self.kv_heads, self.head_dim).transpose(1, 2)
+        q, k = apply_rope(q), apply_rope(k)
         repeat = self.query_heads // self.kv_heads
         k, v = k.repeat_interleave(repeat, 1), v.repeat_interleave(repeat, 1)
         return self.o(F.scaled_dot_product_attention(q, k, v, is_causal=True).transpose(1, 2).reshape(b, t, -1))

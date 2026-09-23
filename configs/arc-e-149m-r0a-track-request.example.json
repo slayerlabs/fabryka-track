@@ -1,0 +1,30 @@
+{
+  "name": "ARC-E R0a Ultra-FineWeb 1B control",
+  "compute": "runpod",
+  "model_size": "qwen149m",
+  "mix": [],
+  "tokenized_shards": [
+    {
+      "path": "ultra-fineweb-r0a/train-00000.bin",
+      "sha256": "REPLACE_WITH_64_CHARACTER_LOWERCASE_SHA256",
+      "tokens": 100000000,
+      "split": "train"
+    },
+    {
+      "path": "ultra-fineweb-r0a/validation-00000.bin",
+      "sha256": "REPLACE_WITH_64_CHARACTER_LOWERCASE_SHA256",
+      "tokens": 10000000,
+      "split": "validation"
+    }
+  ],
+  "budget_mode": "tokens",
+  "target_tokens": 1000000000,
+  "batch_size": 8,
+  "learning_rate": 0.0006,
+  "lr_schedule": "trapezoidal",
+  "steps": 61036,
+  "seed": 42,
+  "max_runtime_seconds": 21600,
+  "auto_benchmark": false,
+  "early_stopping": false
+}

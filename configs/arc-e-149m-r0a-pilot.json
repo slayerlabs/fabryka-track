@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "run_kind": "arc-e-149m-dogfood",
-  "phase": "r0a-fineweb-edu-control-pilot",
+  "phase": "r0a-ultra-fineweb-control-pilot",
   "planned_training_tokens": 1000000000,
   "token_unit": "tokenizer_tokens",
   "model": "Deep576-37L-149M",
@@ -33,8 +33,9 @@
     "final_lr_fraction": 0.1
   },
   "data": {
-    "candidate": "HuggingFaceFW/fineweb-edu sample-10BT",
-    "text_column": "text",
+    "candidate": "openbmb/Ultra-FineWeb en",
+    "text_column": "content",
+    "selection": "pin revision; retain only English records with score >= 0.90; seeded whole-document split before tokenization",
     "required_before_launch": [
       "resolved dataset revision",
       "tokenizer artifact SHA-256",
@@ -46,6 +47,10 @@
   "runpod": {
     "gpu_type": "NVIDIA GeForce RTX 5090",
     "gpu_count": 1,
+    "data_center": "EUR-NO-1",
+    "network_volume_id": "p01chmugmg",
+    "network_volume_name": "slayerlab-arc-e-149m-pilot-cache",
+    "network_volume_size_gb": 50,
     "precision": "bf16",
     "max_hourly_usd": 0.99,
     "pilot_budget_usd": 10
