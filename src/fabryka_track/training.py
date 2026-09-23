@@ -136,11 +136,17 @@ class MixItem(BaseModel):
     dataset_id: str
     weight: float = Field(ge=0.01, le=100, multiple_of=0.01, allow_inf_nan=False)
 
+class TokenizedShard(BaseModel):
+    path: str = Field(pattern=r'^[A-Za-z0-9][A-Za-z0-9._/-]*\.bin$')
+    sha256: str = Field(pattern=r'^[a-f0-9]{64}$')
+    tokens: int = Field(gt=2049)
+    split: Literal['train', 'validation'] = 'train'
+
 
 class TrainingInput(BaseModel):
     name: str = Field(min_length=8, max_length=120)
-    mix: list[MixItem] = Field(min_length=1, max_length=20)
-    steps: int = Field(default=100, ge=10, le=2000)
+    mix: list[MixItem] = Field(default_factory=list, max_length=20)
+    steps: int = Field(default=100, ge=10, le=500_000)
     batch_size: int = Field(default=8, ge=1, le=32)
     learning_rate: float = Field(default=0.003, ge=0.0001, le=0.1, allow_inf_nan=False)
     lr_schedule: Literal["constant", "trapezoidal"] = "constant"
@@ -148,7 +154,8 @@ class TrainingInput(BaseModel):
     auto_benchmark_suite: Literal['tiny_ml', 'piqa', 'core', 'polish', 'fast_pl'] = 'tiny_ml'
     auto_benchmark_suite_version: Literal[1] = 1
     seed: int = Field(default=42, ge=0, le=2**32-1)
-    model_size: Literal["tiny", "small", "8m", "16m", "32m", "64m", "128m", "150m"] = "tiny"
+    model_size: Literal["tiny", "small", "8m", "16m", "32m", "64m", "128m", "150m", "qwen149m"] = "tiny"
+    tokenized_shards: list[TokenizedShard] = Field(default_factory=list, max_length=256)
     compute: Literal["cpu", "runpod"] = "cpu"
     budget_mode: Literal["manual", "chinchilla", "tokens"] = "manual"
     max_runtime_seconds: int = Field(default=3600, ge=600, le=86400)
@@ -167,10 +174,24 @@ class TrainingInput(BaseModel):
         generic = {"test", "run", "training", "new", "untitled", "trening", "nowy", "nazwa", "asdf", "qwerty"}
         if len(self.name) < 8 or len(letters) < 4 or len(set(letters)) < 2 or all(w in generic for w in words):
             raise ValueError("Use a descriptive run name (8–120 characters), including the model, dataset or experiment; for example: Polish GPT - Wikipedia baseline.")
-        if sum(round(d.weight * 100) for d in self.mix) != 10000:
-            raise ValueError("Dataset percentages must add up to 100.")
-        if len({d.dataset_id for d in self.mix}) != len(self.mix):
-            raise ValueError("Each dataset can only appear once.")
+        if self.model_size == 'qwen149m':
+            if self.mix:
+                raise ValueError("The 149M runner accepts an immutable tokenized-shard manifest, not Studio text datasets.")
+            if not self.tokenized_shards:
+                raise ValueError("The 149M runner requires at least one tokenized shard.")
+            if len({d.path for d in self.tokenized_shards}) != len(self.tokenized_shards):
+                raise ValueError("Each tokenized shard path can only appear once.")
+            if not any(d.split == 'train' for d in self.tokenized_shards) or not any(d.split == 'validation' for d in self.tokenized_shards):
+                raise ValueError("The 149M runner requires separate train and validation shard manifests.")
+        else:
+            if self.steps > 2000:
+                raise ValueError("Studio runs are limited to 2,000 steps.")
+            if not self.mix:
+                raise ValueError("Select at least one dataset.")
+            if sum(round(d.weight * 100) for d in self.mix) != 10000:
+                raise ValueError("Dataset percentages must add up to 100.")
+            if len({d.dataset_id for d in self.mix}) != len(self.mix):
+                raise ValueError("Each dataset can only appear once.")
         return self
 
 
@@ -183,6 +204,8 @@ def launch(body: TrainingInput, session=Depends(session_scope), user=Depends(req
         if not allowed(user, session):raise HTTPException(403, 'RunPod access is not enabled for this account.')
         if body.max_runtime_seconds>settings.runpod_max_seconds:raise HTTPException(422, 'Requested duration exceeds the server GPU time limit.')
         if body.model_size in ('tiny','small'):raise HTTPException(422, 'Choose a GPU model from 8M to 150M.')
+        if body.model_size == 'qwen149m' and not body.tokenized_shards:raise HTTPException(422, 'The 149M runner requires pinned tokenized shards on the RunPod volume.')
+        if body.model_size == 'qwen149m' and not settings.runpod_network_volume_id:raise HTTPException(422, 'Configure a RunPod network volume before launching the 149M runner.')
     elif body.model_size not in ('tiny','small'):
         raise HTTPException(422, 'Models 8M and larger require RunPod.')
     parent_run = checkpoint = warm_start_checkpoint = None
@@ -224,6 +247,7 @@ def launch(body: TrainingInput, session=Depends(session_scope), user=Depends(req
         run_id = str(uuid4())
         model_config = MODEL_PRESETS[body.model_size]
         config = {**body.model_dump(exclude={"name", "mix", "parent_run_id", "checkpoint_id"}), "mix": mix, "model": model_config["label"], "validation_split": 0.1, **model_config["architecture"]}
+        if body.model_size == 'qwen149m': config['runner_kind'] = 'qwen149m'
         config.update(plan_training(body, mix))
         metadata = {"engine": "tiny-transformer", "device": "RunPod GPU" if body.compute=="runpod" else "CPU"}
         if warm_start_checkpoint:
@@ -351,6 +375,10 @@ MODEL_PRESETS.update(GPU_PRESETS)
 
 def plan_training(body, mix):
     preset = MODEL_PRESETS[body.model_size]
+    if body.model_size == 'qwen149m':
+        target = body.target_tokens if body.budget_mode == 'tokens' else body.steps * body.batch_size * 2048
+        return {"steps": max(1, math.ceil(target / (body.batch_size * 2048))), "parameters": preset['parameters'], "training_context_length": 2048,
+                "planned_training_tokens": target, "tokens_per_parameter": target / preset['parameters'], "chinchilla_target_tokens": 20 * preset['parameters'], "available_training_bytes": 0, "expected_max_source_reuse": None}
     parameters = preset.get("parameters") or (134_912 if body.model_size == "tiny" else 391_008)
     # Match batch() exactly: the shortest training split limits all sequences.
     length = min(preset["architecture"]["context_length"], min(int(d["bytes"] * .9) - 1 for d in mix))

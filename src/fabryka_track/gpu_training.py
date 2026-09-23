@@ -49,6 +49,8 @@ for key,(width,layers,heads) in SIZES.items():
     parameters = layers*(12*width*width+13*width)+(512+512+2)*width
     PRESETS[key]={'label':f'{key.upper()} transformer · {parameters:,} parameters', 'parameters':parameters,
                   'architecture':{'width':width,'layers':layers,'heads':heads,'context_length':512}}
+PRESETS['qwen149m']={'label':'Deep576-37L Qwen-style · 149,863,232 parameters','parameters':149_863_232,
+                     'architecture':{'width':576,'layers':37,'heads':9,'kv_heads':3,'context_length':2048}}
 
 
 def now(): return datetime.now(timezone.utc)
@@ -113,11 +115,13 @@ def provider(method,path,**kwargs):
         return r.json() if r.content else None
 
 
-def bundle(run_id):
-    folder=settings.artifact_dir/run_id;folder.mkdir(parents=True,exist_ok=True)
+def bundle(run):
+    folder=settings.artifact_dir/run.id;folder.mkdir(parents=True,exist_ok=True)
     path=folder/'runner.zip'
     with zipfile.ZipFile(path,'w',zipfile.ZIP_DEFLATED) as z:
-        for name in ('native_model.py','runpod_worker.py','lr_schedule.py','corpus_files.py'):
+        names=('native_model.py','runpod_worker.py','lr_schedule.py','corpus_files.py')
+        if run.config.get('runner_kind') == 'qwen149m': names += ('qwen_model.py','qwen_runpod_worker.py')
+        for name in names:
             z.writestr(name,(Path(__file__).parent/name).read_bytes())
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -125,7 +129,7 @@ def bundle(run_id):
 def enqueue(session,run):
     # Saved before dispatch: a timed-out create can be reconciled by deterministic pod name.
     job=GPUJob(run_id=run.id,token_hash='',deadline=now()+timedelta(seconds=run.config.get('max_runtime_seconds',3600)),
-               bundle_sha256=bundle(run.id))
+               bundle_sha256=bundle(run))
     session.add(job)
 
 
