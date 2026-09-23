@@ -187,7 +187,10 @@ def main():
     Path('recipe.json').write_text('{}')
     try:
         manifest=remote.call('GET','/manifest').json();Path('recipe.json').write_text(json.dumps(manifest,indent=2))
-        state,result=train(remote,manifest)
+        if manifest['config'].get('runner_kind') == 'qwen149m':
+            from qwen_runpod_worker import train as qwen_train
+            state,result=qwen_train(remote,manifest)
+        else: state,result=train(remote,manifest)
     except Exception as exc:
         error=f'{type(exc).__name__}: {str(exc)[:500]}'
         # Exception text has no credentials: request URLs contain run IDs only.

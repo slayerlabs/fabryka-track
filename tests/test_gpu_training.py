@@ -33,6 +33,10 @@ def create(client,monkeypatch):
 
 def test_gpu_parameters_match_real_architecture():
     for preset in gpu.PRESETS.values():
+        if preset['label'].startswith('Deep576-37L'):
+            from fabryka_track.qwen_model import Deep576_37L
+            assert Deep576_37L().parameter_count() == preset['parameters']
+            continue
         with torch.device('meta'):m=TinyTransformer(**preset['architecture'])
         assert sum(p.numel() for p in m.parameters())==preset['parameters']
 
