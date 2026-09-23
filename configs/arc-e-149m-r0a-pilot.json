@@ -46,6 +46,10 @@
   "runpod": {
     "gpu_type": "NVIDIA GeForce RTX 5090",
     "gpu_count": 1,
+    "data_center": "EUR-NO-1",
+    "network_volume_id": "p01chmugmg",
+    "network_volume_name": "slayerlab-arc-e-149m-pilot-cache",
+    "network_volume_size_gb": 50,
     "precision": "bf16",
     "max_hourly_usd": 0.99,
     "pilot_budget_usd": 10
