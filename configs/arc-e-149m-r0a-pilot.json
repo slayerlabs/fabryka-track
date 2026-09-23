@@ -62,7 +62,7 @@
     ]
   },
   "evaluation": {
-    "development_only": ["ARC-Easy validation", "independent science set", "held-out BPB"],
+    "development_only": ["ARC-Easy validation", "independent science set", "validation BPB"],
     "final_only": ["ARC-Easy test"],
     "forbidden_training_content": ["all ARC-Easy and ARC-Challenge questions, choices, answers and paraphrases"]
   },
