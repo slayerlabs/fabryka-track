@@ -235,6 +235,8 @@ function CheckpointDialog({
 export function RunsPage() {
   const navigate = useNavigate();
   const dashboard = useDashboard();
+  const publicRuns = useRunQuery<{ id: string; name: string; state: string }[]>("/api/public/runs", 10000);
+  const [publicSearch, setPublicSearch] = useState("");
   const queue = useRunQuery<Queue>("/api/benchmarks/queue", 5000);
   const action = useRunAction();
   const focusAction = useRunAction();
@@ -816,6 +818,20 @@ export function RunsPage() {
             </span>
           </div>
         )}
+      </section>
+      <section className="runs-panel" aria-labelledby="public-runs-title">
+        <h2 id="public-runs-title">Public runs</h2>
+        <p>Explore everyone's runs, including training in progress. Runs are public by default.</p>
+        <input aria-label="Search public runs" placeholder="Search public runs" value={publicSearch}
+          onChange={(event) => setPublicSearch(event.target.value)} />
+        <RunError error={publicRuns.error} retry={() => void publicRuns.refetch()} />
+        {publicRuns.isLoading && <p role="status">Loading public runs…</p>}
+        <ul>
+          {publicRuns.data?.filter((run) => run.name.toLowerCase().includes(publicSearch.toLowerCase())).map((run) => (
+            <li key={run.id}><Link to={`/run/${encodeURIComponent(run.id)}`}>{run.name}</Link> · {run.state}</li>
+          ))}
+        </ul>
+        {publicRuns.data?.length === 0 && <p>No public runs yet.</p>}
       </section>
       <details className="runs-benchmark-queue">
         <summary>

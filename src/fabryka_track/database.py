@@ -34,6 +34,10 @@ def create_tables():
             connection.execute(text("UPDATE runs SET is_public = TRUE WHERE owner_id IS NOT NULL"))
             connection.execute(text("INSERT INTO track_migrations(name) VALUES ('owner-runs-public-v1')"))
 
+        if connection.execute(text("SELECT 1 FROM track_migrations WHERE name='all-runs-public-v2'")).first() is None:
+            connection.execute(text("UPDATE runs SET is_public = TRUE"))
+            connection.execute(text("INSERT INTO track_migrations(name) VALUES ('all-runs-public-v2')"))
+
         connection.execute(text("CREATE INDEX IF NOT EXISTS ix_metrics_run_key_id ON metrics (run_id, key, id)"))
         dataset_columns = {c['name'] for c in inspect(connection).get_columns('datasets')}
         if 'source' not in dataset_columns:

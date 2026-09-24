@@ -55,13 +55,13 @@ def test_scoped_ingestion_replay_and_public_live_redaction(client):
     assert client.get('/api/external-training/live').json() == []
 
 
-def test_public_running_requires_explicit_opt_in(client):
+def test_public_running_does_not_require_legacy_opt_in(client):
     rid, _ = registered(client)
     with SessionLocal() as db:
         r = db.get(Run, rid); r.metadata_ = {**r.metadata_, 'public_live_tracking': False}; db.commit()
     client.cookies.clear()
-    assert client.get(f'/api/runs/{rid}').status_code == 401
-    assert client.get('/api/external-training/live').json() == []
+    assert client.get(f'/api/runs/{rid}').json()['read_only'] is True
+    assert client.get('/api/external-training/live').json()[0]['id'] == rid
 
 
 def test_counters_completion_and_lost_process(client):

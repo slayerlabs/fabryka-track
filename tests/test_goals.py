@@ -34,7 +34,7 @@ def test_goal_lifecycle_private_tracking_and_idempotency(client):
     assert report(client, claim, headers).status_code == 200
     with SessionLocal() as session:
         assert len(session.scalars(select(GoalEvent).where(GoalEvent.event_key=='event-1')).all()) == 1
-        assert session.get(Run, goal['run_id']).is_public is False
+        assert session.get(Run, goal['run_id']).is_public is True
     assert report(client, claim, headers, state='completed', event_id='done', message='All checks passed.').status_code == 200
     assert report(client, claim, headers, state='completed', event_id='done', message='All checks passed.').status_code == 200
     assert report(client, claim, headers, event_id='late').status_code == 409
@@ -47,7 +47,7 @@ def test_auth_isolation_and_scoped_worker_credential(client):
     goal, claim, headers = setup_goal(client)
     with TestClient(app) as stranger:
         assert stranger.get('/api/goals').status_code == 401
-        assert stranger.get('/api/runs/'+goal['run_id']).status_code == 401
+        assert stranger.get('/api/runs/'+goal['run_id']).json()['read_only'] is True
         assert stranger.get('/api/goals', headers=headers).status_code == 401
         sign_in(stranger, 'other-user')
         assert stranger.get('/api/goals/'+goal['id']).status_code == 404

@@ -466,7 +466,7 @@ function RunWorkspace({ id }: { id: string }) {
           <p className="muted">
             {external
               ? "Public training progress · checkpoints are saved on the training host."
-              : "Public model · signed-in users can generate text continuations. Uploaded files and notes remain private."}
+              : "Public run · uploaded files and notes remain private."}
           </p>
         )}
         <Link className="secondary" to="/new">

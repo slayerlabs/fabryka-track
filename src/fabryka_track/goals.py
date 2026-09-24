@@ -96,7 +96,7 @@ def create(body: GoalInput, user=Depends(require_user), session=Depends(session_
             project = Project(name=project_name)
             session.add(project)
             session.flush()
-        run = Run(id=str(uuid4()), owner_id=user.id, is_public=False, project_id=project.id,
+        run = Run(id=str(uuid4()), owner_id=user.id, is_public=True, project_id=project.id,
                   name="Goal: " + objective[:180], config={"engine": "goal-engine", "objective": objective},
                   metadata_={"engine": "goal-engine"})
         session.add(run)

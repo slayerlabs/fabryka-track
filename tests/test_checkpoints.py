@@ -56,8 +56,7 @@ def test_forking_from_a_checkpoint_on_a_private_or_unowned_run_returns_404(clien
     response = launch(client, steps=20, parent_run_id=private_run['id'], checkpoint_id=checkpoint_id)
     assert response.status_code == 404
 
-    # A running (not-yet-finished) run is also not visible to another account,
-    # even while it's technically is_public by default.
+    # Checkpoints of a running run remain owner-only even when its progress is public.
     sign_in(client)
     running = launch(client, steps=2000).json()['id']
     sign_in(client, 'stranger')

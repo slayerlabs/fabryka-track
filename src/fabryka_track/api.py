@@ -25,7 +25,7 @@ from .hf_datasets import router as hf_datasets_router, start_importer, stop_impo
 from .goals import router as goals_router
 from .research import router as research_router
 from .agents import router as agents_router
-from .external_training import router as external_training_router, is_shared_live, PUBLIC_METRICS
+from .external_training import router as external_training_router, PUBLIC_METRICS
 from .dashboard import router as dashboard_router
 
 @asynccontextmanager
@@ -132,11 +132,20 @@ def runs(name: str, state: str | None = None, search: str | None = None, archive
     return result
 
 
+@app.get("/api/public/runs")
+def public_runs(session: Session = Depends(db)):
+    # Deliberately small projection: no private config, notes, logs or artifacts.
+    return [{"id": run.id, "name": run.name, "state": run.state,
+             "started_at": run.started_at, "ended_at": run.ended_at}
+            for run in session.scalars(select(Run).where(Run.is_public.is_(True))
+                                       .order_by(Run.started_at.desc(), Run.id))]
+
+
 @app.get("/api/runs/{run_id}")
 def run_detail(run_id: str, session: Session = Depends(db), user=Depends(current_user)):
     item = session.get(Run, run_id)
     owner = bool(item and user and item.owner_id == user.id)
-    if not owner and not (item and item.is_public and (item.state == 'finished' or is_shared_live(item))):
+    if not owner and not (item and item.is_public):
         raise HTTPException(404 if user else 401, 'Run not found' if user else 'Sign in to view this run.')
     metrics = session.execute(select(Metric.key, Metric.step, Metric.timestamp, Metric.value).where(Metric.run_id == run_id).order_by(Metric.step, Metric.id)).all()
     series: dict[str, list] = {}
