@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     runpod_max_concurrent: int = Field(default=50, ge=1, le=500)
     runpod_network_volume_id: str = ""
     runpod_volume_mount: str = "/runpod-volume"
+    white_benchmark_url: str = ""
     benchmark_runner_tokens: str = "{}"
     r2_endpoint: str | None = None
     r2_bucket: str | None = None

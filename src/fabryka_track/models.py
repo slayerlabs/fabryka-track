@@ -280,3 +280,15 @@ class ResearchAuthor(Base):
     note_id: Mapped[int] = mapped_column(Integer, ForeignKey("research_notes.id"), primary_key=True)
     agent_id: Mapped[str] = mapped_column(String(36), ForeignKey("research_agents.id"))
     name: Mapped[str] = mapped_column(String(80))
+
+
+class WhiteBenchmark(Base):
+    __tablename__ = 'white_benchmarks'
+    source_kind: Mapped[str] = mapped_column(String(20), default='manual')
+    run_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), ForeignKey('runs.id'), primary_key=True)
+    repo_id: Mapped[str] = mapped_column(String(200))
+    revision: Mapped[str] = mapped_column(String(64))
+    status: Mapped[str] = mapped_column(String(32), default='pending')
+    job_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+    result: Mapped[dict] = mapped_column(JSON, default=dict)

@@ -22,6 +22,7 @@ import {
 } from "./RunPanels";
 import { RunExport } from "./RunExport";
 import { RunBenchmarks } from "./RunBenchmarks";
+import { WhiteBenchmark } from "./WhiteBenchmark";
 
 const metricNames: Record<string, string> = {
   "throughput/tokens_sec": "Training throughput",
@@ -361,6 +362,7 @@ function RunWorkspace({ id }: { id: string }) {
           </p>
         </div>
       )}
+      <WhiteBenchmark id={id} />
       {finished && <RunBenchmarks id={id} canEvaluate={!readOnly && local} />}
       <div className="actions">
         <div>

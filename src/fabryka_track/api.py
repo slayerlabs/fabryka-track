@@ -27,6 +27,7 @@ from .research import router as research_router
 from .agents import router as agents_router
 from .external_training import router as external_training_router, PUBLIC_METRICS
 from .dashboard import router as dashboard_router
+from .white_benchmarks import router as white_router, start_worker as start_white, stop_worker as stop_white
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
@@ -38,9 +39,11 @@ async def lifespan(_app: FastAPI):
     recover_evaluations()
     start_benchmark_queue()
     start_supervisor()
+    start_white()
     try:
         yield
     finally:
+        stop_white()
         stop_importer()
         stop_benchmark_queue()
         stop_supervisor()
@@ -63,6 +66,7 @@ app.include_router(research_router)
 app.include_router(agents_router)
 app.include_router(external_training_router)
 app.include_router(dashboard_router)
+app.include_router(white_router)
 from .generation import router as generation_router
 app.include_router(generation_router)
 from .benchmark_remote import router as benchmark_remote_router
