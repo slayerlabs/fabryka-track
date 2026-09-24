@@ -239,6 +239,7 @@ export function RunsPage() {
   const action = useRunAction();
   const focusAction = useRunAction();
   const [workspace, setWorkspace] = useState<"focused" | "all">("focused");
+  const [showArchived, setShowArchived] = useState(false);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
   const [dateScope, setDateScope] = useState("all");
@@ -255,6 +256,7 @@ export function RunsPage() {
     const query = search.trim().toLowerCase();
     const scope = allRuns.filter(
       (run) =>
+        (showArchived ? run.archived : !run.archived) &&
         (workspace === "all" || run.focused) &&
         (dateScope === "all" || Date.parse(run.started_at) >= cutoff) &&
         [run.name, run.project, run.experiment, run.id].some((value) =>
@@ -299,7 +301,7 @@ export function RunsPage() {
         allRuns.filter((run) => run.focused).map((run) => run.family_id),
       ).size,
     };
-  }, [data, dateScope, search, status, workspace]);
+  }, [data, dateScope, search, status, workspace, showArchived]);
   useEffect(() => {
     setSelected((previous) => {
       const next = new Set(
@@ -396,6 +398,14 @@ export function RunsPage() {
             <option value="30">Last 30 days</option>
           </select>
         </label>
+        <button
+          type="button"
+          className="runs-button runs-button-secondary"
+          aria-pressed={showArchived}
+          onClick={() => setShowArchived((value) => !value)}
+        >
+          {showArchived ? "Showing archived" : "Show archived"}
+        </button>
         <button
           type="button"
           className="runs-button runs-button-secondary runs-compare"

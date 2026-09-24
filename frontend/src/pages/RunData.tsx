@@ -68,6 +68,7 @@ export type Run = {
   gpu_status?: GPUStatus;
   read_only?: boolean;
   is_public?: boolean;
+  archived?: boolean;
   note?: string;
   conclusion?: string;
   logs?: { level: string; message: string }[];

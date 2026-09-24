@@ -47,6 +47,7 @@ class Run(Base):
     project_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), ForeignKey("projects.id"), index=True)
     name: Mapped[str] = mapped_column(String(300), index=True)
     state: Mapped[str] = mapped_column(String(20), default="running", index=True)
+    archived: Mapped[bool] = mapped_column(default=False, server_default="0", index=True)
     config: Mapped[dict] = mapped_column(JSON, default=dict)
     metadata_: Mapped[dict] = mapped_column("metadata", JSON, default=dict)
     note: Mapped[str] = mapped_column(Text, default="")

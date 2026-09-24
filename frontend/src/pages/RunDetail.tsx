@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Link, useParams } from "react-router";
+import { Link, useNavigate, useParams } from "react-router";
 import { MetricHelp } from "./BenchmarkHelp";
 import { RunChart, type Series } from "./RunChart";
 import {
@@ -57,6 +57,7 @@ function RunWorkspace({ id }: { id: string }) {
   const [sample, setSample] = useState<Sample>();
   const exportHost = useRef<HTMLDivElement>(null);
   const action = useRunAction();
+  const navigate = useNavigate();
   const r = query.data;
   if (!r)
     return (
@@ -422,6 +423,40 @@ function RunWorkspace({ id }: { id: string }) {
                 Upload to Hugging Face →
               </button>
             </>
+          )}
+          {!readOnly && (
+            <button
+              className="secondary"
+              disabled={action.pending}
+              onClick={async () => {
+                if (
+                  await action.execute(
+                    "/api/runs/" + id + (r.archived ? "/unarchive" : "/archive"),
+                  )
+                )
+                  await query.refetch();
+              }}
+            >
+              {r.archived ? "Unarchive run" : "Archive run"}
+            </button>
+          )}
+          {!readOnly && (
+            <button
+              className="secondary danger"
+              disabled={action.pending}
+              onClick={async () => {
+                if (
+                  !window.confirm(
+                    "Delete this run permanently? This removes all its metrics, charts, logs and notes and cannot be undone.",
+                  )
+                )
+                  return;
+                if (await action.execute("/api/runs/" + id, {}, "delete"))
+                  navigate("/runs");
+              }}
+            >
+              Delete run
+            </button>
           )}
           {r.artifacts?.map((artifact) => (
             <RunArtifact key={artifact.id} {...artifact} />

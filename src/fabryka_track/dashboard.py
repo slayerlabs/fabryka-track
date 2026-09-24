@@ -302,7 +302,7 @@ def dashboard(session: Session = Depends(session_scope), user=Depends(require_us
         result.append({
             "id": run.id, "name": run.name, "project": projects[run.id],
             "experiment": experiments[run.id], "state": run.state,
-            "family_id": families[run.id], "focused": families[run.id] in focused,
+            "family_id": families[run.id], "focused": families[run.id] in focused, "archived": run.archived,
             "started_at": _utc(run.started_at),
             "ended_at": _utc(run.ended_at) if run.ended_at else None,
             "parent_run_id": parent.id if parent else None,
