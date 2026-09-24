@@ -26,12 +26,14 @@ import { LeaderboardPage } from "./pages/Leaderboard";
 import { CheckpointsPage } from "./pages/Checkpoints";
 import { useDashboard } from "./pages/DashboardData";
 import { Icon, type IconName } from "./Icons";
+import { OverviewPage } from "./pages/Overview";
 import { LandingPage } from "./pages/Landing";
 
 const navigation: { label: string; links: [string, string, IconName][] }[] = [
   {
     label: "Workspace",
     links: [
+      ["/overview", "Overview", "layers"],
       ["/new", "Training studio", "flask"],
       ["/runs", "Focused runs", "play"],
       ["/checkpoints", "Checkpoints", "layers"],
@@ -69,7 +71,7 @@ export function App() {
             : "Account");
     document.title =
       location.pathname === "/"
-        ? "Fabryka Track · From training idea to evaluated model"
+        ? "Serious experiment tracking · Fabryka Track"
         : `${name} · Fabryka Track`;
     if (location.hash)
       requestAnimationFrame(() =>
@@ -176,6 +178,7 @@ function ApplicationShell() {
         </aside>
         <main className="shell-main" id="app">
           <Routes>
+            <Route path="/overview" element={<OverviewPage />} />
             <Route path="/goals" element={<GoalsPage />} />
             <Route path="/status" element={<StatusPage />} />
             <Route path="/agents" element={<AgentsPage />} />
