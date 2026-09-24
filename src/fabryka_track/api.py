@@ -7,7 +7,7 @@ from uuid import uuid4
 
 from fastapi import Depends, FastAPI, File, HTTPException, Query, UploadFile, Request, Form
 from fastapi.responses import RedirectResponse, FileResponse, HTMLResponse, JSONResponse
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from .accounts import router as accounts_router, require_user, current_user, owned_run
@@ -16,7 +16,7 @@ from .hf_publish import router as hf_publish_router, recover_uploads
 from .huggingface_auth import router as huggingface_router
 from .gpu_training import router as gpu_router, start_supervisor, stop_supervisor, status as gpu_status
 from .database import create_tables, session_scope
-from .models import Artifact, IngestedEvent, Metric, Project, Run, RunLog, RunArtifactLink, RunAttribute
+from .models import AgentGoal, Artifact, BenchmarkEvaluation, Checkpoint, GoalEvent, GPUJob, IngestedEvent, Metric, Project, Run, RunLog, RunArtifactLink, RunAttribute
 from .namespaces import router as namespace_router, set_attribute, append_series, checked_path
 from .schemas import EventBatch, LogInput, Notes
 from .settings import settings
@@ -96,7 +96,7 @@ def db():
 
 def serialize_run(run: Run, latest: dict | None = None):
     return {
-        "id": run.id, "is_public": run.is_public, "project": run.project.name, "name": run.name, "state": run.state,
+        "id": run.id, "is_public": run.is_public, "archived": run.archived, "project": run.project.name, "name": run.name, "state": run.state,
         "config": run.config, "metadata": run.metadata_, "note": run.note,
         "conclusion": run.conclusion, "started_at": run.started_at, "ended_at": run.ended_at,
         "latest_metrics": latest or {},
@@ -109,12 +109,12 @@ def projects(session: Session = Depends(db), user=Depends(require_user)):
 
 
 @app.get("/api/projects/{name}/runs")
-def runs(name: str, state: str | None = None, search: str | None = None,
+def runs(name: str, state: str | None = None, search: str | None = None, archived: bool = False,
          sort: str = Query("started_at", pattern="^(started_at|name|state)$"), session: Session = Depends(db), user=Depends(require_user)):
     project = session.scalar(select(Project).where(Project.name == name))
     if not project:
         raise HTTPException(404, "Project not found")
-    query = select(Run).where(Run.project_id == project.id, Run.owner_id == user.id)
+    query = select(Run).where(Run.project_id == project.id, Run.owner_id == user.id, Run.archived == archived)
     if state:
         query = query.where(Run.state == state)
     if search:
@@ -202,6 +202,40 @@ def add_log(run_id: str, body: LogInput, session: Session = Depends(db), user=De
     session.add(RunLog(run_id=run_id, level=body.level, message=body.message))
     session.commit()
     return {"ok": True}
+
+
+@app.post("/api/runs/{run_id}/archive")
+def archive_run(run_id: str, session: Session = Depends(db), user=Depends(require_user)):
+    run = owned_run(session, run_id, user)
+    run.archived = True
+    session.commit()
+    return {"ok": True, "id": run_id, "archived": True}
+
+
+@app.post("/api/runs/{run_id}/unarchive")
+def unarchive_run(run_id: str, session: Session = Depends(db), user=Depends(require_user)):
+    run = owned_run(session, run_id, user)
+    run.archived = False
+    session.commit()
+    return {"ok": True, "id": run_id, "archived": False}
+
+
+@app.delete("/api/runs/{run_id}")
+def delete_run(run_id: str, session: Session = Depends(db), user=Depends(require_user)):
+    owned_run(session, run_id, user)
+    # Remove every row that references this run before the run itself so the
+    # delete is clean on FK-enforcing backends (Postgres) too, not just SQLite.
+    goal_ids = session.scalars(select(AgentGoal.id).where(AgentGoal.run_id == run_id)).all()
+    if goal_ids:
+        session.execute(delete(GoalEvent).where(GoalEvent.goal_id.in_(goal_ids)))
+        session.execute(delete(AgentGoal).where(AgentGoal.run_id == run_id))
+    # RunArtifactLink and Checkpoint reference artifacts.id -> drop them before Artifact.
+    for model in (Metric, RunLog, RunAttribute, RunArtifactLink, Checkpoint, BenchmarkEvaluation, GPUJob):
+        session.execute(delete(model).where(model.run_id == run_id))
+    session.execute(delete(Artifact).where(Artifact.run_id == run_id))
+    session.execute(delete(Run).where(Run.id == run_id))
+    session.commit()
+    return {"ok": True, "deleted": run_id}
 
 
 @app.post("/api/events")

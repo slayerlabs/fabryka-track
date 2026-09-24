@@ -51,6 +51,9 @@ def create_tables():
         connection.execute(text('CREATE INDEX IF NOT EXISTS ix_runs_parent_run_id ON runs (parent_run_id)'))
         if 'forked_from_checkpoint_id' not in run_columns:
             connection.execute(text('ALTER TABLE runs ADD COLUMN forked_from_checkpoint_id VARCHAR(36)'))
+        if 'archived' not in run_columns:
+            connection.execute(text('ALTER TABLE runs ADD COLUMN archived BOOLEAN NOT NULL DEFAULT FALSE'))
+        connection.execute(text('CREATE INDEX IF NOT EXISTS ix_runs_archived ON runs (archived)'))
 
 
 def session_scope():

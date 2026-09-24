@@ -7,6 +7,7 @@ export interface DashboardRun {
   experiment: string;
   family_id: string;
   focused: boolean;
+  archived?: boolean;
   state: string;
   started_at: string;
   ended_at: string | null;
