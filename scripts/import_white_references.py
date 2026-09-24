@@ -15,6 +15,10 @@ def import_references(url, apply=False):
     response.raise_for_status()
     entries = [entry for entry in response.json()['entries']
                if entry['status'] == 'complete' and entry['scope'] == 'full']
+    if not apply:
+        for item in entries:
+            print(item['model'], item['revision'], 'existing evaluation', item['id'])
+        return len(entries)
     with SessionLocal() as session:
         project = session.scalar(select(Project).where(Project.name == 'White benchmark references'))
         if apply and project is None:

@@ -69,3 +69,32 @@ def test_unsupported_publication_never_launches_gpu_job(client, monkeypatch):
     assert requests == ['/api/models/compatibility']
     with SessionLocal() as db:
         assert db.get(WhiteBenchmark, rid).status == 'unsupported'
+
+
+def test_private_publication_is_not_submitted(client, monkeypatch):
+    rid = make_run()
+    with SessionLocal() as db:
+        run = db.get(Run, rid)
+        db.add(HFPublication(run_id=rid, owner_id=run.owner_id, repo_id='org/private-model', commit='c' * 40,
+                             status='finished', private=True)); db.commit()
+    monkeypatch.setattr(white.settings, 'white_benchmark_url', 'http://white.test')
+    white.sync_once()
+    with SessionLocal() as db:
+        assert db.get(WhiteBenchmark, rid) is None
+
+
+def test_service_failure_preserves_assignment_for_retry(client, monkeypatch):
+    rid = make_run()
+    with SessionLocal() as db:
+        db.add(WhiteBenchmark(run_id=rid, repo_id='org/model', revision='d' * 40,
+                              job_id='existing-job', status='running')); db.commit()
+    def handle(request):
+        assert request.method == 'GET'
+        return httpx.Response(503)
+    real_client = httpx.Client
+    monkeypatch.setattr(white.httpx, 'Client', lambda **kw: real_client(transport=httpx.MockTransport(handle), **kw))
+    monkeypatch.setattr(white.settings, 'white_benchmark_url', 'http://white.test')
+    white.sync_once()
+    with SessionLocal() as db:
+        row = db.get(WhiteBenchmark, rid)
+        assert row.job_id == 'existing-job' and row.status == 'running'
