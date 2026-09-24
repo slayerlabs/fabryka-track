@@ -18,6 +18,13 @@ trap 'rm -f "$archive"' EXIT
 head -c 104857601 > "$archive"
 [[ $(stat -c %s "$archive") -le 104857600 ]] || { echo 'Archive exceeds 100 MB' >&2; exit 1; }
 release="$base/releases/$revision"
+# Workflow retries still test the commit, but a healthy active release needs no
+# second environment copy, database snapshot or restart. Consume stdin first.
+if [[ $(readlink -f "$base/current" 2>/dev/null || true) == "$release" ]] &&
+   curl -fsS --max-time 5 http://127.0.0.1:8130/health | python3 -c 'import json,sys; d=json.load(sys.stdin); sys.exit(0 if d.get("status")=="ok" and d.get("release")==sys.argv[1] else 1)' "$revision"; then
+  printf 'Already deployed and healthy: %s\n' "$revision"
+  exit 0
+fi
 [[ ! -e "$release" ]] || { echo 'Release already exists; use a new commit or inspect the previous deployment.' >&2; exit 1; }
 mkdir "$release"
 python3 - "$archive" "$release" <<'PY'
