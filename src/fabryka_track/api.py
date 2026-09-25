@@ -148,6 +148,8 @@ def public_runs(session: Session = Depends(db)):
 @app.get("/api/runs/{run_id}")
 def run_detail(run_id: str, session: Session = Depends(db), user=Depends(current_user)):
     item = session.get(Run, run_id)
+    if item is None:
+        raise HTTPException(404, 'Run not found. It may have been deleted or the link is incorrect.')
     owner = bool(item and user and item.owner_id == user.id)
     if not owner and not (item and item.is_public):
         raise HTTPException(404 if user else 401, 'Run not found' if user else 'Sign in to view this run.')

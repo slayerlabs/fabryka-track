@@ -9,6 +9,26 @@ from fabryka_track.database import SessionLocal, create_tables
 from fabryka_track.models import Account, Project, Run
 
 
+def test_missing_and_deleted_runs_do_not_prompt_anonymous_visitors_to_sign_in(client):
+    rid = str(uuid4())
+    path = '/api/runs/' + rid
+    with TestClient(app) as anonymous:
+        for viewer in (client, anonymous):
+            response = viewer.get(path)
+            assert response.status_code == 404
+            assert response.json()['detail'] == 'Run not found. It may have been deleted or the link is incorrect.'
+        with SessionLocal() as db:
+            project = Project(name='Deleted public run')
+            db.add(project)
+            db.flush()
+            db.add(Run(id=rid, project_id=project.id, owner_id=db.scalar(select(Account.id)),
+                       name='Shared run', state='finished'))
+            db.commit()
+        assert anonymous.get(path).status_code == 200
+        assert client.delete(path).status_code == 200
+        assert anonymous.get(path).status_code == 404
+
+
 @pytest.mark.parametrize('state', ['queued', 'running', 'stopping', 'finished', 'failed', 'cancelled', 'interrupted', 'paused'])
 def test_every_public_state_is_readable_without_owner_access(client, state):
     with SessionLocal() as db:
