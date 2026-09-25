@@ -692,7 +692,8 @@ export function RunsPage() {
                                   {run.project} ·{" "}
                                   {new Date(
                                     run.started_at,
-                                  ).toLocaleDateString()}
+                                  ).toLocaleDateString()}{" "}
+                                  · <code>{run.id.slice(0, 8)}</code>
                                 </span>
                                 {run.parent_run_id && (
                                   <span className="runs-parent-note">
@@ -789,6 +790,35 @@ export function RunsPage() {
                                   Fork weights
                                 </button>
                               )}
+                              <button
+                                type="button"
+                                className="runs-button runs-button-secondary"
+                                disabled={action.pending}
+                                onClick={async () => {
+                                  if (
+                                    !window.confirm(
+                                      `Delete "${run.name}" (${run.id.slice(0, 8)}) permanently? This removes its metrics, charts and logs and cannot be undone.`,
+                                    )
+                                  )
+                                    return;
+                                  if (
+                                    await action.execute(
+                                      `/api/runs/${encodeURIComponent(run.id)}`,
+                                      {},
+                                      "delete",
+                                    )
+                                  ) {
+                                    setSelected((previous) => {
+                                      const next = new Set(previous);
+                                      next.delete(run.id);
+                                      return next;
+                                    });
+                                    await dashboard.refetch();
+                                  }
+                                }}
+                              >
+                                Delete
+                              </button>
                             </div>
                           </td>
                         </tr>
