@@ -34,6 +34,9 @@ def test_real_training_checkpoint_and_reproducibility(client):
     assert run['metrics']['progress'][-1]['value'] == 100
     assert run['metrics']['train/loss'][-1]['value'] < run['metrics']['train/loss'][0]['value']
     assert all(math.isfinite(p['value']) for points in run['metrics'].values() for p in points)
+    gradients = run['metrics']['optimizer/gradient_norm']
+    assert gradients and all(p['value'] >= 0 for p in gradients)
+    assert [p['value'] for p in run['metrics']['optimizer/gradient_clipped']] == [float(p['value'] > 1) for p in gradients]
     artifact = next(a for a in run['artifacts'] if a['name'] == 'model.pt')
     checkpoint = torch.load(io.BytesIO(client.get('/api/artifacts/' + artifact['id']).content), weights_only=True)
     model = TinyTransformer()

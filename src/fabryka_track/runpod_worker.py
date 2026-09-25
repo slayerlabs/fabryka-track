@@ -153,7 +153,7 @@ def train(remote,manifest):
         x,y=batch(sources,cfg['batch_size'],rng,length)
         with precision():loss=F.cross_entropy(model(x).reshape(-1,256),y.reshape(-1))
         if not torch.isfinite(loss):raise RuntimeError('Non-finite training loss')
-        loss.backward();torch.nn.utils.clip_grad_norm_(model.parameters(),1.0);optimizer.step();seen+=x.numel()
+        loss.backward();gradient_norm=torch.nn.utils.clip_grad_norm_(model.parameters(),1.0);optimizer.step();seen+=x.numel()
         # Keep validation and cancellation responsive, without a callback for each GPU batch.
         if step==1 or step%25==0 or step==cfg['steps'] or time.monotonic()-last_report>=15:
             val=validate()
@@ -164,6 +164,9 @@ def train(remote,manifest):
             else:stale+=1
             values={'gpu/peak_allocated_mb':torch.cuda.max_memory_allocated()/1e6,'gpu/peak_reserved_mb':torch.cuda.max_memory_reserved()/1e6,'train/learning_rate':lr,'train/loss':loss.item(),'val/loss':val,'val/perplexity':math.exp(min(val,80)),
                     'throughput/tokens_sec':seen/max(time.monotonic()-start,.001),'progress':100*step/cfg['steps'],'training/tokens_seen':seen}
+            norm=float(gradient_norm)
+            if math.isfinite(norm):
+                values.update({"optimizer/gradient_norm":norm,"optimizer/gradient_clip_threshold":1.0,"optimizer/gradient_clipped":float(norm>1.0)})
             stop=remote.progress(step,values);last_report=time.monotonic()
             if step%checkpoint_every_steps==0 and step!=cfg['steps']:
                 # Named distinctly from the final "model.pt" so lineage can fork mid-run.

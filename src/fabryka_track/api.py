@@ -183,7 +183,10 @@ def run_detail(run_id: str, session: Session = Depends(db), user=Depends(current
                 'inherited_from': item.metadata_.get('inherited_from'),
                 'note': '', 'conclusion': '', 'logs': [], 'artifacts': [],
                 'metrics': {k: v for k, v in series.items() if k in ('train/loss', 'val/loss', 'val/perplexity',
-                            'progress', 'training/tokens_seen', 'throughput/tokens_sec') or
+                            'progress', 'training/tokens_seen', 'throughput/tokens_sec',
+                            'optimizer/gradient_norm', 'optimizer/gradient_norm_after_clip',
+                            'optimizer/gradient_clip_threshold', 'optimizer/gradient_clipped',
+                            'grad_norm', 'train/grad_norm', 'gradient_norm') or
                             (item.metadata_.get('engine') == 'external-training' and k in PUBLIC_METRICS)}}
     logs = session.scalars(select(RunLog).where(RunLog.run_id == run_id).order_by(RunLog.timestamp)).all()
     artifacts = session.scalars(select(Artifact).where(Artifact.run_id == run_id)).all()

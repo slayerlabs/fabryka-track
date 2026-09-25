@@ -38,7 +38,7 @@ def read_batch(path, state, maximum=200):
                      'tokens': item.get('tokens', 0)}
             if item['kind'] in ('update', 'evaluation'):
                 event['metrics'] = {k: v for k, v in item.get('metrics', {}).items()
-                                    if k in ('loss', 'tokens_per_second', 'gradient_norm', 'learning_rate', 'bpb')}
+                                    if k in ('loss', 'tokens_per_second', 'gradient_norm', 'gradient_norm_after_clip', 'gradient_clip_threshold', 'gradient_clipped', 'learning_rate', 'bpb')}
             if item['kind'] == 'checkpoint': event['sha256'] = item['sha256']
             if item['kind'] == 'end': event['status'] = item['status']
             events.append(event)

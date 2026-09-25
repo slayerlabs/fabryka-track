@@ -28,7 +28,13 @@ const metricNames: Record<string, string> = {
   "throughput/tokens_sec": "Training throughput",
   "training/tokens_seen": "Training tokens",
   "optimizer/learning_rate": "Learning rate",
-  "optimizer/gradient_norm": "Gradient norm",
+  "optimizer/gradient_norm": "Gradient norm (before clipping)",
+  "optimizer/gradient_norm_after_clip": "Gradient norm (after clipping)",
+  "optimizer/gradient_clip_threshold": "Gradient clipping threshold",
+  "optimizer/gradient_clipped": "Gradient clipped (0 / 1)",
+  "grad_norm": "Gradient norm",
+  "train/grad_norm": "Gradient norm",
+  "gradient_norm": "Gradient norm",
   "checkpoint/tokens": "Saved checkpoint · tokens",
   "checkpoint/step": "Saved checkpoint · step",
   "validation/bpb": "Validation bits per byte",
@@ -265,6 +271,25 @@ function RunWorkspace({ id }: { id: string }) {
       <MetricHelp />
       <div hidden={tab !== "charts"}>
         <RunStatus run={r} />
+        <section className="panel" style={{ padding: 20, marginBottom: 16 }} aria-label="Gradient tracking">
+          <h3>Gradient tracking</h3>
+          <p className="muted">Gradient norm measures the size of the loss gradients used by the optimizer.
+            Compare spikes with loss and learning rate; there is no universal healthy range.</p>
+          {["optimizer/gradient_norm", "grad_norm", "train/grad_norm", "gradient_norm"].some(key => r.metrics[key]?.length) ? (
+            <p>Latest gradient norm: <strong>{fmt(latest(r, "optimizer/gradient_norm") ?? latest(r, "grad_norm") ?? latest(r, "train/grad_norm") ?? latest(r, "gradient_norm"), 4)}</strong>.
+              See the gradient charts below. Clipped = 1 means the recorded step exceeded the clipping threshold;
+              sampled points do not measure clipping frequency across all updates.</p>
+          ) : (
+            <p>No gradient measurements were recorded. Send <code>optimizer/gradient_norm</code> from the trainer
+              after backward and before clipping. Loss alone cannot reconstruct past gradients.</p>
+          )}
+          <details><summary>How to record gradients</summary>
+            <p>Record the global L2 norm at optimizer-update boundaries, after gradient accumulation.
+              With mixed-precision loss scaling, unscale gradients before measuring or clipping.
+              PyTorch <code>clip_grad_norm_</code> returns the norm before clipping; log that existing result
+              at your normal reporting interval. For sharded training, use your framework’s global norm.</p>
+          </details>
+        </section>
         {local && (
           <>
             <div className="row">

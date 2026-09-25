@@ -32,7 +32,7 @@ def test_scoped_ingestion_replay_and_public_live_redaction(client):
     url = f'/api/external-training/{rid}/progress'
     body = payload([{'line': 2, 'kind': 'checkpoint', 'step': 0, 'tokens': 0, 'sha256': 'a'*64},
                     {'line': 3, 'kind': 'update', 'step': 1, 'tokens': 200,
-                     'metrics': {'loss': 3.5, 'tokens_per_second': 22000, 'learning_rate': .001}},
+                     'metrics': {'loss': 3.5, 'tokens_per_second': 22000, 'learning_rate': .001, 'gradient_norm': 2.5, 'gradient_clipped': 1, 'gradient_clip_threshold': 1}},
                     {'line': 4, 'kind': 'checkpoint', 'step': 1, 'tokens': 200, 'sha256': 'b'*64}])
     assert client.post(url, json=body).status_code == 401
     for _ in range(2):
@@ -46,6 +46,8 @@ def test_scoped_ingestion_replay_and_public_live_redaction(client):
     assert run['logs'] == run['artifacts'] == []
     assert len(run['metrics']['train/loss']) == 1
     assert run['metrics']['train/loss'][0] == {'step': 1, 'value': 3.5, 'tokens': 200, 'timestamp': None}
+    assert run['metrics']['optimizer/gradient_norm'][0]['value'] == 2.5
+    assert run['metrics']['optimizer/gradient_clipped'][0]['value'] == 1
     assert run['metrics']['progress'][0]['value'] == 20
     assert run['metadata']['tracking']['checkpoint']['sha256'] == 'b'*64
     assert client.get('/api/external-training/live').json()[0]['id'] == rid

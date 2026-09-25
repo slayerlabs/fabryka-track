@@ -515,7 +515,7 @@ def _train(run_id):
             raise ValueError("Non-finite training loss")
         optimizer.zero_grad()
         loss.backward()
-        nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+        gradient_norm = nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         optimizer.step()
         seen_tokens += x.numel()
         completed_steps = step
@@ -532,6 +532,11 @@ def _train(run_id):
             else:
                 stale_checks += 1
             values = {"train/learning_rate": lr, "train/loss": loss.item(), "val/loss": val_loss, "val/perplexity": math.exp(val_loss), "throughput/tokens_sec": seen_tokens/max(time.monotonic()-start, 1e-3), "progress": step/cfg["steps"]*100, "training/tokens_seen": seen_tokens}
+            norm = float(gradient_norm)
+            if math.isfinite(norm):
+                values.update({"optimizer/gradient_norm": norm,
+                               "optimizer/gradient_clip_threshold": 1.0,
+                               "optimizer/gradient_clipped": float(norm > 1.0)})
             with SessionLocal() as session:
                 for key, value in values.items():
                     session.add(Metric(run_id=run_id, key=key, step=step, value=value))

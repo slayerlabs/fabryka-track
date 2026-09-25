@@ -20,7 +20,10 @@ from .namespaces import append_series
 
 router = APIRouter(prefix='/api/external-training')
 METRICS = {'loss': 'train/loss', 'tokens_per_second': 'throughput/tokens_sec',
-           'gradient_norm': 'optimizer/gradient_norm', 'learning_rate': 'optimizer/learning_rate'}
+           'gradient_norm': 'optimizer/gradient_norm',
+           'gradient_norm_after_clip': 'optimizer/gradient_norm_after_clip',
+           'gradient_clip_threshold': 'optimizer/gradient_clip_threshold',
+           'gradient_clipped': 'optimizer/gradient_clipped', 'learning_rate': 'optimizer/learning_rate'}
 PUBLIC_METRICS = {*METRICS.values(), 'training/tokens_seen', 'progress',
                   'checkpoint/tokens', 'checkpoint/step', 'validation/bpb'}
 

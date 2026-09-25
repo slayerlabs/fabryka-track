@@ -35,7 +35,7 @@ THREAD = None
 LOCK = threading.Lock()
 DISPATCH_LOCK = threading.Lock()
 TICK_LOCK = threading.Lock()
-METRICS = {'gpu/peak_allocated_mb','gpu/peak_reserved_mb','train/learning_rate','train/loss','val/loss','val/perplexity','throughput/tokens_sec','progress','training/tokens_seen'}
+METRICS = {'optimizer/gradient_norm','optimizer/gradient_clip_threshold','optimizer/gradient_clipped','gpu/peak_allocated_mb','gpu/peak_reserved_mb','train/learning_rate','train/loss','val/loss','val/perplexity','throughput/tokens_sec','progress','training/tokens_seen'}
 FILES = {'model.pt','recipe.json','metrics.jsonl','training.log','result.json'}
 CHECKPOINT_NAME = re.compile(r'^checkpoint-(\d+)\.pt$')
 
