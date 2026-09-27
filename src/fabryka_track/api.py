@@ -51,6 +51,9 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(title="Fabryka Track", version="0.1.0", lifespan=lifespan)
+# Owner opt-in (per run): PUT /api/runs/{id}/attributes/visibility/public_board_metrics {"value": true}
+# makes that run's board/* evaluation series visible in the public read-only view.
+PUBLIC_BOARD_ATTRIBUTE = 'visibility/public_board_metrics'
 
 
 app.include_router(benchmarks_router)
@@ -167,6 +170,9 @@ def run_detail(run_id: str, session: Session = Depends(db), user=Depends(current
                 point['timestamp'] = None
                 point['tokens'] = token_steps.get(point['step'])
     if not owner:
+        # Evaluation series (board/*) stay owner-only unless the run's owner opts in for this run.
+        public_board = session.get(RunAttribute, (run_id, PUBLIC_BOARD_ATTRIBUTE))
+        public_board = bool(public_board and public_board.value is True)
         cfg = {k: item.config.get(k) for k in ('model', 'model_size', 'steps', 'batch_size', 'learning_rate', 'lr_schedule', 'seed',
                'compute', 'context_length', 'layers', 'width', 'heads', 'parameters', 'validation_split', 'early_stopping',
                'budget_mode', 'planned_training_tokens', 'tokens_per_parameter', 'token_unit',
@@ -187,6 +193,7 @@ def run_detail(run_id: str, session: Session = Depends(db), user=Depends(current
                             'optimizer/gradient_norm', 'optimizer/gradient_norm_after_clip',
                             'optimizer/gradient_clip_threshold', 'optimizer/gradient_clipped',
                             'grad_norm', 'train/grad_norm', 'gradient_norm') or
+                            (public_board and k.startswith('board/')) or
                             (item.metadata_.get('engine') == 'external-training' and k in PUBLIC_METRICS)}}
     logs = session.scalars(select(RunLog).where(RunLog.run_id == run_id).order_by(RunLog.timestamp)).all()
     artifacts = session.scalars(select(Artifact).where(Artifact.run_id == run_id)).all()
