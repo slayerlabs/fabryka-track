@@ -86,6 +86,8 @@ const labels: Record<string, string> = {
   "checkpoint/step": "Checkpoint step",
 };
 const emptyHidden = new Set<string>();
+// Series with at most this many points draw markers on each measurement.
+const SPARSE_POINTS = 60;
 export function RunChart({
   series,
   range = 0,
@@ -145,13 +147,21 @@ export function RunChart({
       );
       const base: Trace = {
         type: "scatter",
-        mode: points.length === 1 ? "markers" : "lines",
+        // Sparse series (e.g. evaluations every 20k steps) show their measured points, so a line
+        // starting at the first evaluation is not read as a value at step 0.
+        mode:
+          points.length === 1
+            ? "markers"
+            : points.length <= SPARSE_POINTS
+              ? "lines+markers"
+              : "lines",
         x,
         y,
         customdata: points.map((p) => [p.step, p.value]),
         name: labels[s.name] || s.name,
         legendgroup: key,
         line: { color: s.color || palette[index % palette.length], width: 1.8 },
+        marker: { color: s.color || palette[index % palette.length], size: 5 },
         visible: !hidden.has(key) && !muted.has(key),
         hoverinfo: "none",
         showlegend: false,
@@ -251,6 +261,9 @@ export function RunChart({
       },
       gridcolor: "#d6dfd4",
       zeroline: false,
+      // Steps, tokens and elapsed time start at 0; keep the origin visible so the gap before the
+      // first measurement is shown instead of the first point sitting on the left edge.
+      rangemode: "tozero",
       showline: true,
       linecolor: "#d6dfd4",
       nticks: 6,
