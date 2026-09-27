@@ -17,7 +17,7 @@ from .huggingface_auth import router as huggingface_router
 from .gpu_training import router as gpu_router, start_supervisor, stop_supervisor, status as gpu_status
 from .database import create_tables, session_scope
 from .models import AgentGoal, Artifact, BenchmarkEvaluation, Checkpoint, GoalEvent, GPUJob, IngestedEvent, Metric, Project, Run, RunLog, RunArtifactLink, RunAttribute
-from .namespaces import router as namespace_router, set_attribute, append_series, checked_path
+from .namespaces import router as namespace_router, set_attribute, append_series, checked_path, PUBLIC_NOTE_ATTRIBUTE
 from .schemas import EventBatch, LogInput, Notes
 from .settings import settings
 from .training import router as training_router, start_worker, stop_worker
@@ -173,6 +173,9 @@ def run_detail(run_id: str, session: Session = Depends(db), user=Depends(current
         # Evaluation series (board/*) stay owner-only unless the run's owner opts in for this run.
         public_board = session.get(RunAttribute, (run_id, PUBLIC_BOARD_ATTRIBUTE))
         public_board = bool(public_board and public_board.value is True)
+        # Owner caveat shown next to the opted-in evaluation series; plain text, validated on write.
+        public_note = session.get(RunAttribute, (run_id, PUBLIC_NOTE_ATTRIBUTE)) if public_board else None
+        public_note = public_note.value if public_note and isinstance(public_note.value, str) else ''
         cfg = {k: item.config.get(k) for k in ('model', 'model_size', 'steps', 'batch_size', 'learning_rate', 'lr_schedule', 'seed',
                'compute', 'context_length', 'layers', 'width', 'heads', 'parameters', 'validation_split', 'early_stopping',
                'budget_mode', 'planned_training_tokens', 'tokens_per_parameter', 'token_unit',
@@ -187,7 +190,7 @@ def run_detail(run_id: str, session: Session = Depends(db), user=Depends(current
                              **({'tracking': item.metadata_.get('tracking', {})} if item.metadata_.get('engine') == 'external-training' else {})},
                 'parent_run_id': item.parent_run_id, 'forked_from_checkpoint_id': item.forked_from_checkpoint_id,
                 'inherited_from': item.metadata_.get('inherited_from'),
-                'note': '', 'conclusion': '', 'logs': [], 'artifacts': [],
+                'note': '', 'conclusion': '', 'public_note': public_note, 'logs': [], 'artifacts': [],
                 'metrics': {k: v for k, v in series.items() if k in ('train/loss', 'val/loss', 'val/perplexity',
                             'progress', 'training/tokens_seen', 'throughput/tokens_sec',
                             'optimizer/gradient_norm', 'optimizer/gradient_norm_after_clip',

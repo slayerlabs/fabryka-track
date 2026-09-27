@@ -192,6 +192,7 @@ function RunWorkspace({ id }: { id: string }) {
                 : ""}
             {new Date(r.started_at).toLocaleString()}
           </p>
+          {r.public_note && <p className="muted public-note">{r.public_note}</p>}
         </div>
         <span className={"badge " + r.state}>{r.state}</span>
       </div>
