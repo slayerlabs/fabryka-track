@@ -32,6 +32,12 @@ def writable(run):
         raise HTTPException(409,'Studio training records are managed by the worker. Arbitrary logging is available for SDK runs.')
 
 
+# Owner-set public caveat for a run (PUT /api/runs/{id}/attributes/visibility/public_note {"value": "..."}).
+# Shown in the public read-only view only while visibility/public_board_metrics is true; plain text, ≤300 chars.
+PUBLIC_NOTE_ATTRIBUTE = 'visibility/public_note'
+PUBLIC_NOTE_MAX_CHARS = 300
+
+
 def set_attribute(session,run,path,value):
     writable(run);checked_path(path)
     try:encoded=json.dumps(value,allow_nan=False)
@@ -49,6 +55,10 @@ def set_attribute(session,run,path,value):
         else:leaves.append((current,value))
     flatten(path,value)
     if len(leaves)>2000:raise HTTPException(413,'Assign at most 2000 attribute leaves at once.')
+    for key,leaf in leaves:
+        if (key==PUBLIC_NOTE_ATTRIBUTE or key.startswith(PUBLIC_NOTE_ATTRIBUTE+'/')) and not (
+                key==PUBLIC_NOTE_ATTRIBUTE and isinstance(leaf,str) and len(leaf)<=PUBLIC_NOTE_MAX_CHARS):
+            raise HTTPException(422,f'{PUBLIC_NOTE_ATTRIBUTE} must be plain text of at most {PUBLIC_NOTE_MAX_CHARS} characters.')
     session.execute(delete(RunAttribute).where(RunAttribute.run_id==run.id,(RunAttribute.path==path)|RunAttribute.path.startswith(path+'/',autoescape=True)))
     ancestors=['/'.join(path.split('/')[:i]) for i in range(1,len(path.split('/'))) ]
     if ancestors:session.execute(delete(RunAttribute).where(RunAttribute.run_id==run.id,RunAttribute.path.in_(ancestors)))

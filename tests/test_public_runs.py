@@ -147,3 +147,44 @@ def test_board_metrics_are_public_only_after_owner_opt_in_for_that_run(client):
         assert client.put(f'/api/runs/{opted}/attributes/visibility/public_board_metrics',
                           json={'value': False}).status_code == 200
         assert 'board/eff' not in anonymous.get('/api/runs/' + opted).json()['metrics']
+
+
+def test_public_note_is_owner_only_plain_text_and_shown_only_with_public_board_series(client):
+    from fabryka_track.models import Metric
+    with SessionLocal() as db:
+        project = Project(name='Public note')
+        db.add(project)
+        db.flush()
+        run = Run(id=str(uuid4()), project_id=project.id, owner_id=db.scalar(select(Account.id)),
+                  name='noted', state='running', metadata_={'engine': 'sdk'})
+        db.add(run)
+        db.add(Metric(run_id=run.id, key='board/eff', step=80000, value=73.75))
+        db.commit()
+        rid = run.id
+    path = f'/api/runs/{rid}/attributes/visibility/public_note'
+    caveat = 'Intermediate checkpoints; training in progress, not a result. <script>alert(1)</script>'
+    assert client.patch(f'/api/runs/{rid}/notes', json={'note': 'private owner note', 'conclusion': ''}).status_code == 200
+    with TestClient(app) as anonymous:
+        assert anonymous.put(path, json={'value': caveat}).status_code in (401, 403)
+    with TestClient(app, headers={'X-Track-Request': '1'}) as stranger:
+        sign_in(stranger, 'note-stranger')
+        assert stranger.put(path, json={'value': caveat}).status_code in (403, 404)
+        attr = event('run.attribute', {'run_id': rid, 'path': 'visibility/public_note', 'value': caveat})
+        assert stranger.post('/api/events', json={'events': [attr]}).status_code in (403, 404)
+    # Server-side limits: text only, at most 300 characters, also when set through a parent object.
+    assert client.put(path, json={'value': 'x' * 301}).status_code == 422
+    assert client.put(path, json={'value': {'html': '<b>x</b>'}}).status_code == 422
+    assert client.put(path, json={'value': 42}).status_code == 422
+    assert client.put(f'/api/runs/{rid}/attributes/visibility', json={'value': {'public_note': 'y' * 301}}).status_code == 422
+    assert client.put(path, json={'value': caveat}).status_code == 200
+    with TestClient(app) as anonymous:
+        # Without the board opt-in the caveat stays hidden; the private note is never public.
+        hidden = anonymous.get('/api/runs/' + rid).json()
+        assert hidden['public_note'] == '' and hidden['note'] == ''
+        assert client.put(f'/api/runs/{rid}/attributes/visibility/public_board_metrics', json={'value': True}).status_code == 200
+        shown = anonymous.get('/api/runs/' + rid).json()
+        assert shown['public_note'] == caveat  # returned verbatim as text; the UI renders it as a text node
+        assert shown['note'] == ''
+        assert 'board/eff' in shown['metrics']
+    owner_view = client.get('/api/runs/' + rid).json()
+    assert owner_view['note'] == 'private owner note'

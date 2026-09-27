@@ -71,6 +71,7 @@ export type Run = {
   archived?: boolean;
   note?: string;
   conclusion?: string;
+  public_note?: string;
   logs?: { level: string; message: string }[];
   artifacts?: { id: string; name: string }[];
 };
