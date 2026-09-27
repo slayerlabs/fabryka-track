@@ -314,9 +314,14 @@ def leaderboard(sort: str = "val_loss", order: str = "asc", session=Depends(sess
         result = run.metadata_.get("training_result", {})
         latest["val/loss"] = result.get("best_val_loss", latest["val/loss"])
         latest["val/perplexity"] = result.get("best_val_perplexity", latest.get("val/perplexity"))
+        tokens = result.get("tokens_seen", latest.get("training/tokens_seen"))
+        tokens = tokens if isinstance(tokens, (int, float)) and math.isfinite(tokens) and tokens > 0 else None
+        parameters = run.config.get("parameters")
+        estimated_flops = 6 * parameters * tokens if tokens and isinstance(parameters, (int, float)) and math.isfinite(parameters) and parameters > 0 else None
         models.append({"id": run.id, "owner": session.get(Account, run.owner_id).username if run.owner_id else "Legacy", "is_owner": bool(user and run.owner_id == user.id), "name": run.name, "state": run.state, "started_at": run.started_at,
                        "ended_at": run.ended_at, "val_loss": latest.get("val/loss"),
                        "perplexity": latest.get("val/perplexity"), "train_loss": latest.get("train/loss"),
+                       "training_tokens": tokens, "estimated_flops": estimated_flops,
                        "throughput": latest.get("throughput/tokens_sec"), "steps": result.get("completed_steps", run.config.get("steps")),
                        "model_size": run.config.get("model_size"), "parameters": run.config.get("parameters"),
                        "auto_benchmark": auto_benchmark_summary(session, run),

@@ -1,0 +1,9 @@
+# Training leaderboard
+
+`frontend/src/pages/Leaderboard.tsx` renders `/leaderboard` from the public `/api/leaderboard` endpoint. The view selects one model size at a time, searches model/author/dataset names, and groups by data recipe or author. A group filter narrows both chart and tables; the first three tables expand initially and the remaining groups can be opened individually. Runs can be ordered by validation loss, perplexity, throughput or run start date. Checkboxes lead to the existing synchronized perplexity comparison. Switching model size clears selection; search retains selection and indicates hidden selected runs.
+
+Public recipe groups use dataset names and weights, independent of source ordering. Undisclosed and partially disclosed recipes are explicitly separate disclosure groups, not claims of shared dataset identity. Grouping does not establish a common validation protocol. Do not aggregate benchmark suites or label a global winner using these smoke-test results.
+
+The responsive SVG plots saved-checkpoint validation loss against full-run training tokens, estimated training FLOPs, or steps on a log axis. Each observation links to its run and supports pointer/keyboard details. No interpolated curve or planned result is presented as measured data. `training_tokens` comes from `training_result.tokens_seen` or recorded `training/tokens_seen`; planned token budgets are never substituted. `estimated_flops` is the approximate `6 × parameters × training_tokens`, explicitly labeled as an estimate. Missing/invalid measurements are omitted from the plot and counted in plotted/total coverage; the run remains in the table. Tokens and FLOPs describe the whole run, not necessarily the step of its saved checkpoint.
+
+Validation: `npm --prefix frontend run build`, `node --experimental-strip-types --test tests/leaderboard-groups.test.mjs`, and `pytest tests/test_training.py`. UI styles are scoped in `frontend/src/leaderboard.css`.

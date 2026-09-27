@@ -90,6 +90,8 @@ def test_leaderboard_ranks_completed_models(client):
     assert rows[0]['rank'] == 1
     assert rows[0]['val_loss'] <= rows[1]['val_loss']
     assert rows[0]['mix'][0]['weight'] == 60
+    assert rows[0]['training_tokens'] > 0
+    assert rows[0]['estimated_flops'] == 6 * rows[0]['parameters'] * rows[0]['training_tokens']
     fast = client.get('/api/leaderboard?sort=throughput&order=desc').json()['sizes'][0]['models']
     assert fast[0]['throughput'] >= 0
     assert client.get('/api/leaderboard?sort=nope').status_code == 422
@@ -270,3 +272,31 @@ def test_existing_dataset_sizes_are_backfilled(client):
     with engine.connect() as connection:
         assert connection.execute(text('SELECT count(*) FROM datasets WHERE byte_count IS NULL OR byte_count != length(CAST(content AS BLOB))')).scalar() == 0
     assert client.get('/api/datasets').status_code == 200
+
+
+def test_leaderboard_compute_uses_recorded_tokens_not_planned_budget(client):
+    from uuid import uuid4
+    from fabryka_track.database import SessionLocal
+    from fabryka_track.models import Metric, Project, Run
+    with SessionLocal() as session:
+        project = Project(name='leaderboard budget evidence')
+        session.add(project)
+        session.flush()
+        for name, result, metric_tokens in [('missing', {}, None), ('metric', {}, 150), ('result', {'tokens_seen': 200}, 150), ('invalid', {'tokens_seen': -5}, None)]:
+            run = Run(id=str(uuid4()), project_id=project.id, name=name, state='finished', is_public=True,
+                      config={'model_size': 'tiny', 'parameters': 100, 'planned_training_tokens': 9999},
+                      metadata_={'engine': 'tiny-transformer', 'training_result': result})
+            session.add(run)
+            session.flush()
+            session.add(Metric(run_id=run.id, key='val/loss', step=10, value=2.0))
+            if metric_tokens:
+                session.add(Metric(run_id=run.id, key='training/tokens_seen', step=10, value=metric_tokens))
+        session.commit()
+    rows = {row['name']: row for group in client.get('/api/leaderboard').json()['sizes'] for row in group['models']}
+    assert rows['missing']['training_tokens'] is None
+    assert rows['missing']['estimated_flops'] is None
+    assert rows['invalid']['estimated_flops'] is None
+    assert rows['metric']['training_tokens'] == 150
+    assert rows['metric']['estimated_flops'] == 90000
+    assert rows['result']['training_tokens'] == 200
+    assert rows['result']['estimated_flops'] == 120000
