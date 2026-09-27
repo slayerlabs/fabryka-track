@@ -560,3 +560,11 @@
     max-width: none;
   }
 }
+@media (max-width: 480px) {
+  .lb-controls > label:not(.lb-search) {
+    flex-basis: 100%;
+  }
+  .lb-chart {
+    font-size: 20px;
+  }
+}
