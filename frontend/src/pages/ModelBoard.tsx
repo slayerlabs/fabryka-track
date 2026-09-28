@@ -32,14 +32,14 @@ const CATEGORY_LABELS: Record<Category, string> = {
 type Column = { key: SortKey; label: string; note?: string; digits?: number };
 const SCORE_COLUMNS: Record<Category, Column[]> = {
   en: [
-    { key: "en_eff", label: "eff", note: "Glint Tiny-ML", digits: 1 },
-    { key: "arc_easy", label: "ARC-Easy", digits: 1 },
-    { key: "blimp", label: "BLiMP", digits: 1 },
+    { key: "en_eff", label: "eff", note: "Glint Tiny-ML", digits: 2 },
+    { key: "arc_easy", label: "ARC-Easy", digits: 2 },
+    { key: "blimp", label: "BLiMP", digits: 2 },
     {
       key: "wiki_byte_ppl",
       label: "Wiki byte-PPL",
       note: "lower is better",
-      digits: 3,
+      digits: 4,
     },
   ],
   pl: [
@@ -47,7 +47,7 @@ const SCORE_COLUMNS: Record<Category, Column[]> = {
       key: "multiblimp",
       label: "MultiBLiMP-pl accuracy",
       note: "random = 50 %",
-      digits: 1,
+      digits: 2,
     },
   ],
 };
@@ -55,7 +55,7 @@ const PL_EFF_COLUMN: Column = {
   key: "pl_eff",
   label: "eff-PL",
   note: "not frozen · not ranked",
-  digits: 1,
+  digits: 2,
 };
 
 function BoardTable({
