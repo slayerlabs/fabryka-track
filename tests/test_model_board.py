@@ -16,6 +16,13 @@ EN = {'board/eff': 41.5, 'board/arc_easy': 38.2, 'board/blimp': 71.0, 'board/wik
 T0 = datetime(2026, 9, 1, tzinfo=timezone.utc)
 
 
+@pytest.fixture(autouse=True)
+def trusted_board(monkeypatch):
+    """The deployment trusts the fixture account and one evaluation-harness revision."""
+    monkeypatch.setattr('fabryka_track.model_board.settings.model_board_trusted_owners', 'Tester')
+    monkeypatch.setattr('fabryka_track.model_board.settings.model_board_harness_shas', '2c5ea968d7')
+
+
 def result(**overrides):
     value = {'step': 1000, 'checkpoint_sha256': SHA, 'n_params': 16_000_000, 'tokens_seen': 320_000_000,
              'harness_sha': '2c5ea968', 'scale_rev': 'Glint 2c5ea968 (2026-09-28)',
@@ -29,13 +36,13 @@ def external(**overrides):
                      'author': 'Jane Doe', 'hf_repo': 'org-name/tiny.llama_20M', 'revision': '0123abcd', **overrides})
 
 
-def make_run(name, points, state='finished', public=True, ended=T0):
+def make_run(name, points, state='finished', public=True, ended=T0, owner='tester'):
     """points: {step: {metric key: value}}"""
     with SessionLocal() as db:
         project = db.scalar(select(Project).where(Project.name == 'Model board')) or Project(name='Model board')
         db.add(project)
         db.flush()
-        run = Run(id=str(uuid4()), project_id=project.id, owner_id=db.scalar(select(Account.id).where(Account.username == 'tester')),
+        run = Run(id=str(uuid4()), project_id=project.id, owner_id=db.scalar(select(Account.id).where(Account.username == owner)),
                   name=name, state=state, is_public=public, metadata_={'engine': 'sdk'},
                   config={'secret': 'hidden-config'}, note='private owner note', started_at=ended - timedelta(hours=2),
                   ended_at=ended if state == 'finished' else None)
@@ -106,19 +113,47 @@ def test_board_lists_only_finished_public_opted_in_results_with_values_at_the_ma
     assert {row['name'] for row in board().json()['models']} == {'good'}
 
 
-def test_board_keeps_the_newest_run_per_checkpoint_and_links_external_models_to_the_pinned_revision(client):
-    older = make_run('older copy', {1000: EN}, ended=T0)
-    newer = make_run('newer copy', {1000: EN}, ended=T0 + timedelta(days=1))
-    for rid in (newer, older):
+def test_board_keeps_the_earliest_trusted_row_per_checkpoint_and_links_external_models_to_the_pinned_revision(client):
+    original = make_run('original', {1000: EN}, ended=T0)
+    sign_in(client, 'mallory')
+    copy = make_run('copied sha', {1000: {k: v + 20 for k, v in EN.items()}}, ended=T0 + timedelta(days=1), owner='mallory')
+    publish(client, copy, result())
+    only_untrusted = [make_run(f'untrusted {day}', {1000: EN}, ended=T0 + timedelta(days=day), owner='mallory')
+                      for day in (3, 2)]
+    for rid in only_untrusted:
+        publish(client, rid, result(checkpoint_sha256='2' * 64))
+    sign_in(client)
+    later_own = make_run('later own copy', {1000: EN}, ended=T0 + timedelta(days=2))
+    for rid in (later_own, original):
         publish(client, rid, result())
     measured = make_run('measurement run', {1000: {'board_pl/multiblimp': 58.0}})
     publish(client, measured, external(checkpoint_sha256='1' * 64))
     rows = board().json()['models']
-    assert [row['run_id'] for row in rows if row['checkpoint_sha256'] == SHA] == [newer]
+    # A newer run that copies a checkpoint sha cannot replace the trusted original, even when it is newer.
+    assert [row['run_id'] for row in rows if row['checkpoint_sha256'] == SHA] == [original]
+    # Among untrusted claims of one sha the earliest wins.
+    assert [row['run_id'] for row in rows if row['checkpoint_sha256'] == '2' * 64] == [only_untrusted[1]]
     ext = next(row for row in rows if row['kind'] == 'external')
     assert ext['name'] == 'Tiny Llama 20M' and ext['author'] == 'Jane Doe' and ext['trust'] == 'measured'
     assert ext['hf_url'] == 'https://huggingface.co/org-name/tiny.llama_20M/tree/0123abcd'
     assert ext['categories'] == ['pl']
+
+
+def test_trust_badges_are_granted_by_the_server_not_declared_by_the_owner(client):
+    sign_in(client, 'mallory')
+    claims = {'mallory verified': result(checkpoint_sha256='3' * 64),
+              'mallory measured': external(checkpoint_sha256='4' * 64, model_name='mallory measured')}
+    for name, value in claims.items():
+        publish(client, make_run(name, {1000: {**EN, 'board_pl/multiblimp': 60.0}}, owner='mallory'), value)
+    sign_in(client)
+    own = {'known harness': result(checkpoint_sha256='5' * 64),
+           'unknown harness': result(checkpoint_sha256='6' * 64, harness_sha='deadbeef'),
+           'declared reported': result(checkpoint_sha256='7' * 64, trust='reported', harness='own eval script')}
+    for name, value in own.items():
+        publish(client, make_run(name, {1000: EN}), value)
+    trust = {row['name']: row['trust'] for row in board().json()['models']}
+    assert trust == {'mallory verified': 'reported', 'mallory measured': 'reported', 'known harness': 'verified',
+                     'unknown harness': 'measured', 'declared reported': 'reported'}
 
 
 @pytest.mark.parametrize('value', [

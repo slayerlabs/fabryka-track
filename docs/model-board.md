@@ -13,7 +13,7 @@ A run appears when all of these hold:
    - PL: `board_pl/multiblimp` (MultiBLiMP-pl accuracy in %, random = 50 %). Optional `board_pl/eff` is shown next to it but is never ranked, because the eff-PL formula is not frozen yet.
 4. It carries a valid `leaderboard/result` attribute (below). Studio runs cannot be marked because their records are managed by the training worker; log results from an SDK run.
 
-Values are read at exactly `result.step`, never the latest step. A missing value is `null`, never 0; a row with neither category complete is omitted. When several runs report the same `checkpoint_sha256`, only the newest finished run is listed. An opted-in `visibility/public_note` is shown with the row. No other attribute, config, note or series leaves the server.
+Values are read at exactly `result.step`, never the latest step. A missing value is `null`, never 0; a row with neither category complete is omitted. When several runs report the same `checkpoint_sha256`, a trusted owner's run wins over any other, then the earliest finished run, so a later copy of a checkpoint sha cannot replace the original row. An opted-in `visibility/public_note` is shown with the row. No other attribute, config, note or series leaves the server.
 
 ## `leaderboard/result`
 
@@ -39,9 +39,11 @@ Plain text rejects `<`, `>` and control or formatting characters; the page rende
 
 ### Trust levels
 
-- `verified` (badge "verified ✓"): track runs only, and only with `harness_sha`.
-- `measured` (badge "measured by Fabryka"): the numbers come from Fabryka tooling. Default for track runs; external rows must choose `measured` or `reported` explicitly.
-- `reported` (badge "self-reported (different protocol)"): the numbers were entered by the model's authors under their own protocol; `harness` is required. The page can hide these rows.
+`trust` in the attribute is the owner's claim. The badge on the page is granted by the server from two deployment settings (comma-separated): `FABRYKA_MODEL_BOARD_TRUSTED_OWNERS` (account names) and `FABRYKA_MODEL_BOARD_HARNESS_SHAS` (evaluation-harness revisions, 7+ hex characters; prefixes match).
+
+- `verified` (badge "verified ✓"): a trusted owner's track run whose `harness_sha` is a listed harness revision. External models are never verified.
+- `measured` (badge "measured by Fabryka"): any other row from a trusted owner that did not declare itself `reported`. Default claim for track runs; external rows must claim `measured` or `reported` explicitly.
+- `reported` (badge "self-reported (different protocol)"): every row from an account outside the trusted list, whatever it claims, and rows declared `reported` (which must name their protocol in `harness`). The page can hide these rows.
 
 Ranking ignores the badge: EN ranks by eff, PL by MultiBLiMP-pl. EN and PL are never combined because the two scores live on different scales.
 
@@ -76,7 +78,7 @@ run.finish()
 
 ## Example: external model measured here
 
-Create a run that only evaluates the downloaded checkpoint, log its board series at one step (for example 0) and describe the model:
+Create a run that only evaluates the downloaded checkpoint, log its board series at one step (for example 0) and describe the model. This evaluation run is only a container for the measurement: it is an SDK run, so it never appears in Training results (that page lists Studio training runs only). Name it after the model, for example `external: Tiny Llama 20M (Jane Doe)`, log no training curve, and set `visibility/public_note` to "External model, measured by Fabryka; not trained here." The board row shows the model name, its authors and the pinned Hugging Face revision, not the container run.
 
 ```python
 run["leaderboard/result"] = {

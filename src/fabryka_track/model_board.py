@@ -8,12 +8,34 @@ from .database import session_scope
 from .leaderboard_result import RESULT_ATTRIBUTE, hf_tree_url, result_from_leaves, validate_result
 from .models import Account, Metric, Run, RunAttribute
 from .namespaces import PUBLIC_BOARD_ATTRIBUTE, PUBLIC_NOTE_ATTRIBUTE
+from .settings import settings
 
 router = APIRouter(prefix='/api/leaderboard')
 
 EN_METRICS = {'eff': 'board/eff', 'arc_easy': 'board/arc_easy', 'blimp': 'board/blimp',
               'wiki_byte_ppl': 'board/wiki_byte_ppl'}
 PL_METRICS = {'multiblimp': 'board_pl/multiblimp', 'eff': 'board_pl/eff'}
+
+
+def _listed(raw):
+    return {item.strip().lower() for item in raw.split(',') if item.strip()}
+
+
+def displayed_trust(claimed, owner, harness_sha, trusted_owners, known_harnesses):
+    """The badge the board shows. Owners only declare a claim; the server grants it.
+
+    Rows from accounts outside the trusted list are always self-reported. A trusted row is verified only
+    with a known harness revision (7+ hex prefixes match either way), otherwise measured unless it
+    declared itself reported.
+    """
+    if not owner or owner.lower() not in trusted_owners:
+        return 'reported'
+    if claimed == 'reported':
+        return 'reported'
+    if claimed == 'verified' and harness_sha and any(
+            len(known) >= 7 and (known.startswith(harness_sha) or harness_sha.startswith(known)) for known in known_harnesses):
+        return 'verified'
+    return 'measured'
 
 
 def _result(session, run_id):
@@ -40,6 +62,8 @@ def _values_at(session, run_id, step):
 @router.get('/models')
 def model_board(session=Depends(session_scope)):
     """Finished public runs whose owner opted into public board metrics and marked a valid result."""
+    trusted_owners = _listed(settings.model_board_trusted_owners)
+    known_harnesses = _listed(settings.model_board_harness_shas)
     candidates = session.execute(
         select(Run, RunAttribute.value)
         .join(RunAttribute, (RunAttribute.run_id == Run.id) & (RunAttribute.path == PUBLIC_BOARD_ATTRIBUTE))
@@ -60,10 +84,13 @@ def model_board(session=Depends(session_scope)):
             continue
         external = result['kind'] == 'external'
         owner = session.get(Account, run.owner_id) if run.owner_id else None
+        owner_name = owner.username if owner else None
         note = session.get(RunAttribute, (run.id, PUBLIC_NOTE_ATTRIBUTE))
-        rows.append({
+        trusted = bool(owner_name) and owner_name.lower() in trusted_owners
+        rows.append((trusted, {
             'run_id': run.id, 'name': result['model_name'] if external else run.name,
-            'owner': owner.username if owner else 'Legacy', 'kind': result['kind'], 'trust': result['trust'],
+            'owner': owner_name or 'Legacy', 'kind': result['kind'],
+            'trust': displayed_trust(result['trust'], owner_name, result['harness_sha'], trusted_owners, known_harnesses),
             'author': result['author'] if external else None,
             'hf_repo': result['hf_repo'] if external else None,
             'revision': result['revision'] if external else None,
@@ -74,12 +101,15 @@ def model_board(session=Depends(session_scope)):
             'label': result['label'], 'started_at': run.started_at, 'finished_at': run.ended_at,
             'public_note': note.value if note and isinstance(note.value, str) and note.value else None,
             'categories': categories, 'en': en, 'pl': pl,
-        })
-    # One row per checkpoint: the newest run that reports it wins.
-    rows.sort(key=lambda row: (row['finished_at'] or row['started_at'], row['started_at'], row['run_id']), reverse=True)
+        }))
+    # One row per checkpoint. A trusted owner's row wins over anyone else's, then the earliest claim, so a
+    # later run that copies a checkpoint sha cannot replace the original row.
+    rows.sort(key=lambda item: (not item[0], item[1]['finished_at'] or item[1]['started_at'],
+                                item[1]['started_at'], item[1]['run_id']))
     seen, board = set(), []
-    for row in rows:
+    for _trusted, row in rows:
         if row['checkpoint_sha256'] not in seen:
             seen.add(row['checkpoint_sha256'])
             board.append(row)
+    board.sort(key=lambda row: (row['finished_at'] or row['started_at'], row['started_at'], row['run_id']), reverse=True)
     return {'models': board}

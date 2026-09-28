@@ -159,7 +159,12 @@ function BoardTable({
                   <small>
                     {row.label} · step {row.step.toLocaleString("en-US")} ·
                     ckpt {row.checkpoint_sha256.slice(0, 8)}
-                    {row.scale_rev ? ` · scale ${row.scale_rev}` : ""}
+                    {row.scale_rev ? " · " : ""}
+                    {row.scale_rev && (
+                      <abbr title="eff depends on the Glint min/max ranges; compare eff only between rows with the same scale revision.">
+                        scale {row.scale_rev}
+                      </abbr>
+                    )}
                     {row.harness || row.harness_sha
                       ? ` · harness ${[row.harness, row.harness_sha?.slice(0, 8)].filter(Boolean).join(" @ ")}`
                       : ""}
