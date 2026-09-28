@@ -17,7 +17,7 @@ from .huggingface_auth import router as huggingface_router
 from .gpu_training import router as gpu_router, start_supervisor, stop_supervisor, status as gpu_status
 from .database import create_tables, session_scope
 from .models import AgentGoal, Artifact, BenchmarkEvaluation, Checkpoint, GoalEvent, GPUJob, IngestedEvent, Metric, Project, Run, RunLog, RunArtifactLink, RunAttribute
-from .namespaces import router as namespace_router, set_attribute, append_series, checked_path, PUBLIC_NOTE_ATTRIBUTE
+from .namespaces import router as namespace_router, set_attribute, append_series, checked_path, PUBLIC_BOARD_ATTRIBUTE, PUBLIC_NOTE_ATTRIBUTE
 from .schemas import EventBatch, LogInput, Notes
 from .settings import settings
 from .training import router as training_router, start_worker, stop_worker
@@ -51,9 +51,6 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(title="Fabryka Track", version="0.1.0", lifespan=lifespan)
-# Owner opt-in (per run): PUT /api/runs/{id}/attributes/visibility/public_board_metrics {"value": true}
-# makes that run's board/* evaluation series visible in the public read-only view.
-PUBLIC_BOARD_ATTRIBUTE = 'visibility/public_board_metrics'
 
 
 app.include_router(benchmarks_router)
@@ -76,6 +73,8 @@ from .benchmark_remote import router as benchmark_remote_router
 app.include_router(benchmark_remote_router)
 from .published_benchmarks import router as published_benchmarks_router
 app.include_router(published_benchmarks_router)
+from .model_board import router as model_board_router
+app.include_router(model_board_router)
 
 
 @app.middleware("http")
@@ -395,7 +394,7 @@ def goal_rfc_page():
 @app.get("/{path:path}", response_class=HTMLResponse)
 def web(path: str = ""):
     pages = {"": "Serious experiment tracking", "overview": "Overview", "goals": "Goals / RFCs", "new": "Training studio", "runs": "Focused runs",
-             "benchmarks": "Evaluation queue", "leaderboard": "Training results", "guide": "Learning guide",
+             "benchmarks": "Evaluation queue", "leaderboard": "Training results", "models": "Model leaderboard", "guide": "Learning guide",
              "login": "Sign in", "register": "Sign in", "account": "Account", "checkpoints": "Checkpoints",
              "status": "Goal status", "agents": "Agent sign up",
              "benchmark-results": "Published benchmarks",

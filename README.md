@@ -241,6 +241,11 @@ view. See [published benchmark results](docs/published-benchmark-results.md).
 For the full pinned suite and an existing-GPU batch, see the
 [simp leaderboard campaign](docs/simp-leaderboard-campaign.md).
 
+The public model leaderboard at `/models` ranks one owner-marked final checkpoint
+per model in separate EN and PL tabs, including external models measured here.
+See [model leaderboard](docs/model-board.md) for the `leaderboard/result` schema
+and trust levels.
+
 Set `FABRYKA_API_URL=https://track.fabryka.ai` and `FABRYKA_API_KEY` in the SDK
 process environment. HTTP API clients send `Authorization: Bearer <key>`.
 API keys can be rotated or revoked in Account, and are shown only when generated.

@@ -14,6 +14,7 @@ from sqlalchemy import delete, literal, select, union_all
 from .accounts import owned_run, require_user
 from .series_store import SQLSeriesStore
 from .database import session_scope
+from .leaderboard_result import check_result_write
 from .models import Artifact, Metric, RunAttribute, RunArtifactLink
 
 router = APIRouter(prefix='/api/runs')
@@ -32,6 +33,10 @@ def writable(run):
         raise HTTPException(409,'Studio training records are managed by the worker. Arbitrary logging is available for SDK runs.')
 
 
+# Owner opt-in (per run): PUT /api/runs/{id}/attributes/visibility/public_board_metrics {"value": true}
+# makes that run's board/* evaluation series visible in the public read-only view, and lets a valid
+# leaderboard/result put its board/* and board_pl/* values at the result step on the public model board.
+PUBLIC_BOARD_ATTRIBUTE = 'visibility/public_board_metrics'
 # Owner-set public caveat for a run (PUT /api/runs/{id}/attributes/visibility/public_note {"value": "..."}).
 # Shown in the public read-only view only while visibility/public_board_metrics is true; plain text, ≤300 chars.
 PUBLIC_NOTE_ATTRIBUTE = 'visibility/public_note'
@@ -59,6 +64,8 @@ def set_attribute(session,run,path,value):
         if (key==PUBLIC_NOTE_ATTRIBUTE or key.startswith(PUBLIC_NOTE_ATTRIBUTE+'/')) and not (
                 key==PUBLIC_NOTE_ATTRIBUTE and isinstance(leaf,str) and len(leaf)<=PUBLIC_NOTE_MAX_CHARS):
             raise HTTPException(422,f'{PUBLIC_NOTE_ATTRIBUTE} must be plain text of at most {PUBLIC_NOTE_MAX_CHARS} characters.')
+    try:check_result_write(path,leaves)
+    except ValueError as exc:raise HTTPException(422,str(exc)) from exc
     session.execute(delete(RunAttribute).where(RunAttribute.run_id==run.id,(RunAttribute.path==path)|RunAttribute.path.startswith(path+'/',autoescape=True)))
     ancestors=['/'.join(path.split('/')[:i]) for i in range(1,len(path.split('/'))) ]
     if ancestors:session.execute(delete(RunAttribute).where(RunAttribute.run_id==run.id,RunAttribute.path.in_(ancestors)))
