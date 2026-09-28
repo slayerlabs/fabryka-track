@@ -23,6 +23,7 @@ import {
 } from "./pages/Public";
 import { BenchmarksPage } from "./pages/Benchmarks";
 import { LeaderboardPage } from "./pages/Leaderboard";
+import { ModelBoardPage } from "./pages/ModelBoard";
 import { CheckpointsPage } from "./pages/Checkpoints";
 import { useDashboard } from "./pages/DashboardData";
 import { Icon, type IconName } from "./Icons";
@@ -49,6 +50,7 @@ const navigation: { label: string; links: [string, string, IconName][] }[] = [
       ["/agents", "Agent sign up", "users"],
       ["/benchmark-results", "Published results", "chart"],
       ["/leaderboard", "Training results", "trophy"],
+      ["/models", "Model leaderboard", "trophy"],
       ["/guide", "Training guide", "book"],
       ["https://github.com/slayerlabs/rfcs", "RFC repository", "book"],
     ],
@@ -191,6 +193,7 @@ function ApplicationShell() {
               element={<PublishedBenchmarksPage />}
             />
             <Route path="/leaderboard" element={<LeaderboardPage />} />
+            <Route path="/models" element={<ModelBoardPage />} />
             <Route path="/guide" element={<GuidePage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route

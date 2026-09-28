@@ -31,6 +31,11 @@ class Settings(BaseSettings):
     runpod_max_concurrent: int = Field(default=50, ge=1, le=500)
     runpod_network_volume_id: str = ""
     runpod_volume_mount: str = "/runpod-volume"
+    # Public model leaderboard (/models). Rows owned by these accounts may carry Fabryka trust badges;
+    # "verified" also needs one of the listed evaluation-harness revisions. Comma-separated; every other
+    # row is shown as self-reported whatever its owner declared.
+    model_board_trusted_owners: str = ""
+    model_board_harness_shas: str = ""
     white_benchmark_url: str = ""
     benchmark_runner_tokens: str = "{}"
     r2_endpoint: str | None = None
