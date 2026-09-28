@@ -45,7 +45,7 @@ def make_run(name, points, state='finished', public=True, ended=T0, owner='teste
         db.flush()
         run = Run(id=str(uuid4()), project_id=project.id, owner_id=db.scalar(select(Account.id).where(Account.username == owner)),
                   name=name, state=state, is_public=public, metadata_={'engine': 'sdk'},
-                  config={'secret': 'hidden-config'}, note='private owner note', started_at=ended - timedelta(hours=2),
+                  config={'hidden': 'hidden-config'}, note='private owner note', started_at=ended - timedelta(hours=2),
                   ended_at=ended if state == 'finished' else None)
         db.add(run)
         db.flush()
@@ -74,7 +74,7 @@ def test_board_lists_only_finished_public_opted_in_results_with_values_at_the_ma
                              1500: {**later, 'board_pl/multiblimp': 70.0}})
     publish(client, good, result())
     assert client.put(f'/api/runs/{good}/attributes/visibility/public_note', json={'value': 'Glint ranges pinned.'}).status_code == 200
-    assert client.put(f'/api/runs/{good}/attributes/private/secret', json={'value': 'owner-only attribute'}).status_code == 200
+    assert client.put(f'/api/runs/{good}/attributes/private/owner_only', json={'value': 'owner-only attribute'}).status_code == 200
     excluded = {'running': make_run('running', {1000: EN}, state='running'),
                 'private': make_run('private', {1000: EN}, public=False),
                 'failed': make_run('failed', {1000: EN}, state='failed')}
