@@ -18,8 +18,9 @@ T0 = datetime(2026, 9, 1, tzinfo=timezone.utc)
 
 @pytest.fixture(autouse=True)
 def trusted_board(monkeypatch):
-    """The deployment trusts the fixture account and one evaluation-harness revision."""
-    monkeypatch.setattr('fabryka_track.model_board.settings.model_board_trusted_owners', 'Tester')
+    """The deployment trusts the fixture account and one evaluation-harness revision. "Mallory" is listed
+    only to show that a different-case account name ("mallory") is not trusted."""
+    monkeypatch.setattr('fabryka_track.model_board.settings.model_board_trusted_owners', 'tester, Mallory')
     monkeypatch.setattr('fabryka_track.model_board.settings.model_board_harness_shas', '2c5ea968d7')
 
 

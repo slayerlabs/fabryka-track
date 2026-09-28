@@ -39,7 +39,7 @@ Plain text rejects `<`, `>` and control or formatting characters; the page rende
 
 ### Trust levels
 
-`trust` in the attribute is the owner's claim. The badge on the page is granted by the server from two deployment settings (comma-separated): `FABRYKA_MODEL_BOARD_TRUSTED_OWNERS` (account names) and `FABRYKA_MODEL_BOARD_HARNESS_SHAS` (evaluation-harness revisions, 7+ hex characters; prefixes match).
+`trust` in the attribute is the owner's claim. The badge on the page is granted by the server from two deployment settings (comma-separated): `FABRYKA_MODEL_BOARD_TRUSTED_OWNERS` (account names) and `FABRYKA_MODEL_BOARD_HARNESS_SHAS` (evaluation-harness revisions, 7+ hex characters; prefixes match). Account names match exactly, including case.
 
 - `verified` (badge "verified ✓"): a trusted owner's track run whose `harness_sha` is a listed harness revision. External models are never verified.
 - `measured` (badge "measured by Fabryka"): any other row from a trusted owner that did not declare itself `reported`. Default claim for track runs; external rows must claim `measured` or `reported` explicitly.

@@ -18,17 +18,17 @@ PL_METRICS = {'multiblimp': 'board_pl/multiblimp', 'eff': 'board_pl/eff'}
 
 
 def _listed(raw):
-    return {item.strip().lower() for item in raw.split(',') if item.strip()}
+    return {item.strip() for item in raw.split(',') if item.strip()}
 
 
 def displayed_trust(claimed, owner, harness_sha, trusted_owners, known_harnesses):
     """The badge the board shows. Owners only declare a claim; the server grants it.
 
-    Rows from accounts outside the trusted list are always self-reported. A trusted row is verified only
-    with a known harness revision (7+ hex prefixes match either way), otherwise measured unless it
-    declared itself reported.
+    Rows from accounts outside the trusted list (exact, case-sensitive account names) are always
+    self-reported. A trusted row is verified only with a known harness revision (7+ hex prefixes match
+    either way), otherwise measured unless it declared itself reported.
     """
-    if not owner or owner.lower() not in trusted_owners:
+    if not owner or owner not in trusted_owners:
         return 'reported'
     if claimed == 'reported':
         return 'reported'
@@ -63,7 +63,7 @@ def _values_at(session, run_id, step):
 def model_board(session=Depends(session_scope)):
     """Finished public runs whose owner opted into public board metrics and marked a valid result."""
     trusted_owners = _listed(settings.model_board_trusted_owners)
-    known_harnesses = _listed(settings.model_board_harness_shas)
+    known_harnesses = {sha.lower() for sha in _listed(settings.model_board_harness_shas)}
     candidates = session.execute(
         select(Run, RunAttribute.value)
         .join(RunAttribute, (RunAttribute.run_id == Run.id) & (RunAttribute.path == PUBLIC_BOARD_ATTRIBUTE))
@@ -86,7 +86,7 @@ def model_board(session=Depends(session_scope)):
         owner = session.get(Account, run.owner_id) if run.owner_id else None
         owner_name = owner.username if owner else None
         note = session.get(RunAttribute, (run.id, PUBLIC_NOTE_ATTRIBUTE))
-        trusted = bool(owner_name) and owner_name.lower() in trusted_owners
+        trusted = bool(owner_name) and owner_name in trusted_owners
         rows.append((trusted, {
             'run_id': run.id, 'name': result['model_name'] if external else run.name,
             'owner': owner_name or 'Legacy', 'kind': result['kind'],
