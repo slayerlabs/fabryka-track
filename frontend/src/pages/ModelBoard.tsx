@@ -7,6 +7,7 @@ import {
   RANK_KEY,
   SIZE_BUCKETS,
   TRUST_LABELS,
+  checkpointDetails,
   filterRows,
   hfLink,
   rankRows,
@@ -32,7 +33,7 @@ const CATEGORY_LABELS: Record<Category, string> = {
 type Column = { key: SortKey; label: string; note?: string; digits?: number };
 const SCORE_COLUMNS: Record<Category, Column[]> = {
   en: [
-    { key: "en_eff", label: "eff", note: "Glint Tiny-ML", digits: 2 },
+    { key: "en_eff", label: "eff", note: "per scale revision", digits: 2 },
     { key: "arc_easy", label: "ARC-Easy", digits: 2 },
     { key: "blimp", label: "BLiMP", digits: 2 },
     {
@@ -157,11 +158,10 @@ function BoardTable({
                       : row.owner}
                   </span>
                   <small>
-                    {row.label} · step {row.step.toLocaleString("en-US")} ·
-                    ckpt {row.checkpoint_sha256.slice(0, 8)}
+                    {checkpointDetails(row)}
                     {row.scale_rev ? " · " : ""}
                     {row.scale_rev && (
-                      <abbr title="eff depends on the Glint min/max ranges; compare eff only between rows with the same scale revision.">
+                      <abbr title="eff depends on the min/max ranges of its scale; compare eff only between rows with the same scale revision.">
                         scale {row.scale_rev}
                       </abbr>
                     )}
@@ -259,7 +259,8 @@ export function ModelBoardPage() {
           <h1>One final checkpoint per model.</h1>
           <p>
             Each row is the checkpoint its owner marked as the result, scored
-            at exactly that training step.
+            at exactly that training step, or the latest checkpoint the track
+            evaluated itself.
           </p>
         </div>
         <a
@@ -304,7 +305,7 @@ export function ModelBoardPage() {
           </div>
           <p className="lb-group-note">
             {category === "en"
-              ? "Ranked by eff, the Glint Tiny-ML efficiency score on a 0–100 scale."
+              ? "Ranked by eff: the Glint Tiny-ML efficiency score (0–100) for owner-marked rows, the track's Tiny-ML efficiency for rows measured by track. Each row shows its scale revision."
               : "Ranked by MultiBLiMP-pl accuracy (random = 50 %). eff-PL is not frozen yet, so it is shown when available but never ranked."}
           </p>
           <div className="mb-controls">
@@ -379,7 +380,8 @@ export function ModelBoardPage() {
               <h2>No models in this view yet.</h2>
               <p>
                 A finished public run appears here once it publishes its board
-                metrics and marks its final checkpoint.
+                metrics and marks its final checkpoint, or once the track has
+                evaluated it.
               </p>
             </div>
           ) : (
@@ -408,7 +410,8 @@ export function ModelBoardPage() {
             Scores are our measurements with the Glint Tiny-ML protocol, not
             official leaderboard results. eff depends on the Glint min/max
             ranges at the revision shown. Self-reported rows use the authors'
-            own protocols.
+            own protocols. Rows measured by track use the server's own
+            evaluation of each public run's latest checkpoint.
           </p>
         </>
       )}

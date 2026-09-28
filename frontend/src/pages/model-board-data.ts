@@ -1,4 +1,4 @@
-export type Trust = "verified" | "measured" | "reported";
+export type Trust = "verified" | "measured" | "reported" | "track";
 export type Category = "en" | "pl";
 export interface BoardRow {
   run_id: string;
@@ -12,12 +12,13 @@ export interface BoardRow {
   hf_url: string | null;
   n_params: number;
   tokens_seen: number | null;
-  checkpoint_sha256: string;
+  checkpoint_sha256: string | null;
   harness: string | null;
   harness_sha: string | null;
   scale_rev: string | null;
-  step: number;
+  step: number | null;
   label: string;
+  evaluated_at: string | null;
   started_at: string;
   finished_at: string | null;
   public_note: string | null;
@@ -47,6 +48,7 @@ export const TRUST_LABELS: Record<Trust, string> = {
   verified: "verified ✓",
   measured: "measured by Fabryka",
   reported: "self-reported (different protocol)",
+  track: "measured by track",
 };
 // Disjoint size classes on n_params, upper bounds inclusive, decimal millions.
 export const SIZE_BUCKETS: {
@@ -151,4 +153,21 @@ export function hfLink(row: BoardRow) {
     row.hf_url?.startsWith("https://huggingface.co/")
     ? row.hf_url
     : null;
+}
+
+/** Provenance line under the model name; parts a server-measured row may lack are omitted. */
+export function checkpointDetails(row: BoardRow) {
+  return [
+    row.label,
+    row.evaluated_at &&
+      new Date(row.evaluated_at).toLocaleDateString("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      }),
+    row.step !== null && `step ${row.step.toLocaleString("en-US")}`,
+    row.checkpoint_sha256 && `ckpt ${row.checkpoint_sha256.slice(0, 8)}`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }

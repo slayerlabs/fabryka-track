@@ -1,4 +1,4 @@
-"""Public model leaderboard: one marked result per model, EN and PL categories (docs/model-board.md)."""
+"""Public model leaderboard: one result per model, EN and PL categories (docs/model-board.md)."""
 import math
 
 from fastapi import APIRouter, Depends
@@ -6,15 +6,23 @@ from sqlalchemy import select
 
 from .database import session_scope
 from .leaderboard_result import RESULT_ATTRIBUTE, hf_tree_url, result_from_leaves, validate_result
-from .models import Account, Metric, Run, RunAttribute
+from .models import Account, BenchmarkEvaluation, Metric, Run, RunAttribute
 from .namespaces import PUBLIC_BOARD_ATTRIBUTE, PUBLIC_NOTE_ATTRIBUTE
 from .settings import settings
+from .tiny_ml_suite import PROTOCOL as TINY_ML_PROTOCOL, REFERENCE as TINY_ML_REFERENCE, finite, scores as tiny_ml_scores
 
 router = APIRouter(prefix='/api/leaderboard')
 
 EN_METRICS = {'eff': 'board/eff', 'arc_easy': 'board/arc_easy', 'blimp': 'board/blimp',
               'wiki_byte_ppl': 'board/wiki_byte_ppl'}
 PL_METRICS = {'multiblimp': 'board_pl/multiblimp', 'eff': 'board_pl/eff'}
+# Rows the server measured itself ("measured by track"); owners cannot claim this trust level.
+TRACK_TRUST = 'track'
+TRACK_LABEL = 'latest server evaluation'
+TINY_ML_SCALE = (f"tiny_ml {TINY_ML_REFERENCE['revision'][:8]} "
+                 f"({TINY_ML_REFERENCE['parameters_min']}–{TINY_ML_REFERENCE['parameters_max'] / 1e6:g}M)")
+# Synthetic runs that carry other boards' reference results; they are not track participants.
+REFERENCE_ENGINE = 'benchmark-reference'
 
 
 def _listed(raw):
@@ -49,6 +57,102 @@ def _result(session, run_id):
         return None
 
 
+def _count(value, minimum):
+    return value if isinstance(value, int) and not isinstance(value, bool) and value >= minimum else None
+
+
+def _evaluated_at(evaluation):
+    return evaluation.ended_at or evaluation.created_at
+
+
+def _tiny_ml_values(evaluation):
+    """EN values from the server's Tiny-ML aggregate, on the board scale (accuracies in %), or None."""
+    results = evaluation.results or {}
+    scored = tiny_ml_scores(results, evaluation.provenance.get('parameters'))
+    if scored is None:
+        return None
+    return {'eff': scored['efficiency'], 'arc_easy': 100 * results['arc_easy']['accuracy'],
+            'blimp': 100 * results['blimp']['accuracy'], 'wiki_byte_ppl': results['wikitext']['byte_perplexity']}
+
+
+def _multiblimp_value(evaluation):
+    """MultiBLiMP-pl accuracy in % from a server evaluation that ran it, or None."""
+    cell = (evaluation.results or {}).get('multiblimp_polish')
+    if 'multiblimp_polish' not in (evaluation.tasks or []) or not isinstance(cell, dict) or cell.get('error'):
+        return None
+    accuracy = cell.get('accuracy')
+    return 100 * accuracy if finite(accuracy) and 0 <= accuracy <= 1 else None
+
+
+def _track_rows(session, publish_tiny_ml):
+    """One row per public finished run from its latest finished full server evaluation.
+
+    EN comes from the Tiny-ML suite (only when the deployment publishes its aggregates), PL from any
+    non-private evaluation that ran MultiBLiMP-pl. The latest evaluation fixes the row's checkpoint; the
+    other category is added only when its latest evaluation measured the same checkpoint sha.
+    """
+    evaluations = session.execute(
+        select(BenchmarkEvaluation, Run).join(Run, BenchmarkEvaluation.run_id == Run.id).where(
+            Run.is_public.is_(True), Run.state == 'finished',
+            BenchmarkEvaluation.status == 'finished', BenchmarkEvaluation.mode == 'full')).all()
+    evaluations.sort(key=lambda item: (_evaluated_at(item[0]), item[0].created_at, item[0].id))
+    latest = {}
+    for evaluation, run in evaluations:
+        if (run.metadata_ or {}).get('engine') == REFERENCE_ENGINE:
+            continue
+        provenance = evaluation.provenance or {}
+        if provenance.get('protocol') == TINY_ML_PROTOCOL:
+            # The suite is owner-only by default (its evaluations are always marked private).
+            if not publish_tiny_ml:
+                continue
+            category, values = 'en', _tiny_ml_values(evaluation)
+        elif provenance.get('visibility') == 'private':
+            continue
+        else:
+            category, values = 'pl', _multiblimp_value(evaluation)
+        if values is not None:
+            latest.setdefault(run.id, (run, {}))[1][category] = (evaluation, values)
+    rows = []
+    for run, found in latest.values():
+        primary = max(found.values(), key=lambda item: (_evaluated_at(item[0]), item[0].created_at, item[0].id))[0]
+        provenance = primary.provenance or {}
+        sha = provenance.get('checkpoint_sha256') if isinstance(provenance.get('checkpoint_sha256'), str) else None
+        used = {category: item for category, item in found.items()
+                if item[0] is primary or (sha and item[0].provenance.get('checkpoint_sha256') == sha)}
+        measured = [used[c][0].provenance or {} for c in ('en', 'pl') if c in used]
+
+        def fact(key, minimum):
+            # The used evaluations measured one checkpoint; take the first that recorded this fact.
+            return next((value for value in (_count(p.get(key), minimum) for p in measured) if value is not None), None)
+
+        n_params = fact('parameters', 1) or _count((run.config or {}).get('parameters'), 1)
+        if n_params is None:
+            continue
+        en = {name: None for name in EN_METRICS}
+        pl = {name: None for name in PL_METRICS}
+        if 'en' in used:
+            en.update(used['en'][1])
+        if 'pl' in used:
+            pl['multiblimp'] = used['pl'][1]
+        owner = session.get(Account, run.owner_id) if run.owner_id else None
+        opted_in = session.get(RunAttribute, (run.id, PUBLIC_BOARD_ATTRIBUTE))
+        note = session.get(RunAttribute, (run.id, PUBLIC_NOTE_ATTRIBUTE))
+        rows.append({
+            'run_id': run.id, 'name': run.name, 'owner': owner.username if owner else 'Legacy',
+            'kind': 'track', 'trust': TRACK_TRUST, 'author': None, 'hf_repo': None, 'revision': None, 'hf_url': None,
+            'n_params': n_params, 'tokens_seen': fact('training_tokens', 0), 'checkpoint_sha256': sha,
+            'harness': ' + '.join(p['protocol'] for p in measured if isinstance(p.get('protocol'), str)) or None,
+            'harness_sha': None, 'scale_rev': TINY_ML_SCALE if 'en' in used else None,
+            'step': fact('checkpoint_step', 0), 'label': TRACK_LABEL,
+            'evaluated_at': _evaluated_at(primary), 'started_at': run.started_at, 'finished_at': run.ended_at,
+            # Same rule as owner rows: the note is public only while the owner opts in to public board metrics.
+            'public_note': note.value if (opted_in and opted_in.value is True and note and isinstance(note.value, str)
+                                          and note.value) else None,
+            'categories': [c for c in ('en', 'pl') if c in used], 'en': en, 'pl': pl,
+        })
+    return rows
+
+
 def _values_at(session, run_id, step):
     keys = [*EN_METRICS.values(), *PL_METRICS.values()]
     values = {}
@@ -61,7 +165,7 @@ def _values_at(session, run_id, step):
 
 @router.get('/models')
 def model_board(session=Depends(session_scope)):
-    """Finished public runs whose owner opted into public board metrics and marked a valid result."""
+    """Owner-marked results of opted-in runs, then the server's own measurements of every other public run."""
     trusted_owners = _listed(settings.model_board_trusted_owners)
     known_harnesses = {sha.lower() for sha in _listed(settings.model_board_harness_shas)}
     candidates = session.execute(
@@ -98,7 +202,7 @@ def model_board(session=Depends(session_scope)):
             'n_params': result['n_params'], 'tokens_seen': result['tokens_seen'],
             'checkpoint_sha256': result['checkpoint_sha256'], 'harness': result['harness'],
             'harness_sha': result['harness_sha'], 'scale_rev': result['scale_rev'], 'step': result['step'],
-            'label': result['label'], 'started_at': run.started_at, 'finished_at': run.ended_at,
+            'label': result['label'], 'evaluated_at': None, 'started_at': run.started_at, 'finished_at': run.ended_at,
             'public_note': note.value if note and isinstance(note.value, str) and note.value else None,
             'categories': categories, 'en': en, 'pl': pl,
         }))
@@ -111,5 +215,16 @@ def model_board(session=Depends(session_scope)):
         if row['checkpoint_sha256'] not in seen:
             seen.add(row['checkpoint_sha256'])
             board.append(row)
+    # A run with its own marked result is never replaced by the server's row, nor is a checkpoint already
+    # on the board; among server rows sharing a checkpoint the earliest finished run is kept.
+    marked_runs = {row['run_id'] for _trusted, row in rows}
+    track = sorted(_track_rows(session, settings.model_board_publish_tiny_ml),
+                   key=lambda row: (row['finished_at'] or row['started_at'], row['started_at'], row['run_id']))
+    for row in track:
+        if row['run_id'] in marked_runs or (row['checkpoint_sha256'] and row['checkpoint_sha256'] in seen):
+            continue
+        if row['checkpoint_sha256']:
+            seen.add(row['checkpoint_sha256'])
+        board.append(row)
     board.sort(key=lambda row: (row['finished_at'] or row['started_at'], row['started_at'], row['run_id']), reverse=True)
     return {'models': board}

@@ -11,6 +11,10 @@ enters the private ranking. The suite stays private even when its parent run is
 public, including automatic leaderboard summaries. Automatic reconciliation
 checks the selected suite, protocol and final checkpoint when recovering a
 missing or incompatible link; an old PIQA link does not satisfy Tiny-ML.
+The suite's aggregate scores (Efficiency, WikiText-2 BYTE_PPL, BLiMP and
+ARC-Easy; never ACI or per-item results) appear on the public
+[model board](model-board.md) only when the deployment enables
+`FABRYKA_MODEL_BOARD_PUBLISH_TINY_ML`.
 
 ## Reproducible protocol
 
