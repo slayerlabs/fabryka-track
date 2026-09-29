@@ -31,7 +31,9 @@ test("size buckets are disjoint with inclusive decimal upper bounds", () => {
   assert.equal(sizeBucket(16_000_000), "16");
   assert.equal(sizeBucket(16_000_001), "32");
   assert.equal(sizeBucket(150_000_000), "150");
-  assert.equal(sizeBucket(150_000_001), "150+");
+  assert.equal(sizeBucket(150_000_001), "350");
+  assert.equal(sizeBucket(350_000_000), "350");
+  assert.equal(sizeBucket(350_000_001), "350+");
   const rows = [
     row("small", { n_params: 16_000_000 }),
     row("next", { n_params: 16_000_001 }),

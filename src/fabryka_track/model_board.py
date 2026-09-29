@@ -195,7 +195,7 @@ def model_board(session=Depends(session_scope)):
             'run_id': run.id, 'name': result['model_name'] if external else run.name,
             'owner': owner_name or 'Legacy', 'kind': result['kind'],
             'trust': displayed_trust(result['trust'], owner_name, result['harness_sha'], trusted_owners, known_harnesses),
-            'author': result['author'] if external else None,
+            'author': result['author'],
             'hf_repo': result['hf_repo'] if external else None,
             'revision': result['revision'] if external else None,
             'hf_url': hf_tree_url(result['hf_repo'], result['revision']) if external else None,

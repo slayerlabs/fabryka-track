@@ -42,7 +42,7 @@ export type SortKey =
   | "tokens_seen"
   | "date";
 export type Direction = "asc" | "desc";
-export type SizeKey = "all" | "16" | "32" | "64" | "150" | "150+";
+export type SizeKey = "all" | "16" | "32" | "64" | "150" | "350" | "350+";
 
 export const TRUST_LABELS: Record<Trust, string> = {
   verified: "verified ✓",
@@ -61,7 +61,8 @@ export const SIZE_BUCKETS: {
   { key: "32", label: "≤32M", range: "16M–32M parameters", max: 32e6 },
   { key: "64", label: "≤64M", range: "32M–64M parameters", max: 64e6 },
   { key: "150", label: "≤150M", range: "64M–150M parameters", max: 150e6 },
-  { key: "150+", label: ">150M", range: "over 150M parameters", max: Infinity },
+  { key: "350", label: "≤350M", range: "150M–350M parameters", max: 350e6 },
+  { key: "350+", label: ">350M", range: "over 350M parameters", max: Infinity },
 ];
 // Column direction when first chosen; wiki byte-perplexity is lower-is-better.
 export const NATURAL_DIRECTION: Record<SortKey, Direction> = {

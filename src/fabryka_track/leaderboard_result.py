@@ -19,8 +19,8 @@ _MAX_STEP = 2**63 - 1  # same bound as series steps
 _MAX_COUNT = 2**53 - 1  # exact in JSON/JavaScript numbers
 
 _COMMON = {'step', 'checkpoint_sha256', 'n_params', 'label', 'tokens_seen', 'harness_sha', 'harness',
-           'scale_rev', 'kind', 'trust'}
-_EXTERNAL = {'model_name', 'author', 'hf_repo', 'revision'}
+           'scale_rev', 'kind', 'trust', 'author'}
+_EXTERNAL = {'model_name', 'hf_repo', 'revision'}
 
 
 def _integer(result, key, minimum, maximum, required=True):
@@ -81,10 +81,11 @@ def validate_result(value):
         'harness_sha': _pattern(value, 'harness_sha', _HARNESS_SHA, '7–64 lowercase hex characters'),
         'harness': _text(value, 'harness', 80),
         'scale_rev': _text(value, 'scale_rev', 40),
+        # Optional for track runs (the board falls back to the owner account); required for external models.
+        'author': _text(value, 'author', 80, required=kind == 'external'),
     }
     if kind == 'external':
         result.update(model_name=_text(value, 'model_name', 80, required=True),
-                      author=_text(value, 'author', 80, required=True),
                       hf_repo=_pattern(value, 'hf_repo', _HF_REPO, 'a Hugging Face repository id "org/name"', True),
                       revision=_pattern(value, 'revision', _REVISION, '7–40 lowercase hex characters', True))
     trust = value.get('trust')

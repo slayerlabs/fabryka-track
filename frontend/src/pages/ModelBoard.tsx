@@ -116,6 +116,7 @@ function BoardTable({
             <th scope="col">Compare</th>
             <th scope="col">Rank</th>
             <th scope="col">Model</th>
+            <th scope="col">Author</th>
             {columns.map(header)}
             {header({ key: "n_params", label: "Params" })}
             {header({ key: "tokens_seen", label: "Tokens" })}
@@ -152,11 +153,13 @@ function BoardTable({
                   ) : (
                     <Link to={`/run/${row.run_id}`}>{row.name}</Link>
                   )}
-                  <span>
-                    {row.kind === "external"
-                      ? `${row.author} · ${row.hf_repo}@${row.revision?.slice(0, 8)} · logged by ${row.owner}`
-                      : row.owner}
-                  </span>
+                  {row.kind === "external" ? (
+                    <span>
+                      {`${row.hf_repo}@${row.revision?.slice(0, 8)} · logged by ${row.owner}`}
+                    </span>
+                  ) : (
+                    row.author && <span>run by {row.owner}</span>
+                  )}
                   <small>
                     {checkpointDetails(row)}
                     {row.scale_rev ? " · " : ""}
@@ -173,6 +176,7 @@ function BoardTable({
                     <small className="mb-note">{row.public_note}</small>
                   )}
                 </td>
+                <td>{row.author ?? row.owner}</td>
                 {columns.map((column) => (
                   <td className="lb-number" key={column.key}>
                     {column.key === RANK_KEY[category] ? (
@@ -305,7 +309,7 @@ export function ModelBoardPage() {
           </div>
           <p className="lb-group-note">
             {category === "en"
-              ? "Ranked by eff: the Glint Tiny-ML efficiency score (0–100) for owner-marked rows, the track's Tiny-ML efficiency for rows measured by track. Each row shows its scale revision."
+              ? "Ranked by eff: the Glint Tiny-ML efficiency score (0–100) for owner-marked rows, the track's Tiny-ML efficiency for rows measured by track. Each row shows its scale revision. The size bonus stops at 150M parameters (Glint formula), so larger models get no bonus."
               : "Ranked by MultiBLiMP-pl accuracy (random = 50 %). eff-PL is not frozen yet, so it is shown when available but never ranked."}
           </p>
           <div className="mb-controls">

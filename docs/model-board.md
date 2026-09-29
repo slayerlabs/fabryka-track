@@ -26,7 +26,7 @@ Rows with the badge "measured by track" come from the server's own benchmark eva
 5. `n_params`, `step` and `tokens_seen` come from the evaluation's recorded checkpoint provenance (`parameters`, `checkpoint_step`, `training_tokens`); `n_params` falls back to the run's configured `parameters`, and a run with neither is omitted. `harness` names the evaluation protocol(s); `scale_rev` is `tiny_ml <reference revision> (1000–150M)` when EN is present.
 6. A run that already has an owner-marked row, or whose checkpoint sha is already on the board through an owner-marked row, gets no track row. Among track rows that share a checkpoint sha the earliest finished run is kept.
 
-Owners cannot claim `track` in `leaderboard/result`. The track's Tiny-ML eff and the Glint eff are different formulas on different scales; compare eff only between rows with the same `scale_rev`. `visibility/public_note` is shown with a track row only while `visibility/public_board_metrics` is `true`.
+Owners cannot claim `track` in `leaderboard/result`. The track's Tiny-ML eff and the Glint eff are different formulas on different scales; compare eff only between rows with the same `scale_rev`. `visibility/public_note` is shown with a track row only while `visibility/public_board_metrics` is `true`. Track-measured rows carry no `author`; the Author column shows the run owner's account name.
 
 ## `leaderboard/result`
 
@@ -36,7 +36,7 @@ Set it as one object; the server validates it on every write path (attribute end
 |---|---|
 | `step` | required integer ≥ 0; the metric step of the result |
 | `checkpoint_sha256` | required, 64 lowercase hex characters |
-| `n_params` | required integer > 0; drives the size filter (≤16M · ≤32M · ≤64M · ≤150M · >150M, disjoint, upper bounds inclusive, decimal M) |
+| `n_params` | required integer > 0; drives the size filter (≤16M · ≤32M · ≤64M · ≤150M · ≤350M · >350M, disjoint, upper bounds inclusive, decimal M). The eff size bonus stops at 150M parameters (Glint formula), so larger models get no bonus. |
 | `label` | required, exactly `"final checkpoint (result)"` |
 | `kind` | `"track"` (default, trained on this run) or `"external"` (trained elsewhere, measured and logged here) |
 | `trust` | `"verified"`, `"measured"` or `"reported"`; see below |
@@ -44,7 +44,8 @@ Set it as one object; the server validates it on every write path (attribute end
 | `harness_sha` | optional, 7–64 lowercase hex characters |
 | `harness` | optional plain text ≤ 80 characters |
 | `scale_rev` | optional plain text ≤ 40 characters: revision of the Glint min/max ranges used to compute eff, e.g. `"Glint 2c5ea968 (2026-09-28)"` |
-| `model_name`, `author` | external only, required plain text ≤ 80 characters |
+| `author` | plain text ≤ 80 characters; required for external models, optional for track runs. The board's Author column shows it, or the run owner's account name when a track run names no author. |
+| `model_name` | external only, required plain text ≤ 80 characters |
 | `hf_repo` | external only, required `org/name` (`[A-Za-z0-9._-]`) |
 | `revision` | external only, required 7–40 lowercase hex characters (the Hugging Face commit) |
 

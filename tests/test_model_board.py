@@ -201,7 +201,8 @@ def test_trust_badges_are_granted_by_the_server_not_declared_by_the_owner(client
     result(harness='<b>Glint</b>'),
     result(scale_rev='Glint\u202e2c5ea968'),
     result(scale_rev='x' * 41),
-    result(author='Jane Doe'),
+    result(author='<b>Jane Doe</b>'),
+    result(author='x' * 81),
     external(trust='verified', harness_sha='2c5ea968'),
     external(trust=None),
     external(trust='reported'),
@@ -237,6 +238,17 @@ def test_result_marker_accepts_complete_objects_only_from_the_owner(client):
     with TestClient(app, headers={'X-Track-Request': '1'}) as stranger:
         sign_in(stranger, 'board-stranger')
         assert stranger.put(f'/api/runs/{rid}/attributes/leaderboard/result', json={'value': result()}).status_code in (403, 404)
+
+
+def test_a_track_result_may_name_its_author_and_otherwise_leaves_it_to_the_owner_account(client):
+    named = make_run('named', {1000: EN})
+    publish(client, named, result(author='Jane Doe & Team'))
+    assert client.get(f'/api/runs/{named}/attributes/leaderboard/result').json()['value']['author'] == 'Jane Doe & Team'
+    unnamed = make_run('unnamed', {1000: EN})
+    publish(client, unnamed, result(checkpoint_sha256='9' * 64))
+    rows = {row['name']: row for row in board().json()['models']}
+    assert (rows['named']['author'], rows['named']['owner']) == ('Jane Doe & Team', 'tester')
+    assert (rows['unnamed']['author'], rows['unnamed']['owner']) == (None, 'tester')
 
 
 def test_every_public_finished_run_gets_a_row_from_its_latest_complete_track_evaluation(client, monkeypatch):
