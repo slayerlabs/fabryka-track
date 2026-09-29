@@ -36,6 +36,9 @@ class Settings(BaseSettings):
     # row is shown as self-reported whatever its owner declared.
     model_board_trusted_owners: str = ""
     model_board_harness_shas: str = ""
+    # The owner-only Tiny-ML suite (docs/private-tiny-ml.md) contributes its aggregate EN scores to the
+    # public model board's "measured by track" rows only when this is enabled.
+    model_board_publish_tiny_ml: bool = False
     white_benchmark_url: str = ""
     benchmark_runner_tokens: str = "{}"
     r2_endpoint: str | None = None

@@ -664,6 +664,10 @@
   border-color: #385e96;
   color: #2f4f7e;
 }
+.mb-badge-track {
+  border-color: #6a4f96;
+  color: #563f7c;
+}
 .mb-badge-reported {
   color: var(--lb-muted);
 }

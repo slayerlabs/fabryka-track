@@ -1,5 +1,6 @@
 from conftest import sign_in
 from test_api import event
+import math
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
@@ -9,7 +10,8 @@ from sqlalchemy import select
 
 from fabryka_track.api import app
 from fabryka_track.database import SessionLocal
-from fabryka_track.models import Account, Metric, Project, Run
+from fabryka_track.models import Account, BenchmarkEvaluation, Metric, Project, Run
+from fabryka_track.tiny_ml_suite import PROTOCOL as TINY_ML_PROTOCOL, TASKS as TINY_ML_TASKS
 
 SHA = 'a' * 64
 EN = {'board/eff': 41.5, 'board/arc_easy': 38.2, 'board/blimp': 71.0, 'board/wiki_byte_ppl': 2.91}
@@ -22,6 +24,7 @@ def trusted_board(monkeypatch):
     only to show that a different-case account name ("mallory") is not trusted."""
     monkeypatch.setattr('fabryka_track.model_board.settings.model_board_trusted_owners', 'tester, Mallory')
     monkeypatch.setattr('fabryka_track.model_board.settings.model_board_harness_shas', '2c5ea968d7')
+    monkeypatch.setattr('fabryka_track.model_board.settings.model_board_publish_tiny_ml', False)
 
 
 def result(**overrides):
@@ -37,15 +40,15 @@ def external(**overrides):
                      'author': 'Jane Doe', 'hf_repo': 'org-name/tiny.llama_20M', 'revision': '0123abcd', **overrides})
 
 
-def make_run(name, points, state='finished', public=True, ended=T0, owner='tester'):
+def make_run(name, points, state='finished', public=True, ended=T0, owner='tester', config=None, engine='sdk'):
     """points: {step: {metric key: value}}"""
     with SessionLocal() as db:
         project = db.scalar(select(Project).where(Project.name == 'Model board')) or Project(name='Model board')
         db.add(project)
         db.flush()
         run = Run(id=str(uuid4()), project_id=project.id, owner_id=db.scalar(select(Account.id).where(Account.username == owner)),
-                  name=name, state=state, is_public=public, metadata_={'engine': 'sdk'},
-                  config={'hidden': 'hidden-config'}, note='private owner note', started_at=ended - timedelta(hours=2),
+                  name=name, state=state, is_public=public, metadata_={'engine': engine},
+                  config=config or {'hidden': 'hidden-config'}, note='private owner note', started_at=ended - timedelta(hours=2),
                   ended_at=ended if state == 'finished' else None)
         db.add(run)
         db.flush()
@@ -54,6 +57,30 @@ def make_run(name, points, state='finished', public=True, ended=T0, owner='teste
                 db.add(Metric(run_id=run.id, key=key, step=step, value=value))
         db.commit()
         return run.id
+
+
+def tiny_ml_results(blimp=.7, arc=.4, wiki=1.86):
+    """At wiki byte-PPL 1.86 the wiki score is 100, so eff = (100·blimp + 100·arc + 100) / 3 × size multiplier."""
+    return {'blimp': {'accuracy': blimp}, 'arc_easy': {'accuracy': arc}, 'wikitext': {'byte_perplexity': wiki},
+            'aci': {'aci_score': 62.5, 'samples': 5000}}
+
+
+def evaluate(rid, results, ended, tasks=TINY_ML_TASKS, sha=SHA, status='finished', mode='full', **provenance):
+    """A server evaluation row as the benchmark queue stores it; Tiny-ML ones are marked private like start() does.
+    `parameters_counted` is what the evaluation worker counted from the checkpoint; pass None to omit it."""
+    if tasks is TINY_ML_TASKS:
+        provenance = {'protocol': TINY_ML_PROTOCOL, 'visibility': 'private', **provenance}
+    provenance = {'checkpoint_sha256': sha, 'parameters_counted': 1000, **provenance}
+    with SessionLocal() as db:
+        db.add(BenchmarkEvaluation(run_id=rid, status=status, mode=mode, tasks=list(tasks), results=results,
+                                   provenance={k: v for k, v in provenance.items() if v is not None},
+                                   created_at=ended - timedelta(minutes=30), ended_at=ended))
+        db.commit()
+
+
+def polish(rid, accuracy, ended, **provenance):
+    evaluate(rid, {'multiblimp_polish': {'accuracy': accuracy, 'samples': 200}}, ended,
+             tasks=['multiblimp_polish'], **{'protocol': 'tinylm-en-v1-byte-sliding', **provenance})
 
 
 def publish(client, rid, value, board=True):
@@ -170,11 +197,15 @@ def test_trust_badges_are_granted_by_the_server_not_declared_by_the_owner(client
     result(trust='verified', harness_sha=None),
     result(trust='reported'),
     result(trust='gold'),
+    # "measured by track" is granted only to the server's own evaluations, never claimed by an owner.
+    result(trust='track'),
+    external(trust='track', harness='own eval script'),
     result(kind='fork'),
     result(harness='<b>Glint</b>'),
     result(scale_rev='Glint\u202e2c5ea968'),
     result(scale_rev='x' * 41),
-    result(author='Jane Doe'),
+    result(author='<b>Jane Doe</b>'),
+    result(author='x' * 81),
     external(trust='verified', harness_sha='2c5ea968'),
     external(trust=None),
     external(trust='reported'),
@@ -210,3 +241,108 @@ def test_result_marker_accepts_complete_objects_only_from_the_owner(client):
     with TestClient(app, headers={'X-Track-Request': '1'}) as stranger:
         sign_in(stranger, 'board-stranger')
         assert stranger.put(f'/api/runs/{rid}/attributes/leaderboard/result', json={'value': result()}).status_code in (403, 404)
+
+
+def test_a_track_result_may_name_its_author_and_otherwise_leaves_it_to_the_owner_account(client):
+    named = make_run('named', {1000: EN})
+    publish(client, named, result(author='Jane Doe & Team'))
+    assert client.get(f'/api/runs/{named}/attributes/leaderboard/result').json()['value']['author'] == 'Jane Doe & Team'
+    unnamed = make_run('unnamed', {1000: EN})
+    publish(client, unnamed, result(checkpoint_sha256='9' * 64))
+    rows = {row['name']: row for row in board().json()['models']}
+    assert (rows['named']['author'], rows['named']['owner']) == ('Jane Doe & Team', 'tester')
+    assert (rows['unnamed']['author'], rows['unnamed']['owner']) == (None, 'tester')
+
+
+def test_every_public_finished_run_gets_a_row_from_its_latest_complete_track_evaluation(client, monkeypatch):
+    monkeypatch.setattr('fabryka_track.model_board.settings.model_board_publish_tiny_ml', True)
+    measured = make_run('measured', {}, config={'parameters': 999_999})
+    # The better but older evaluation loses to the latest complete one ("last measured", never "best").
+    evaluate(measured, tiny_ml_results(blimp=.9, arc=.6), T0 + timedelta(days=1), sha='1' * 64)
+    evaluate(measured, tiny_ml_results(), T0 + timedelta(days=2), checkpoint_step=4000, training_tokens=8_000_000)
+    polish(measured, .72, T0 + timedelta(days=2, hours=1))
+    # Never a smoke, failed or incomplete run of the suite, nor a private evaluation of another suite.
+    evaluate(measured, tiny_ml_results(blimp=.99), T0 + timedelta(days=3), mode='smoke')
+    evaluate(measured, tiny_ml_results(blimp=.99), T0 + timedelta(days=3), status='failed')
+    evaluate(measured, {**tiny_ml_results(blimp=.99), 'aci': {'error': 'worker stopped'}}, T0 + timedelta(days=3))
+    polish(measured, .99, T0 + timedelta(days=3), visibility='private')
+    for name, options in {'private run': {'public': False}, 'running run': {'state': 'running'},
+                          'failed run': {'state': 'failed'}, 'reference': {'engine': 'benchmark-reference'}}.items():
+        evaluate(make_run(name, {}, **options), tiny_ml_results(), T0, sha='2' * 64)
+    # A later Polish evaluation of another checkpoint becomes the row; the Tiny-ML numbers of the old one are dropped.
+    moved = make_run('moved on', {})
+    evaluate(moved, tiny_ml_results(), T0, sha='3' * 64)
+    polish(moved, .6, T0 + timedelta(days=1), sha='4' * 64, protocol='track-leaderboard-pl-v1', parameters_counted=20_000_000)
+
+    response = board()
+    rows = {row['name']: row for row in response.json()['models']}
+    assert set(rows) == {'measured', 'moved on'}
+    row = rows['measured']
+    assert (row['kind'], row['trust'], row['label']) == ('track', 'track', 'latest server evaluation')
+    assert (row['checkpoint_sha256'], row['step'], row['tokens_seen'], row['n_params']) == (SHA, 4000, 8_000_000, 1000)
+    # eff = (70 + 40 + 100) / 3 × 1.5 at 1000 parameters; accuracies on the board's 0–100 scale.
+    assert row['en'] == pytest.approx({'eff': 105.0, 'arc_easy': 40.0, 'blimp': 70.0, 'wiki_byte_ppl': 1.86})
+    assert row['pl'] == pytest.approx({'multiblimp': 72.0, 'eff': None})
+    assert row['categories'] == ['en', 'pl']
+    assert row['scale_rev'] == 'tiny_ml 3fce6037 (1000–150M)'
+    assert row['harness'] == f'{TINY_ML_PROTOCOL} + tinylm-en-v1-byte-sliding'
+    assert row['public_note'] is None and row['evaluated_at'].startswith('2026-09-03')
+    other = rows['moved on']
+    assert other['checkpoint_sha256'] == '4' * 64 and other['categories'] == ['pl']
+    assert other['en']['eff'] is None and other['pl']['multiblimp'] == pytest.approx(60.0)
+    assert other['n_params'] == 20_000_000 and other['step'] is None and other['scale_rev'] is None
+    assert 'hidden-config' not in response.text and 'private owner note' not in response.text
+
+
+def test_tiny_ml_aggregates_reach_the_public_board_only_when_the_deployment_publishes_them(client, monkeypatch):
+    only_tiny_ml = make_run('tiny-ml only', {})
+    evaluate(only_tiny_ml, tiny_ml_results(), T0, sha='5' * 64)
+    both = make_run('both suites', {})
+    evaluate(both, tiny_ml_results(), T0, sha='6' * 64, parameters_counted=8_000_000)
+    polish(both, .55, T0, sha='6' * 64, parameters_counted=8_000_000)
+    rows = {row['name']: row for row in board().json()['models']}
+    assert set(rows) == {'both suites'}
+    assert rows['both suites']['categories'] == ['pl'] and set(rows['both suites']['en'].values()) == {None}
+    assert rows['both suites']['n_params'] == 8_000_000
+
+    monkeypatch.setattr('fabryka_track.model_board.settings.model_board_publish_tiny_ml', True)
+    rows = {row['name']: row for row in board().json()['models']}
+    assert set(rows) == {'tiny-ml only', 'both suites'}
+    assert rows['both suites']['categories'] == ['en', 'pl'] and rows['tiny-ml only']['categories'] == ['en']
+
+
+def test_track_rows_use_the_parameter_count_measured_from_the_checkpoint_never_the_declared_one(client, monkeypatch):
+    monkeypatch.setattr('fabryka_track.model_board.settings.model_board_publish_tiny_ml', True)
+    # The owner declares 1M parameters (run config and the evaluation's copied `parameters`); the checkpoint holds 100M.
+    understated = make_run('understated', {}, config={'parameters': 1_000_000})
+    evaluate(understated, tiny_ml_results(), T0, sha='5' * 64, parameters=1_000_000, parameters_counted=100_000_000)
+    # Evaluations recorded before the server counted parameters do not qualify, in either category.
+    uncounted = make_run('uncounted', {}, config={'parameters': 8_000_000})
+    evaluate(uncounted, tiny_ml_results(), T0, sha='6' * 64, parameters=8_000_000, parameters_counted=None)
+    polish(uncounted, .7, T0, sha='6' * 64, parameters_counted=None)
+    rows = {row['name']: row for row in board().json()['models']}
+    assert set(rows) == {'understated'}
+    row = rows['understated']
+    bonus = 1 + .5 * math.log(150e6 / 100e6) / math.log(150e6 / 1000)
+    assert row['n_params'] == 100_000_000
+    assert row['en']['eff'] == pytest.approx(70 * bonus)
+
+
+def test_an_owner_marked_result_takes_precedence_over_the_track_measurement(client, monkeypatch):
+    monkeypatch.setattr('fabryka_track.model_board.settings.model_board_publish_tiny_ml', True)
+    marked = make_run('marked', {1000: EN})
+    publish(client, marked, result())
+    evaluate(marked, tiny_ml_results(), T0 + timedelta(days=1), sha='7' * 64)
+    # A server measurement of a checkpoint that is already on the board as an owner-marked row is not repeated.
+    duplicate = make_run('same checkpoint', {}, ended=T0 - timedelta(days=1))
+    evaluate(duplicate, tiny_ml_results(), T0, sha=SHA)
+    # Opting in without a complete marked result still leaves the run on the board, measured by the track.
+    opted_only = make_run('opted in only', {})
+    assert client.put(f'/api/runs/{opted_only}/attributes/visibility/public_board_metrics', json={'value': True}).status_code == 200
+    assert client.put(f'/api/runs/{opted_only}/attributes/visibility/public_note', json={'value': 'Baseline.'}).status_code == 200
+    evaluate(opted_only, tiny_ml_results(), T0, sha='8' * 64)
+    rows = {row['name']: row for row in board().json()['models']}
+    assert set(rows) == {'marked', 'opted in only'}
+    assert (rows['marked']['trust'], rows['marked']['en'], rows['marked']['checkpoint_sha256']) == (
+        'verified', {'eff': 41.5, 'arc_easy': 38.2, 'blimp': 71.0, 'wiki_byte_ppl': 2.91}, SHA)
+    assert rows['opted in only']['trust'] == 'track' and rows['opted in only']['public_note'] == 'Baseline.'

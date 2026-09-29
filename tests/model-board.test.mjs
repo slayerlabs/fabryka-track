@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  checkpointDetails,
   filterRows,
   hfLink,
   rankRows,
@@ -30,7 +31,9 @@ test("size buckets are disjoint with inclusive decimal upper bounds", () => {
   assert.equal(sizeBucket(16_000_000), "16");
   assert.equal(sizeBucket(16_000_001), "32");
   assert.equal(sizeBucket(150_000_000), "150");
-  assert.equal(sizeBucket(150_000_001), "150+");
+  assert.equal(sizeBucket(150_000_001), "350");
+  assert.equal(sizeBucket(350_000_000), "350");
+  assert.equal(sizeBucket(350_000_001), "350+");
   const rows = [
     row("small", { n_params: 16_000_000 }),
     row("next", { n_params: 16_000_001 }),
@@ -92,20 +95,37 @@ test("each category ranks by its own axis: EN by eff, PL by MultiBLiMP-pl, never
   ]);
 });
 
-test("category and self-reported filters", () => {
+test("category and self-reported filters; rows measured by track are never hidden as self-reported", () => {
   const rows = [
     row("en-only", { categories: ["en"] }),
     row("reported", { trust: "reported", categories: ["pl"] }),
+    row("track", { trust: "track", categories: ["pl"] }),
     row("both"),
   ];
   assert.deepEqual(
     ids(filterRows(rows, { category: "pl", size: "all", hideReported: false })),
-    ["reported", "both"],
+    ["reported", "track", "both"],
   );
   assert.deepEqual(
     ids(filterRows(rows, { category: "pl", size: "all", hideReported: true })),
-    ["both"],
+    ["track", "both"],
   );
+});
+
+test("provenance line omits the step and checkpoint a server evaluation did not record", () => {
+  assert.equal(
+    checkpointDetails(row("aaaaaaaabbbb", { label: "final checkpoint (result)", evaluated_at: null })),
+    "final checkpoint (result) · step 1,000 · ckpt aaaaaaaa",
+  );
+  const measured = checkpointDetails(
+    row("server", {
+      label: "latest server evaluation",
+      evaluated_at: "2026-09-20T12:00:00Z",
+      step: null,
+      checkpoint_sha256: null,
+    }),
+  );
+  assert.match(measured, /^latest server evaluation · 20 Sept? 2026$/);
 });
 
 test("only external rows with a Hugging Face tree URL get an outbound link", () => {

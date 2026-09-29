@@ -17,7 +17,7 @@ from sqlalchemy import update
 
 from .tiny_ml_suite import summarize_wikitext
 from .benchmark_model import ByteCheckpointLM
-from .benchmarks import TASKS, evaluation_checkpoint_path, checkpoint_digest
+from .benchmarks import TASKS, evaluation_checkpoint_path, checkpoint_digest, counted_parameters
 from .database import SessionLocal
 from .models import BenchmarkEvaluation
 from . import aci_suite, wikitext_suite
@@ -107,6 +107,8 @@ def run(eid, job=None, reporter=None):
     save(status='running',provenance=provenance)
     model=ByteCheckpointLM(path,device=device,payload=payload,
                            rolling_policy='harness' if tasks==['wikitext2'] else 'sliding')
+    # Measured from the loaded weights (never the run's declared config); the public model board uses only this.
+    provenance['parameters_counted']=counted_parameters(model.model)
     del payload
     manager=TaskManager() if any(name in TASKS and name not in ('wikitext2','aci') for name in tasks) else None
     api=HfApi();results=dict(job.get('results',{}));failures=[]
