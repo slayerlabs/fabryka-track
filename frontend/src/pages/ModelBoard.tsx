@@ -47,7 +47,7 @@ const SCORE_COLUMNS: Record<Category, Column[]> = {
     {
       key: "multiblimp",
       label: "MultiBLiMP-pl accuracy",
-      note: "random = 50 %",
+      note: "length baseline ≈ 60 %",
       digits: 2,
     },
   ],
@@ -310,7 +310,7 @@ export function ModelBoardPage() {
           <p className="lb-group-note">
             {category === "en"
               ? "Ranked by eff: the Glint Tiny-ML efficiency score (0–100) for owner-marked rows, the track's Tiny-ML efficiency for rows measured by track. Each row shows its scale revision. The size bonus stops at 150M parameters (Glint formula), so larger models get no bonus."
-              : "Ranked by MultiBLiMP-pl accuracy (random = 50 %). eff-PL is not frozen yet, so it is shown when available but never ranked."}
+              : "Ranked by MultiBLiMP-pl accuracy (length baseline ≈ 60 %: always picking the shorter sentence scores about 60 %). eff-PL is not frozen yet, so it is shown when available but never ranked."}
           </p>
           <div className="mb-controls">
             <div className="mb-sizes" role="group" aria-label="Model size">
