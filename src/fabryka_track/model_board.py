@@ -65,10 +65,10 @@ def _evaluated_at(evaluation):
     return evaluation.ended_at or evaluation.created_at
 
 
-def _tiny_ml_values(evaluation):
+def _tiny_ml_values(evaluation, parameters):
     """EN values from the server's Tiny-ML aggregate, on the board scale (accuracies in %), or None."""
     results = evaluation.results or {}
-    scored = tiny_ml_scores(results, evaluation.provenance.get('parameters'))
+    scored = tiny_ml_scores(results, parameters)
     if scored is None:
         return None
     return {'eff': scored['efficiency'], 'arc_easy': 100 * results['arc_easy']['accuracy'],
@@ -88,8 +88,10 @@ def _track_rows(session, publish_tiny_ml):
     """One row per public finished run from its latest finished full server evaluation.
 
     EN comes from the Tiny-ML suite (only when the deployment publishes its aggregates), PL from any
-    non-private evaluation that ran MultiBLiMP-pl. The latest evaluation fixes the row's checkpoint; the
-    other category is added only when its latest evaluation measured the same checkpoint sha.
+    non-private evaluation that ran MultiBLiMP-pl. Only evaluations that counted the checkpoint's weights
+    (`parameters_counted`, set by the server) qualify: size and the eff size bonus never come from the run's
+    declared config. The latest evaluation fixes the row's checkpoint; the other category is added only when
+    its latest evaluation measured the same checkpoint sha.
     """
     evaluations = session.execute(
         select(BenchmarkEvaluation, Run).join(Run, BenchmarkEvaluation.run_id == Run.id).where(
@@ -101,11 +103,14 @@ def _track_rows(session, publish_tiny_ml):
         if (run.metadata_ or {}).get('engine') == REFERENCE_ENGINE:
             continue
         provenance = evaluation.provenance or {}
+        counted = _count(provenance.get('parameters_counted'), 1)
+        if counted is None:
+            continue
         if provenance.get('protocol') == TINY_ML_PROTOCOL:
             # The suite is owner-only by default (its evaluations are always marked private).
             if not publish_tiny_ml:
                 continue
-            category, values = 'en', _tiny_ml_values(evaluation)
+            category, values = 'en', _tiny_ml_values(evaluation, counted)
         elif provenance.get('visibility') == 'private':
             continue
         else:
@@ -125,9 +130,7 @@ def _track_rows(session, publish_tiny_ml):
             # The used evaluations measured one checkpoint; take the first that recorded this fact.
             return next((value for value in (_count(p.get(key), minimum) for p in measured) if value is not None), None)
 
-        n_params = fact('parameters', 1) or _count((run.config or {}).get('parameters'), 1)
-        if n_params is None:
-            continue
+        n_params = fact('parameters_counted', 1)
         en = {name: None for name in EN_METRICS}
         pl = {name: None for name in PL_METRICS}
         if 'en' in used:

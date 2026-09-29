@@ -357,3 +357,14 @@ def test_leaderboard_surfaces_fast_pl_ladder(client):
     ab = next(m for size in client.get('/api/leaderboard').json()['sizes'] for m in size['models'] if m['id'] == rid)['auto_benchmark']
     assert ab['label'] == 'Polish ladder' and ab['is_percent'] is False and ab['suite'] == 'fast_pl'
     assert ab['score'] == pytest.approx(0.5 * .60 + 0.1 * .30 + 0.2 * .10)  # pl_score weighting
+
+
+def test_counted_parameters_count_a_tied_embedding_and_head_once():
+    class Tied(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.tokens = torch.nn.Embedding(256, 8)
+            self.norm = torch.nn.LayerNorm(8)
+            self.head = torch.nn.Linear(8, 256, bias=False)
+            self.head.weight = self.tokens.weight
+    assert benchmarks.counted_parameters(Tied()) == 256 * 8 + 2 * 8

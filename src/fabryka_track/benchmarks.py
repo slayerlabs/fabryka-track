@@ -154,6 +154,15 @@ def checkpoint_digest(path):
     return digest.hexdigest()
 
 
+def counted_parameters(model):
+    """Unique parameter tensors of the loaded model; a tied embedding/head matrix counts once.
+
+    Recorded as provenance `parameters_counted` by the code that executes the evaluation (local worker or an
+    authenticated benchmark runner); the public model board never uses the run's declared `parameters`.
+    """
+    return sum(p.numel() for p in {id(p): p for p in model.parameters()}.values())
+
+
 def selected_checkpoint(session, run, checkpoint_id=None):
     """Resolve native byte artifacts only; selected snapshots may belong to a live run."""
     if checkpoint_id is None:

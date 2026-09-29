@@ -1,5 +1,6 @@
 from conftest import sign_in
 from test_api import event
+import math
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
@@ -65,12 +66,14 @@ def tiny_ml_results(blimp=.7, arc=.4, wiki=1.86):
 
 
 def evaluate(rid, results, ended, tasks=TINY_ML_TASKS, sha=SHA, status='finished', mode='full', **provenance):
-    """A server evaluation row as the benchmark queue stores it; Tiny-ML ones are marked private like start() does."""
+    """A server evaluation row as the benchmark queue stores it; Tiny-ML ones are marked private like start() does.
+    `parameters_counted` is what the evaluation worker counted from the checkpoint; pass None to omit it."""
     if tasks is TINY_ML_TASKS:
-        provenance = {'protocol': TINY_ML_PROTOCOL, 'visibility': 'private', 'parameters': 1000, **provenance}
+        provenance = {'protocol': TINY_ML_PROTOCOL, 'visibility': 'private', **provenance}
+    provenance = {'checkpoint_sha256': sha, 'parameters_counted': 1000, **provenance}
     with SessionLocal() as db:
         db.add(BenchmarkEvaluation(run_id=rid, status=status, mode=mode, tasks=list(tasks), results=results,
-                                   provenance={'checkpoint_sha256': sha, **provenance},
+                                   provenance={k: v for k, v in provenance.items() if v is not None},
                                    created_at=ended - timedelta(minutes=30), ended_at=ended))
         db.commit()
 
@@ -267,9 +270,9 @@ def test_every_public_finished_run_gets_a_row_from_its_latest_complete_track_eva
                           'failed run': {'state': 'failed'}, 'reference': {'engine': 'benchmark-reference'}}.items():
         evaluate(make_run(name, {}, **options), tiny_ml_results(), T0, sha='2' * 64)
     # A later Polish evaluation of another checkpoint becomes the row; the Tiny-ML numbers of the old one are dropped.
-    moved = make_run('moved on', {}, config={'parameters': 20_000_000})
+    moved = make_run('moved on', {})
     evaluate(moved, tiny_ml_results(), T0, sha='3' * 64)
-    polish(moved, .6, T0 + timedelta(days=1), sha='4' * 64, protocol='track-leaderboard-pl-v1')
+    polish(moved, .6, T0 + timedelta(days=1), sha='4' * 64, protocol='track-leaderboard-pl-v1', parameters_counted=20_000_000)
 
     response = board()
     rows = {row['name']: row for row in response.json()['models']}
@@ -294,9 +297,9 @@ def test_every_public_finished_run_gets_a_row_from_its_latest_complete_track_eva
 def test_tiny_ml_aggregates_reach_the_public_board_only_when_the_deployment_publishes_them(client, monkeypatch):
     only_tiny_ml = make_run('tiny-ml only', {})
     evaluate(only_tiny_ml, tiny_ml_results(), T0, sha='5' * 64)
-    both = make_run('both suites', {}, config={'parameters': 8_000_000})
-    evaluate(both, tiny_ml_results(), T0, sha='6' * 64)
-    polish(both, .55, T0, sha='6' * 64)
+    both = make_run('both suites', {})
+    evaluate(both, tiny_ml_results(), T0, sha='6' * 64, parameters_counted=8_000_000)
+    polish(both, .55, T0, sha='6' * 64, parameters_counted=8_000_000)
     rows = {row['name']: row for row in board().json()['models']}
     assert set(rows) == {'both suites'}
     assert rows['both suites']['categories'] == ['pl'] and set(rows['both suites']['en'].values()) == {None}
@@ -306,6 +309,23 @@ def test_tiny_ml_aggregates_reach_the_public_board_only_when_the_deployment_publ
     rows = {row['name']: row for row in board().json()['models']}
     assert set(rows) == {'tiny-ml only', 'both suites'}
     assert rows['both suites']['categories'] == ['en', 'pl'] and rows['tiny-ml only']['categories'] == ['en']
+
+
+def test_track_rows_use_the_parameter_count_measured_from_the_checkpoint_never_the_declared_one(client, monkeypatch):
+    monkeypatch.setattr('fabryka_track.model_board.settings.model_board_publish_tiny_ml', True)
+    # The owner declares 1M parameters (run config and the evaluation's copied `parameters`); the checkpoint holds 100M.
+    understated = make_run('understated', {}, config={'parameters': 1_000_000})
+    evaluate(understated, tiny_ml_results(), T0, sha='5' * 64, parameters=1_000_000, parameters_counted=100_000_000)
+    # Evaluations recorded before the server counted parameters do not qualify, in either category.
+    uncounted = make_run('uncounted', {}, config={'parameters': 8_000_000})
+    evaluate(uncounted, tiny_ml_results(), T0, sha='6' * 64, parameters=8_000_000, parameters_counted=None)
+    polish(uncounted, .7, T0, sha='6' * 64, parameters_counted=None)
+    rows = {row['name']: row for row in board().json()['models']}
+    assert set(rows) == {'understated'}
+    row = rows['understated']
+    bonus = 1 + .5 * math.log(150e6 / 100e6) / math.log(150e6 / 1000)
+    assert row['n_params'] == 100_000_000
+    assert row['en']['eff'] == pytest.approx(70 * bonus)
 
 
 def test_an_owner_marked_result_takes_precedence_over_the_track_measurement(client, monkeypatch):

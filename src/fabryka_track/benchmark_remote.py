@@ -89,6 +89,8 @@ def progress(eid:str,body:Progress,runner=Depends(worker),session=Depends(sessio
     with lock:
         row=assignment(session,eid,runner,body.lease)
         original=row.provenance
+        # `parameters_counted` stays writable here on purpose: authenticated runners (admin-issued tokens)
+        # execute the same worker code and count the loaded checkpoint's weights; owners have no write path.
         protected = {'checkpoint_id','artifact_id','checkpoint_storage_key','checkpoint_sha256',
                      'checkpoint_step','dataset_split','protocol','seed','fewshot','limit_per_subtask',
                      'dataset','dataset_config','evaluator_version','wikitext_task_version','detokenizer',
