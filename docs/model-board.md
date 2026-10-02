@@ -53,7 +53,7 @@ Plain text rejects `<`, `>` and control or formatting characters; the page rende
 
 ### Trust levels
 
-`trust` in the attribute is the owner's claim. The badge on the page is granted by the server from two deployment settings (comma-separated): `FABRYKA_MODEL_BOARD_TRUSTED_OWNERS` (account names) and `FABRYKA_MODEL_BOARD_HARNESS_SHAS` (evaluation-harness revisions, 7+ hex characters; prefixes match). Account names match exactly, including case. Rows measured by the track always carry `track` (badge "measured by track"), which no owner can claim.
+`trust` in the attribute is the owner's claim. The badge on the page is granted by the server from two deployment settings (comma-separated): `FABRYKA_MODEL_BOARD_TRUSTED_OWNERS` (account names; default `hf_maggio33`, the Fabryka account that logs the board rows it measured itself) and `FABRYKA_MODEL_BOARD_HARNESS_SHAS` (evaluation-harness revisions, 7+ hex characters; prefixes match). Account names match exactly, including case; setting `FABRYKA_MODEL_BOARD_TRUSTED_OWNERS=` (empty) trusts nobody. Rows measured by the track always carry `track` (badge "measured by track"), which no owner can claim.
 
 - `verified` (badge "verified ✓"): a trusted owner's track run whose `harness_sha` is a listed harness revision. External models are never verified.
 - `measured` (badge "measured by Fabryka"): any other row from a trusted owner that did not declare itself `reported`. Default claim for track runs; external rows must claim `measured` or `reported` explicitly.
