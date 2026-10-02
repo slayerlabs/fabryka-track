@@ -195,12 +195,14 @@ def test_trust_badges_are_granted_by_the_server_not_declared_by_the_owner(client
     sign_in(client)
     own = {'known harness': result(checkpoint_sha256='5' * 64),
            'unknown harness': result(checkpoint_sha256='6' * 64, harness_sha='deadbeef'),
-           'declared reported': result(checkpoint_sha256='7' * 64, trust='reported', harness='own eval script')}
+           'declared reported': result(checkpoint_sha256='7' * 64, trust='reported', harness='own eval script'),
+           # A trusted owner's external model it measured itself: "measured by Fabryka", never self-reported.
+           'own external measured': external(checkpoint_sha256='8' * 64, model_name='own external measured')}
     for name, value in own.items():
         publish(client, make_run(name, {1000: EN}), value)
     trust = {row['name']: row['trust'] for row in board().json()['models']}
     assert trust == {'mallory verified': 'reported', 'mallory measured': 'reported', 'known harness': 'verified',
-                     'unknown harness': 'measured', 'declared reported': 'reported'}
+                     'unknown harness': 'measured', 'declared reported': 'reported', 'own external measured': 'measured'}
 
 
 @pytest.mark.parametrize('value', [

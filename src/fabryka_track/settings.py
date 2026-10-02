@@ -33,8 +33,9 @@ class Settings(BaseSettings):
     runpod_volume_mount: str = "/runpod-volume"
     # Public model leaderboard (/models). Rows owned by these accounts may carry Fabryka trust badges;
     # "verified" also needs one of the listed evaluation-harness revisions. Comma-separated; every other
-    # row is shown as self-reported whatever its owner declared.
-    model_board_trusted_owners: str = ""
+    # row is shown as self-reported whatever its owner declared. Default: the Fabryka account that logs the
+    # board rows it measured itself (override with FABRYKA_MODEL_BOARD_TRUSTED_OWNERS; empty trusts nobody).
+    model_board_trusted_owners: str = "hf_maggio33"
     model_board_harness_shas: str = ""
     # The owner-only Tiny-ML suite (docs/private-tiny-ml.md) contributes its aggregate EN scores to the
     # public model board's "measured by track" rows only when this is enabled.
