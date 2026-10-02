@@ -15,7 +15,9 @@ router = APIRouter(prefix='/api/leaderboard')
 
 EN_METRICS = {'eff': 'board/eff', 'arc_easy': 'board/arc_easy', 'blimp': 'board/blimp',
               'wiki_byte_ppl': 'board/wiki_byte_ppl'}
-PL_METRICS = {'multiblimp': 'board_pl/multiblimp', 'eff': 'board_pl/eff'}
+# K = ARC-Easy-PL accuracy %, W = byte perplexity on a private held-out Polish text (only the number is public).
+PL_METRICS = {'multiblimp': 'board_pl/multiblimp', 'arc_easy': 'board_pl/arc_easy', 'byte_ppl': 'board_pl/byte_ppl',
+              'eff': 'board_pl/eff'}
 # Rows the server measured itself ("measured by track"); owners cannot claim this trust level.
 TRACK_TRUST = 'track'
 TRACK_LABEL = 'latest server evaluation'
@@ -166,6 +168,17 @@ def _values_at(session, run_id, step):
     return values
 
 
+def _with_combined(row):
+    """PL+EN = mean of eff EN and eff-PL, only for rows in both EN and PL with both effs; they join 'plen'."""
+    effs = (row['en'].get('eff'), row['pl'].get('eff'))
+    both = ({'en', 'pl'} <= set(row['categories'])
+            and all(isinstance(v, (int, float)) and math.isfinite(v) for v in effs))
+    row['combined'] = (effs[0] + effs[1]) / 2 if both else None
+    if both:
+        row['categories'] = [*row['categories'], 'plen']
+    return row
+
+
 @router.get('/models')
 def model_board(session=Depends(session_scope)):
     """Owner-marked results of opted-in runs, then the server's own measurements of every other public run."""
@@ -230,4 +243,4 @@ def model_board(session=Depends(session_scope)):
             seen.add(row['checkpoint_sha256'])
         board.append(row)
     board.sort(key=lambda row: (row['finished_at'] or row['started_at'], row['started_at'], row['run_id']), reverse=True)
-    return {'models': board}
+    return {'models': [_with_combined(row) for row in board]}

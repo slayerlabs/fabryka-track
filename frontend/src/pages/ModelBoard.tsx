@@ -10,6 +10,7 @@ import {
   checkpointDetails,
   filterRows,
   hfLink,
+  measuredByUs,
   rankRows,
   sizeBucket,
   sortRows,
@@ -29,8 +30,16 @@ const DOCS_URL =
 const CATEGORY_LABELS: Record<Category, string> = {
   en: "EN",
   pl: "PL",
+  plen: "PL+EN",
 };
-type Column = { key: SortKey; label: string; note?: string; digits?: number };
+// dagger: a value we measured for an external model with our protocol.
+type Column = {
+  key: SortKey;
+  label: string;
+  note?: string;
+  digits?: number;
+  dagger?: boolean;
+};
 const SCORE_COLUMNS: Record<Category, Column[]> = {
   en: [
     { key: "en_eff", label: "eff", note: "per scale revision", digits: 2 },
@@ -49,15 +58,37 @@ const SCORE_COLUMNS: Record<Category, Column[]> = {
       label: "MultiBLiMP-pl accuracy",
       note: "length baseline ≈ 60 %",
       digits: 2,
+      dagger: true,
     },
+    {
+      key: "pl_arc_easy",
+      label: "ARC-Easy-PL accuracy",
+      digits: 2,
+      dagger: true,
+    },
+    {
+      key: "pl_byte_ppl",
+      label: "byte-PPL PL",
+      note: "lower is better",
+      digits: 4,
+      dagger: true,
+    },
+    { key: "pl_eff", label: "eff-PL", digits: 2, dagger: true },
+  ],
+  plen: [
+    { key: "combined", label: "PL+EN", digits: 2, dagger: true },
+    { key: "en_eff", label: "eff EN", digits: 2 },
+    { key: "pl_eff", label: "eff-PL", digits: 2, dagger: true },
   ],
 };
-const PL_EFF_COLUMN: Column = {
-  key: "pl_eff",
-  label: "eff-PL",
-  note: "not frozen · not ranked",
-  digits: 2,
+const CATEGORY_NOTES: Record<Category, string> = {
+  en: "Ranked by eff: the Glint Tiny-ML efficiency score (0–100) for owner-marked rows, the track's Tiny-ML efficiency for rows measured by track. Each row shows its scale revision. The size bonus stops at 150M parameters (Glint formula), so larger models get no bonus.",
+  pl: "Ranked by eff-PL = (G + K + WS) / 3 × the same size multiplier as EN; our protocol, not official. G = MultiBLiMP-pl accuracy (length baseline ≈ 60 %: always picking the shorter sentence scores about 60 %), K = ARC-Easy-PL accuracy, WS = score from byte-PPL on a private held-out Polish text. Rows without eff-PL are listed below, unranked, by MultiBLiMP-pl.",
+  plen: "Average of eff EN and eff-PL; favours bilingual models. Shown only for models with both.",
 };
+/** A cell carries the dagger when it is our measurement of an external model. */
+const daggered = (row: BoardRow, column: Column) =>
+  !!column.dagger && measuredByUs(row) && sortValue(row, column.key) !== null;
 
 function BoardTable({
   rows,
@@ -177,17 +208,20 @@ function BoardTable({
                   )}
                 </td>
                 <td>{row.author ?? row.owner}</td>
-                {columns.map((column) => (
-                  <td className="lb-number" key={column.key}>
-                    {column.key === RANK_KEY[category] ? (
-                      <strong>
-                        {format(sortValue(row, column.key), column.digits)}
-                      </strong>
-                    ) : (
-                      format(sortValue(row, column.key), column.digits)
-                    )}
-                  </td>
-                ))}
+                {columns.map((column) => {
+                  const text =
+                    format(sortValue(row, column.key), column.digits) +
+                    (daggered(row, column) ? "†" : "");
+                  return (
+                    <td className="lb-number" key={column.key}>
+                      {column.key === RANK_KEY[category] ? (
+                        <strong>{text}</strong>
+                      ) : (
+                        text
+                      )}
+                    </td>
+                  );
+                })}
                 <td className="lb-number">{compact(row.n_params)}</td>
                 <td className="lb-number">{compact(row.tokens_seen)}</td>
                 <td>
@@ -236,10 +270,10 @@ export function ModelBoardPage() {
   const visible = filterRows(models, { category, size, hideReported });
   const rows = sortRows(visible, sort.key, sort.direction);
   const ranks = rankRows(visible, category);
-  const columns =
-    category === "pl" && visible.some((row) => row.pl.eff !== null)
-      ? [...SCORE_COLUMNS.pl, PL_EFF_COLUMN]
-      : SCORE_COLUMNS[category];
+  const columns = SCORE_COLUMNS[category];
+  const showDagger = visible.some((row) =>
+    columns.some((column) => daggered(row, column)),
+  );
   const chooseCategory = (next: Category) => {
     setCategory(next);
     setSort({
@@ -308,9 +342,7 @@ export function ModelBoardPage() {
             ))}
           </div>
           <p className="lb-group-note">
-            {category === "en"
-              ? "Ranked by eff: the Glint Tiny-ML efficiency score (0–100) for owner-marked rows, the track's Tiny-ML efficiency for rows measured by track. Each row shows its scale revision. The size bonus stops at 150M parameters (Glint formula), so larger models get no bonus."
-              : "Ranked by MultiBLiMP-pl accuracy (length baseline ≈ 60 %: always picking the shorter sentence scores about 60 %). eff-PL is not frozen yet, so it is shown when available but never ranked."}
+            {CATEGORY_NOTES[category]}
           </p>
           <div className="mb-controls">
             <div className="mb-sizes" role="group" aria-label="Model size">
@@ -409,6 +441,12 @@ export function ModelBoardPage() {
               selected={selected}
               toggle={toggle}
             />
+          )}
+          {rows.length > 0 && showDagger && (
+            <p className="lb-footnote">
+              † measured by us with our protocol; may differ from the authors'
+              own evaluation
+            </p>
           )}
           <p className="lb-footnote mb-caveat">
             Scores are our measurements with the Glint Tiny-ML protocol, not

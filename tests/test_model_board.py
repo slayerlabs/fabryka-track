@@ -124,13 +124,15 @@ def test_board_lists_only_finished_public_opted_in_results_with_values_at_the_ma
     assert set(rows) == {'good', 'pl only', 'en only'}
     row = rows['good']
     assert row['en'] == {'eff': 41.5, 'arc_easy': 38.2, 'blimp': 71.0, 'wiki_byte_ppl': 2.91}
-    assert row['pl'] == {'multiblimp': 62.5, 'eff': None}
+    assert row['pl'] == {'multiblimp': 62.5, 'arc_easy': None, 'byte_ppl': None, 'eff': None}
+    assert row['combined'] is None
     assert row['categories'] == ['en', 'pl']
     assert (row['kind'], row['trust'], row['owner'], row['step']) == ('track', 'verified', 'tester', 1000)
     assert row['public_note'] == 'Glint ranges pinned.' and row['hf_url'] is None and row['author'] is None
     # Missing values stay null (never 0) and the incomplete category is dropped.
     assert rows['pl only']['en']['wiki_byte_ppl'] is None and rows['pl only']['en']['eff'] == 30.0
     assert rows['pl only']['categories'] == ['pl'] and rows['pl only']['pl']['eff'] == 12.0
+    assert rows['pl only']['combined'] is None
     assert rows['en only']['categories'] == ['en'] and rows['en only']['pl']['multiblimp'] is None
     assert rows['en only']['trust'] == 'measured' and rows['en only']['public_note'] is None
     for private in ('private owner note', 'hidden-config', 'owner-only attribute', 'private/diagnostic'):
@@ -139,6 +141,23 @@ def test_board_lists_only_finished_public_opted_in_results_with_values_at_the_ma
     assert client.put(f'/api/runs/{pl_only}/attributes/visibility/public_board_metrics', json={'value': False}).status_code == 200
     assert client.put(f'/api/runs/{en_only}/attributes/leaderboard/result', json={'value': None}).status_code == 200
     assert {row['name'] for row in board().json()['models']} == {'good'}
+
+
+def test_combined_pl_en_is_the_mean_of_both_effs_and_only_rows_with_both_join_plen(client):
+    pl = {'board_pl/multiblimp': 60.0, 'board_pl/arc_easy': 35.0, 'board_pl/byte_ppl': 3.1234}
+    cases = {'both': {**EN, **pl, 'board_pl/eff': 20.5}, 'en eff only': {**EN, **pl},
+             'pl eff only': {**pl, 'board_pl/eff': 20.5}, 'neither': pl,
+             'non-finite': {**EN, **pl, 'board_pl/eff': float('inf')},
+             'incomplete en': {**{k: v for k, v in EN.items() if k != 'board/wiki_byte_ppl'}, **pl, 'board_pl/eff': 20.5}}
+    for index, (name, values) in enumerate(cases.items()):
+        publish(client, make_run(name, {1000: values}), result(checkpoint_sha256=str(index) * 64))
+    rows = {row['name']: row for row in board().json()['models']}
+    assert rows['both']['combined'] == pytest.approx((41.5 + 20.5) / 2)
+    assert rows['both']['categories'] == ['en', 'pl', 'plen']
+    assert rows['both']['pl'] == {'multiblimp': 60.0, 'arc_easy': 35.0, 'byte_ppl': 3.1234, 'eff': 20.5}
+    for name in ('en eff only', 'pl eff only', 'neither', 'non-finite', 'incomplete en'):
+        assert rows[name]['combined'] is None and 'plen' not in rows[name]['categories']
+    assert rows['non-finite']['pl']['eff'] is None
 
 
 def test_board_keeps_the_earliest_trusted_row_per_checkpoint_and_links_external_models_to_the_pinned_revision(client):
@@ -282,7 +301,7 @@ def test_every_public_finished_run_gets_a_row_from_its_latest_complete_track_eva
     assert (row['checkpoint_sha256'], row['step'], row['tokens_seen'], row['n_params']) == (SHA, 4000, 8_000_000, 1000)
     # eff = (70 + 40 + 100) / 3 × 1.5 at 1000 parameters; accuracies on the board's 0–100 scale.
     assert row['en'] == pytest.approx({'eff': 105.0, 'arc_easy': 40.0, 'blimp': 70.0, 'wiki_byte_ppl': 1.86})
-    assert row['pl'] == pytest.approx({'multiblimp': 72.0, 'eff': None})
+    assert row['pl'] == pytest.approx({'multiblimp': 72.0, 'arc_easy': None, 'byte_ppl': None, 'eff': None})
     assert row['categories'] == ['en', 'pl']
     assert row['scale_rev'] == 'tiny_ml 3fce6037 (1000–150M)'
     assert row['harness'] == f'{TINY_ML_PROTOCOL} + tinylm-en-v1-byte-sliding'

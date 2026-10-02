@@ -4,6 +4,7 @@ import {
   checkpointDetails,
   filterRows,
   hfLink,
+  measuredByUs,
   rankRows,
   sizeBucket,
   sortRows,
@@ -22,7 +23,8 @@ const row = (run_id, { en = {}, pl = {}, ...extras } = {}) => ({
   finished_at: "2026-09-02T00:00:00Z",
   categories: ["en", "pl"],
   en: { eff: null, arc_easy: null, blimp: null, wiki_byte_ppl: null, ...en },
-  pl: { multiblimp: null, eff: null, ...pl },
+  pl: { multiblimp: null, arc_easy: null, byte_ppl: null, eff: null, ...pl },
+  combined: null,
   ...extras,
 });
 const ids = (rows) => rows.map((item) => item.run_id);
@@ -77,11 +79,12 @@ test("missing values sort last in both directions and ties keep their order", ()
   assert.deepEqual(ids(sortRows(dated, "date", "asc")), ["dated", "undated"]);
 });
 
-test("each category ranks by its own axis: EN by eff, PL by MultiBLiMP-pl, never by eff-PL", () => {
+test("EN ranks by eff; PL ranks by eff-PL, rows without it follow unranked by MultiBLiMP-pl", () => {
   const rows = [
     row("a", { en: { eff: 40 }, pl: { multiblimp: 70, eff: 1 } }),
     row("b", { en: { eff: 55 }, pl: { multiblimp: 60, eff: 99 } }),
     row("c", { en: { eff: 55 }, pl: { multiblimp: 50 } }),
+    row("d", { pl: { multiblimp: 80 } }),
   ];
   assert.deepEqual([...rankRows(rows, "en")], [
     ["b", 1],
@@ -89,10 +92,30 @@ test("each category ranks by its own axis: EN by eff, PL by MultiBLiMP-pl, never
     ["a", 3],
   ]);
   assert.deepEqual([...rankRows(rows, "pl")], [
-    ["a", 1],
-    ["b", 2],
-    ["c", 3],
+    ["b", 1],
+    ["a", 2],
   ]);
+  assert.deepEqual(ids(sortRows(rows, "pl_eff", "desc")), ["b", "a", "d", "c"]);
+});
+
+test("PL+EN ranks by combined and lists only rows the server put in plen", () => {
+  const rows = [
+    row("en-pl", { categories: ["en", "pl"] }),
+    row("low", { categories: ["en", "pl", "plen"], combined: 30 }),
+    row("high", { categories: ["en", "pl", "plen"], combined: 45 }),
+  ];
+  const plen = filterRows(rows, { category: "plen", size: "all", hideReported: false });
+  assert.deepEqual(ids(plen), ["low", "high"]);
+  assert.deepEqual([...rankRows(plen, "plen")], [
+    ["high", 1],
+    ["low", 2],
+  ]);
+});
+
+test("the dagger marks only external models measured by us, never self-reported or track rows", () => {
+  assert.equal(measuredByUs(row("ext", { kind: "external", trust: "measured" })), true);
+  assert.equal(measuredByUs(row("ext", { kind: "external", trust: "reported" })), false);
+  assert.equal(measuredByUs(row("own", { kind: "track", trust: "measured" })), false);
 });
 
 test("category and self-reported filters; rows measured by track are never hidden as self-reported", () => {
