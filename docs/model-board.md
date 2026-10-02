@@ -10,7 +10,7 @@ Every public, finished run with a server evaluation is on the board without any 
 2. Its owner opted in to public board metrics: attribute `visibility/public_board_metrics` is literally `true`. The same flag already publishes the run's `board/*` series in the read-only run view; on this board it also publishes the `board_pl/*` values at the result step. Setting it to anything else removes the row.
 3. It logged the board series at the result step:
    - EN: `board/eff`, `board/arc_easy`, `board/blimp` (Glint 0–100 scale) and `board/wiki_byte_ppl` (raw byte perplexity). The row is in the EN category only when all four exist at that step.
-   - PL: `board_pl/multiblimp` (MultiBLiMP-pl accuracy in %; the length baseline, always picking the shorter sentence, scores about 60 %, not 50 %). Optional `board_pl/eff` is shown next to it but is never ranked, because the eff-PL formula is not frozen yet.
+   - PL: `board_pl/multiblimp` (G, MultiBLiMP-pl accuracy in %; the length baseline, always picking the shorter sentence, scores about 60 %, not 50 %). The row is in the PL category when it exists. Optional: `board_pl/arc_easy` (K, ARC-Easy-PL accuracy in %), `board_pl/byte_ppl` (W, byte perplexity on a private held-out Polish text; the text is never published, only the number) and `board_pl/eff` (eff-PL = (G + K + WS) / 3 × the same size multiplier as EN, where WS is the score derived from W; our protocol, not an official one). Values are copied as logged; the server does not recompute them.
 4. It carries a valid `leaderboard/result` attribute (below). Studio runs cannot be marked because their records are managed by the training worker; log results from an SDK run.
 
 Values are read at exactly `result.step`, never the latest step. A missing value is `null`, never 0; a row with neither category complete is omitted. When several runs report the same `checkpoint_sha256`, a trusted owner's run wins over any other, then the earliest finished run, so a later copy of a checkpoint sha cannot replace the original row. An opted-in `visibility/public_note` is shown with the row. No other attribute, config, note or series leaves the server. A run with an owner-marked row is never shown with its track-measured row as well.
@@ -21,7 +21,7 @@ Rows with the badge "measured by track" come from the server's own benchmark eva
 
 1. The run is public and `finished`, and the evaluation is `finished` in `full` mode: the same gate as the public `/api/benchmark-results`. Evaluations whose provenance is marked `private` are excluded (Tiny-ML: see 2). Synthetic reference runs (`engine: benchmark-reference`, other boards' imported references) are not track participants and are excluded.
 2. EN comes from the track's Tiny-ML suite (`tiny-ml-en-v2-byte-sliding-aci`), scored on the server with the frozen Tiny-ML formula: eff is the Tiny-ML Efficiency, ARC-Easy and BLiMP are accuracies in %, Wiki byte-PPL is raw. Only evaluations with a valid aggregate (all four tasks) count. The Tiny-ML suite is owner-only ([private Tiny-ML comparisons](private-tiny-ml.md)), so its aggregate scores appear here only when the deployment sets `FABRYKA_MODEL_BOARD_PUBLISH_TINY_ML=true`; then eff, ARC-Easy, BLiMP and Wiki byte-PPL are published, never ACI or per-item results. Otherwise track rows carry no EN values.
-3. PL comes from any other evaluation that ran MultiBLiMP-pl (`multiblimp_polish`, for example the `polish` or `leaderboard_pl` suites): accuracy × 100.
+3. PL comes from any other evaluation that ran MultiBLiMP-pl (`multiblimp_polish`, for example the `polish` or `leaderboard_pl` suites): accuracy × 100. Track rows carry only MultiBLiMP-pl; ARC-Easy-PL, byte-PPL PL and eff-PL stay `null`.
 4. The latest qualifying evaluation (by end time) fixes the row's checkpoint: the last measured checkpoint, never the best one. The other category is filled only from its own latest qualifying evaluation of the same `checkpoint_sha256`, so one row never mixes checkpoints.
 5. `n_params` and the eff size bonus use only `parameters_counted`: the unique parameters (a tied embedding/head counts once) counted from the loaded checkpoint by the evaluation worker or an authenticated benchmark runner (admin-issued token, same worker code). Owner-declared `parameters` (run config) are not used; evaluations recorded before this count existed appear after re-evaluation. `step` and `tokens_seen` come from the evaluation's checkpoint provenance (`checkpoint_step`, `training_tokens`). `harness` names the evaluation protocol(s); `scale_rev` is `tiny_ml <reference revision> (1000–150M)` when EN is present.
 6. A run that already has an owner-marked row, or whose checkpoint sha is already on the board through an owner-marked row, gets no track row. Among track rows that share a checkpoint sha the earliest finished run is kept.
@@ -59,7 +59,13 @@ Plain text rejects `<`, `>` and control or formatting characters; the page rende
 - `measured` (badge "measured by Fabryka"): any other row from a trusted owner that did not declare itself `reported`. Default claim for track runs; external rows must claim `measured` or `reported` explicitly.
 - `reported` (badge "self-reported (different protocol)"): every row from an account outside the trusted list, whatever it claims, and rows declared `reported` (which must name their protocol in `harness`). The page can hide these rows.
 
-Ranking ignores the badge: EN ranks by eff, PL by MultiBLiMP-pl. EN and PL are never combined because the two scores live on different scales.
+Ranking ignores the badge:
+
+- EN ranks by eff.
+- PL ranks by eff-PL. Rows without eff-PL are listed below all ranked rows, sorted by MultiBLiMP-pl, with no rank; their eff-PL cell shows "—" (nothing is imputed).
+- PL+EN ranks by `combined` = (eff + eff-PL) / 2, computed by the server only for rows ranked in both EN and PL that have both effs; only such rows get the `plen` category. It favours bilingual models.
+
+Missing values show "—". On rows of external models with the badge "measured by Fabryka" (`trust: measured`), PL values and PL+EN are marked "†": measured by us with our protocol; may differ from the authors' own evaluation. Self-reported rows never carry it.
 
 ### `scale_rev`
 
@@ -74,7 +80,8 @@ run.init(project="glint", name="glint-16m-baseline", config={"parameters": 16_00
 # … training …
 step = 80_000
 run.log({"board/eff": 41.2, "board/arc_easy": 38.1, "board/blimp": 70.4,
-         "board/wiki_byte_ppl": 3.12, "board_pl/multiblimp": 61.5}, step=step)
+         "board/wiki_byte_ppl": 3.12, "board_pl/multiblimp": 61.5, "board_pl/arc_easy": 33.0,
+         "board_pl/byte_ppl": 3.4512, "board_pl/eff": 38.7}, step=step)
 run["visibility/public_board_metrics"] = True
 run["leaderboard/result"] = {
     "step": step,

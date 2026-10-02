@@ -1,5 +1,5 @@
 export type Trust = "verified" | "measured" | "reported" | "track";
-export type Category = "en" | "pl";
+export type Category = "en" | "pl" | "plen";
 export interface BoardRow {
   run_id: string;
   name: string;
@@ -29,7 +29,14 @@ export interface BoardRow {
     blimp: number | null;
     wiki_byte_ppl: number | null;
   };
-  pl: { multiblimp: number | null; eff: number | null };
+  pl: {
+    multiblimp: number | null;
+    arc_easy: number | null;
+    byte_ppl: number | null;
+    eff: number | null;
+  };
+  /** (eff EN + eff-PL) / 2, server-side; null unless both are present. */
+  combined: number | null;
 }
 export type SortKey =
   | "en_eff"
@@ -37,7 +44,10 @@ export type SortKey =
   | "blimp"
   | "wiki_byte_ppl"
   | "multiblimp"
+  | "pl_arc_easy"
+  | "pl_byte_ppl"
   | "pl_eff"
+  | "combined"
   | "n_params"
   | "tokens_seen"
   | "date";
@@ -64,22 +74,26 @@ export const SIZE_BUCKETS: {
   { key: "350", label: "≤350M", range: "150M–350M parameters", max: 350e6 },
   { key: "350+", label: ">350M", range: "over 350M parameters", max: Infinity },
 ];
-// Column direction when first chosen; wiki byte-perplexity is lower-is-better.
+// Column direction when first chosen; byte-perplexities are lower-is-better.
 export const NATURAL_DIRECTION: Record<SortKey, Direction> = {
   en_eff: "desc",
   arc_easy: "desc",
   blimp: "desc",
   wiki_byte_ppl: "asc",
   multiblimp: "desc",
+  pl_arc_easy: "desc",
+  pl_byte_ppl: "asc",
   pl_eff: "desc",
+  combined: "desc",
   n_params: "asc",
   tokens_seen: "asc",
   date: "desc",
 };
-// The ranked axis per category. eff-PL is not frozen, so PL ranks by MultiBLiMP-pl.
+// The ranked axis per category. PL rows without eff-PL stay unranked below the ranked ones.
 export const RANK_KEY: Record<Category, SortKey> = {
   en: "en_eff",
-  pl: "multiblimp",
+  pl: "pl_eff",
+  plen: "combined",
 };
 
 const finite = (value: unknown): value is number =>
@@ -96,7 +110,10 @@ export function sortValue(row: BoardRow, key: SortKey): number | null {
     blimp: row.en.blimp,
     wiki_byte_ppl: row.en.wiki_byte_ppl,
     multiblimp: row.pl.multiblimp,
+    pl_arc_easy: row.pl.arc_easy,
+    pl_byte_ppl: row.pl.byte_ppl,
     pl_eff: row.pl.eff,
+    combined: row.combined,
     n_params: row.n_params,
     tokens_seen: row.tokens_seen,
     date: Date.parse(row.finished_at ?? row.started_at),
@@ -104,12 +121,19 @@ export function sortValue(row: BoardRow, key: SortKey): number | null {
   return finite(value) ? value : null;
 }
 
-/** Stable sort; rows without a value stay last in both directions. */
+/** Stable sort; rows without a value stay last in both directions. Rows without eff-PL
+ * follow by MultiBLiMP-pl (desc) when sorting by eff-PL. */
 export function sortRows(rows: BoardRow[], key: SortKey, direction: Direction) {
   const sign = direction === "asc" ? 1 : -1;
   return [...rows].sort((a, b) => {
     const av = sortValue(a, key),
       bv = sortValue(b, key);
+    if (av === null && bv === null && key === "pl_eff") {
+      const am = sortValue(a, "multiblimp"),
+        bm = sortValue(b, "multiblimp");
+      if (am === null) return bm === null ? 0 : 1;
+      return bm === null ? -1 : bm - am;
+    }
     if (av === null) return bv === null ? 0 : 1;
     if (bv === null) return -1;
     return (av - bv) * sign;
@@ -155,6 +179,10 @@ export function hfLink(row: BoardRow) {
     ? row.hf_url
     : null;
 }
+
+/** External model measured by us ("measured by Fabryka"); its PL values carry the dagger. Self-reported never do. */
+export const measuredByUs = (row: BoardRow) =>
+  row.kind === "external" && row.trust === "measured";
 
 /** Provenance line under the model name; parts a server-measured row may lack are omitted. */
 export function checkpointDetails(row: BoardRow) {
