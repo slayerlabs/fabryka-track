@@ -385,6 +385,13 @@ test("every control call is bounded by a finite timeout and the user signal", as
   await assert.rejects(pending, /user cancelled/);
 });
 
+test("the browser waits clearly longer than the proxy so its 503 and Retry-After arrive", () => {
+  const proxy = readFileSync(join(root, "src/fabryka_track/pipeline.py"), "utf8");
+  const proxySeconds = Number(/AsyncClient\([^)]*timeout=(\d+)\)/.exec(proxy)[1]);
+  assert.equal(new PipelineApi().timeoutMs, 15000);
+  assert.ok(new PipelineApi().timeoutMs >= proxySeconds * 1000 + 5000);
+});
+
 test("admission checks content, caps and metadata before create", async () => {
   const par1 = new TextEncoder().encode("PAR1");
   const parquet = new Uint8Array([...par1, 1, 2, 3, 4, 5, 6, ...par1]);

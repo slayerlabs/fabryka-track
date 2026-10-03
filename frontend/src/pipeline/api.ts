@@ -95,7 +95,7 @@ export class PipelineApi {
     this.transport = fetcher;
     this.now = options.now ?? Date.now;
     this.sleep = options.sleep ?? sleep;
-    this.timeoutMs = options.timeoutMs ?? 10000;
+    this.timeoutMs = options.timeoutMs ?? 15000;
   }
 
   async create(body: CreateUpload, key: string, signal?: AbortSignal): Promise<UploadSession> {
