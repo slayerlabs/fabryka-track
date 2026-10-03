@@ -90,3 +90,11 @@ def test_release_includes_private_output(local_release_archive):
 def test_public_graph_has_no_private_entry():
     for path in PUBLIC.rglob("*.js"):
         assert "Data Pipeline Upload" not in path.read_text()
+
+
+def test_operator_docs_name_the_behavior_the_code_has():
+    docs = (REPO / "docs/private-pipeline.md").read_text()
+    for anchor in ("part_size_bytes", "`GET /pipeline/api/jobs`", "308", "WWW-Authenticate", "same create key",
+                   "until the next **Upload**", "15 s"):
+        assert anchor in docs, anchor
+    assert "send 8 MiB parts" not in docs and "sends 8 MiB parts" not in docs

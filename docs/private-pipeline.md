@@ -21,9 +21,13 @@ client pair. Provider, S3 and worker credentials never belong to Track.
 
 ## Authentication boundary
 
-- Every `/pipeline*` request (HTML, assets, HEAD, conditional, `/pipeline/api/*`) needs the shared Basic
+- Every `/pipeline/*` request (HTML, assets, HEAD, conditional, `/pipeline/api/*`) needs the shared Basic
   pair before any bytes are returned; a failure is 401 with
   `WWW-Authenticate: Basic realm="Pipeline Upload", charset="UTF-8"`.
+- `/pipeline` without the slash answers a fixed 308 to `/pipeline/` for every method, before the Basic
+  check, with no body, no `WWW-Authenticate` and the private headers; the query string is never echoed.
+  A challenge there would make browsers scope the cached pair to `/` and send it to public Track
+  endpoints that refuse any `Authorization` header. The redirect only reveals that `/pipeline/` exists.
 - The decision uses the routed path (root_path stripped), and the router repeats the check.
 - All private responses carry `Cache-Control: no-store`, `X-Content-Type-Options: nosniff`,
   `X-Frame-Options: DENY`.
@@ -34,7 +38,7 @@ client pair. Provider, S3 and worker credentials never belong to Track.
 
 | Method | Route |
 | --- | --- |
-| GET, POST | `jobs` |
+| GET, POST | `jobs` (`GET /pipeline/api/jobs` is proxied for contract completeness; the screen never lists jobs) |
 | GET | `jobs/{job_id}` |
 | POST | `jobs/{job_id}/parts`, `jobs/{job_id}/confirm`, `jobs/{job_id}/cancel` |
 | GET | `jobs/{job_id}/report` |
@@ -65,7 +69,8 @@ Bodies must be UTF-8 `application/json` (optionally `charset=utf-8`) of at most 
   private headers above. Upstream redirects are never followed; they become 502.
 - Upstream error bodies must match the contract `Error` schema; otherwise, like non-JSON or oversized
   (> 1 MiB + 64 KiB) bodies, they are replaced by 502 `provider_unavailable`. Transport failures and
-  timeouts (10 s) are 503 `provider_unavailable` with `Retry-After: 5`.
+  timeouts (10 s) are 503 `provider_unavailable` with `Retry-After: 5`. The browser waits 15 s per control
+  call, so that 503 and its `Retry-After` reach it.
 - Track's own log lines record only the failure type, never credentials or bodies. httpx may log the
   upstream request line (method, controller route, status) at INFO; that route holds at most a job ID
   and the validated `limit`, `cursor` or `diagnostic` values, never credentials or signed storage URLs.
@@ -81,8 +86,8 @@ this proxy or carry Basic credentials.
    `_`) and **Added date**. Default license, author and reference are optional and omitted when blank;
    **Require a reference in each record** turns on per-record provenance.
 3. **Upload** checks the file type and size locally, computes its SHA-256 in the browser, creates the
-   job, waits until storage is ready, sends 8 MiB parts straight to signed storage URLs, confirms the
-   upload and then follows the job.
+   job, waits until storage is ready, sends parts of the session's `part_size_bytes` (8 MiB today) straight
+   to signed storage URLs, confirms the upload and then follows the job.
 4. The status panel shows processing, publication and cleanup separately. While publication or cleanup
    is unresolved the title is **Finalizing…** with the time of the last update; a verdict is shown only
    once it is published.
@@ -118,17 +123,22 @@ Messages are fixed English texts; server error text, job IDs and signed URLs are
 - Transient control errors are retried automatically up to three times with the same idempotency key
   and body. A lost connection stops automatic attempts and shows **Retry**, which repeats exactly the
   last step (create, part transfer, confirm, cancel or status) with its original key and body; it never
-  creates a second job. **Upload** stays disabled while a job is unfinished.
+  creates a second job. **Upload** stays disabled until the job has a verdict; if publication or cleanup
+  is still pending it becomes available again once the 60 s **Finalizing…** limit ends polling.
 - Status is polled every 2 s. Polling stops on `complete`, `rejected` or `expired`, after three
   consecutive failed requests, after 60 s of **Finalizing…**, or when an unfinished job passes its
   upload or job deadline; each case shows **Retry**. **Refresh status**, report and result stay
-  available after processing ends, until the artifacts expire.
+  available after processing ends, until the artifacts expire, and only until the next **Upload**: the
+  screen keeps no job list, so a previous job's status, report and result are not reachable afterwards.
 - **Cancel job** aborts the local transfer and, once a job exists, sends a cancel request with its own
-  stable key.
+  stable key. If the create was sent but never confirmed, Cancel first replays it with the same create key
+  and body; that replay is idempotent, so it returns the job the lost create made or, if none was stored,
+  creates it, and the job is then cancelled.
 - `sessionStorage` keeps only the job's upload session (IDs, hash, size, deadlines) and the three
   operation keys, never the file name, metadata or signed URLs. After a reload the screen shows the
   original upload deadline and asks for the original file; a file with a different hash or size is
-  refused, and the matching file continues the same job and parts.
+  refused, and the matching file continues the same job and parts. The stored entry is dropped once the
+  job is settled or the controller answers `not_found` for it, so a stale entry never disables **Upload**.
 
 ## Local browser tests
 
@@ -143,8 +153,9 @@ leaves the machine. `/health` (`"evidence": "local_fixture"`) exists only in thi
   (outcomes passed, failed_qa, empty_result, failed, expired, quota, invalid). The local origin is
   accepted only by these interceptors, never by the application guard. Any other host is aborted and
   fails the test; storage requests carrying `Authorization` or cookies fail it too.
-- Server tests send requests to the harness without interception: every built path, `/pipeline`,
-  `/pipeline/api/jobs` × GET/HEAD/conditional without the pair → 401 with no bytes; alternates and
+- Server tests send requests to the harness without interception: every built path, `/pipeline/`,
+  `/pipeline/api/jobs` × GET/HEAD/conditional without the pair → 401 with no bytes; `/pipeline` → 308
+  without the pair and without `WWW-Authenticate`; alternates and
   source maps → 404 after auth; a POST from the local origin → 403 `forbidden_origin`.
 
 Trace, video and screenshots are off. These are local fixture results, not evidence of a deployed
@@ -175,7 +186,8 @@ tar -rf release.tar src/fabryka_track/web src/fabryka_track/pipeline_web
 archive and checks that every built private file is included and no source map exists. The SDK wheel
 (`src/fabryka`) is unchanged.
 
-Private path manifest of a build (all behind Basic): `/pipeline` (308 to `/pipeline/`), `/pipeline/`,
+Private path manifest of a build: `/pipeline` (fixed 308 to `/pipeline/`, before Basic); behind Basic:
+`/pipeline/`,
 `/pipeline/assets/index-<hash>.js`, `/pipeline/assets/index-<hash>.css`, `/pipeline/api/<route>` (table
 above). `pipeline_web/.vite/manifest.json` ships in the archive but is never served (404). List a build
 with `find src/fabryka_track/pipeline_web -type f | sort | xargs shasum -a 256`.
