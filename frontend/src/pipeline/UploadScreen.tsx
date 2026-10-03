@@ -84,6 +84,14 @@ function save(op: Operation) {
   }
 }
 
+function forget() {
+  try {
+    sessionStorage.removeItem(STORE_KEY);
+  } catch {
+    // Unavailable storage holds nothing to forget.
+  }
+}
+
 function restore(): Operation | null {
   try {
     const saved = JSON.parse(sessionStorage.getItem(STORE_KEY) ?? "null");
@@ -146,6 +154,7 @@ export function UploadScreen() {
   }, []);
 
   function show(next: JobStatus) {
+    if (settled(next)) forget();
     setStatus(next);
     setUpdatedAt(api.now());
   }
@@ -175,6 +184,13 @@ export function UploadScreen() {
       else setBusy(false);
     } catch (error) {
       if (controller.signal.aborted) return;
+      if (error instanceof ApiError && error.code === "not_found") {
+        forget();
+        opRef.current = null;
+        setMessage(errorText(error));
+        setBusy(false);
+        return;
+      }
       op.failed = "poll";
       setPaused(true);
       setMessage(errorText(error));

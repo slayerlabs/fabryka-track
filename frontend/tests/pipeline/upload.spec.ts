@@ -1,5 +1,5 @@
 import { test, expect, type APIRequestContext, type Page } from "@playwright/test";
-import { TEST_NOW, installFixtureJourney, type Journey } from "./fixtures.ts";
+import { JOB_ID, TEST_NOW, installFixtureJourney, type Journey } from "./fixtures.ts";
 
 const JSONL = '{"text":"Synthetic corpus record","license":"CC0-1.0"}\n';
 
@@ -205,6 +205,34 @@ test("after a reload the same job resumes only with the original file", async ({
   expect(journey.backend.stored.get(1)).toEqual(new Uint8Array(Buffer.from(JSONL)));
   const stored = await page.evaluate(() => sessionStorage.getItem("pipeline-upload-operation") ?? "");
   expect(stored).not.toMatch(/synthetic|CC0|Signature|filename|source_ref|author|license/);
+  clean(journey);
+});
+
+test("a stored job the controller no longer knows is forgotten and never blocks Upload", async ({ page }) => {
+  const journey = await installFixtureJourney(page, "passed");
+  journey.storageReply = (attempt) => (attempt === 1 ? "network" : undefined);
+  await fill(page);
+  await page.getByRole("button", { name: "Upload" }).click();
+  await expect(page.getByRole("status")).toHaveText("Connection lost. Check the network, then select Retry");
+  journey.backend.faults.unshift((request) => (request.method === "GET" && request.url.endsWith(JOB_ID)
+    ? journey.backend.error(404, "not_found") : undefined));
+  await page.reload();
+  await expect(page.getByRole("status")).toHaveText("Job not found");
+  await expect.poll(() => page.evaluate(() => sessionStorage.getItem("pipeline-upload-operation"))).toBeNull();
+  await expect(page.getByRole("button", { name: "Retry" })).toHaveCount(0);
+  await fill(page);
+  await expect(page.getByRole("button", { name: "Upload" })).toBeEnabled();
+  clean(journey);
+});
+
+test("a settled job is dropped from reload recovery but keeps its actions", async ({ page }) => {
+  const journey = await installFixtureJourney(page, "passed");
+  await fill(page);
+  await page.getByRole("button", { name: "Upload" }).click();
+  await expect(page.getByRole("heading", { name: "Upload passed" })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => sessionStorage.getItem("pipeline-upload-operation"))).toBeNull();
+  await page.getByRole("button", { name: "Download result" }).click();
+  await expect.poll(() => journey.downloads).toHaveLength(1);
   clean(journey);
 });
 
