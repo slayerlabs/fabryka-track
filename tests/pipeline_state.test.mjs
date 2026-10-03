@@ -26,7 +26,8 @@ test("failed QA remains diagnostic", () => {
 
 test("published passed result is downloadable and not diagnostic", () => {
   const view = terminalView(status({ artifacts: [result, report, manifest] }));
-  assert.deepEqual(view, { title: "Upload passed", diagnostic: false, resultAllowed: true });
+  assert.deepEqual(view, { title: "Upload passed", diagnostic: false, resultAllowed: true,
+    reportAllowed: true });
 });
 
 test("every contract client_phase is carried through literally", () => {
@@ -66,7 +67,8 @@ test("rejected input is explicit and offers nothing", () => {
     attempt_id: null, generation: 0, attempts_used: 0, admitted_at: null, job_deadline: null,
     first_result_stored_at: null, expires_at: null });
   assert.equal(fromStatus(s).phase, "rejected");
-  assert.deepEqual(terminalView(s), { title: "Input rejected", diagnostic: false, resultAllowed: false });
+  assert.deepEqual(terminalView(s), { title: "Input rejected", diagnostic: false, resultAllowed: false,
+    reportAllowed: false });
 });
 
 test("expired artifacts are explicit and never downloadable", () => {
@@ -101,4 +103,20 @@ test("an upload window that lapsed before admission is not a result expiry", () 
   const view = terminalView(s);
   assert.equal(view.title, "Upload window expired");
   assert.equal(view.resultAllowed, false);
+});
+
+test("report is offered once published for any outcome, never while pending or expired", () => {
+  const published = { publication_state: "published", artifacts: [report, manifest] };
+  for (const processing_state of ["passed", "failed_qa", "failed"]) {
+    assert.equal(terminalView(status({ ...published, processing_state })).reportAllowed, true,
+      processing_state);
+  }
+  assert.equal(terminalView(status({ ...published, processing_state: "failed_qa",
+    failure_code: "empty_result" })).reportAllowed, true);
+  assert.equal(terminalView(status({ ...published, publication_state: "pending",
+    client_phase: "finalizing" })).reportAllowed, false, "report_pending before publication");
+  assert.equal(terminalView(status({ ...published, publication_state: "expired",
+    client_phase: "expired" })).reportAllowed, false);
+  assert.equal(terminalView(status({ publication_state: "published", artifacts: [result] }))
+    .reportAllowed, false);
 });

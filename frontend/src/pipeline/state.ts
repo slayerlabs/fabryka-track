@@ -4,7 +4,12 @@ export type UploadState =
   | { phase: JobStatus["client_phase"]; status: JobStatus }
   | { phase: "idle" | "hashing" | "paused"; status: JobStatus | null };
 
-export type TerminalView = { title: string; resultAllowed: boolean; diagnostic: boolean };
+export type TerminalView = {
+  title: string;
+  resultAllowed: boolean;
+  reportAllowed: boolean;
+  diagnostic: boolean;
+};
 
 const titles: Record<JobStatus["processing_state"], string> = {
   uploading: "Upload in progress",
@@ -28,10 +33,9 @@ export function terminalView(status: JobStatus): TerminalView {
   const expired = status.client_phase === "expired" || status.publication_state === "expired";
   const expiredTitle = status.admitted ? "Results expired" : "Upload window expired";
   const title = expired ? expiredTitle : titles[status.processing_state];
-  const resultAllowed =
-    !expired &&
-    (status.processing_state === "passed" || diagnostic) &&
-    status.publication_state === "published" &&
-    status.artifacts.some((artifact) => artifact.kind === "result");
-  return { title, resultAllowed, diagnostic };
+  const published = !expired && status.publication_state === "published";
+  const has = (kind: string) => status.artifacts.some((artifact) => artifact.kind === kind);
+  const resultAllowed = published && (status.processing_state === "passed" || diagnostic) && has("result");
+  const reportAllowed = published && has("report");
+  return { title, resultAllowed, reportAllowed, diagnostic };
 }
