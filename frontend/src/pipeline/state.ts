@@ -26,7 +26,8 @@ export function fromStatus(status: JobStatus): UploadState {
 export function terminalView(status: JobStatus): TerminalView {
   const diagnostic = status.processing_state === "failed_qa";
   const expired = status.client_phase === "expired" || status.publication_state === "expired";
-  const title = expired ? "Results expired" : titles[status.processing_state];
+  const expiredTitle = status.admitted ? "Results expired" : "Upload window expired";
+  const title = expired ? expiredTitle : titles[status.processing_state];
   const resultAllowed =
     !expired &&
     (status.processing_state === "passed" || diagnostic) &&

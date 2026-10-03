@@ -93,3 +93,12 @@ test("non-terminal processing is in progress, failed and cancelled are explicit"
   assert.equal(terminalView(status({ processing_state: "cancelled", publication_state: "none",
     artifacts: [] })).title, "Upload cancelled");
 });
+
+test("an upload window that lapsed before admission is not a result expiry", () => {
+  const s = status({ client_phase: "expired", processing_state: "uploading", transfer_state: "ready",
+    admitted: false, admitted_at: null, job_deadline: null, publication_state: "none",
+    first_result_stored_at: null, expires_at: null, artifacts: [] });
+  const view = terminalView(s);
+  assert.equal(view.title, "Upload window expired");
+  assert.equal(view.resultAllowed, false);
+});
