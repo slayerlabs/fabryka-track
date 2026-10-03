@@ -1,0 +1,16 @@
+:root {
+  color-scheme: light dark;
+  font-family: system-ui, sans-serif;
+}
+
+.pipeline {
+  max-width: 40rem;
+  margin: 2rem auto;
+  padding: 0 1rem;
+}
+
+.pipeline label {
+  display: grid;
+  gap: 0.25rem;
+  margin-block: 1rem;
+}
