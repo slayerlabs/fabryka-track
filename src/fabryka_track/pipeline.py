@@ -7,9 +7,10 @@ from urllib.parse import urlsplit
 from uuid import uuid4
 
 import httpx
-from fastapi import APIRouter, FastAPI, Request
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from pydantic import SecretStr
+from starlette._utils import get_route_path
 
 log = logging.getLogger(__name__)
 
@@ -76,7 +77,8 @@ def _denial(path: str, status: int, code: str, message: str, retryable: bool, he
 def install_private_boundary(app: FastAPI, config: PipelineConfig) -> None:
     @app.middleware("http")
     async def private_boundary(request: Request, call_next):
-        path = request.url.path
+        # Same root_path-stripped value the router matches on, so a prefixed scope cannot skip the guard.
+        path = get_route_path(request.scope)
         if not _is_private(path):
             return await call_next(request)
         if not config.enabled:
@@ -94,7 +96,7 @@ def install_private_boundary(app: FastAPI, config: PipelineConfig) -> None:
 def _servable(root: Path, relative: str) -> Path | None:
     parts = relative.split("/")
     if (len(parts) < 2 or parts[0] != "assets" or any(not p or p.startswith(".") for p in parts)
-            or relative.endswith(".map") or "\\" in relative):
+            or relative.endswith(".map") or "\\" in relative or "\x00" in relative):
         return None
     base = root.resolve()
     target = (root / relative).resolve()
@@ -104,7 +106,16 @@ def _servable(root: Path, relative: str) -> Path | None:
 
 
 def make_pipeline_router(config: PipelineConfig, client: httpx.AsyncClient) -> APIRouter:
-    router = APIRouter(include_in_schema=False)
+    def require_basic(request: Request) -> None:
+        if not config.enabled:
+            raise HTTPException(503, "Pipeline upload is not configured", headers=PRIVATE_HEADERS)
+        try:
+            check_private_basic(request, config)
+        except PermissionError:
+            raise HTTPException(401, "Authentication required",
+                                headers={"WWW-Authenticate": CHALLENGE, **PRIVATE_HEADERS}) from None
+
+    router = APIRouter(include_in_schema=False, dependencies=[Depends(require_basic)])
 
     @router.api_route("/pipeline", methods=["GET", "HEAD"])
     def pipeline_slash():

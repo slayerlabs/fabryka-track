@@ -244,3 +244,53 @@ def test_actual_track_app_without_pair_disables_only_private_feature(client, mon
     assert landing.status_code == 200 and TITLE not in landing.text
     assert client.get("/api/public/runs").status_code == 200
     assert client.get("/models").status_code == 200
+
+
+async def raw_asgi(app, path, root_path="", headers=()):
+    sent = []
+
+    async def receive():
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def send(message):
+        sent.append(message)
+
+    scope = {"type": "http", "asgi": {"version": "3.0"}, "http_version": "1.1", "method": "GET",
+             "scheme": "https", "server": ("track.fabryka.ai", 443), "client": ("127.0.0.1", 1),
+             "path": path, "raw_path": path.encode(), "root_path": root_path, "query_string": b"",
+             "headers": [(b"host", b"track.fabryka.ai"), *headers]}
+    await app(scope, receive, send)
+    start = next(m for m in sent if m["type"] == "http.response.start")
+    body = b"".join(m.get("body", b"") for m in sent if m["type"] == "http.response.body")
+    return start["status"], body
+
+
+@pytest.mark.parametrize("app_factory", ["private", "track"])
+@pytest.mark.anyio
+async def test_root_path_prefix_cannot_bypass_private_boundary(app_factory, private_app, track_pipeline):
+    app = private_app if app_factory == "private" else track_pipeline.app
+    for path in ["/pipeline/", *built_assets()]:
+        status, body = await raw_asgi(app, "/pfx" + path, root_path="/pfx")
+        assert status == 401, path
+        assert TITLE.encode() not in body
+        auth = [(b"authorization", AUTH["Authorization"].encode())]
+        assert (await raw_asgi(app, "/pfx" + path, root_path="/pfx", headers=auth))[0] == 200
+
+
+def test_router_enforces_basic_even_without_boundary_middleware():
+    from fastapi import FastAPI
+
+    from fabryka_track.pipeline import make_pipeline_router
+    bare = FastAPI()
+    bare.include_router(make_pipeline_router(config(), no_network()))
+    client = TestClient(bare, base_url="https://track.fabryka.ai")
+    for path in ["/pipeline", "/pipeline/", *built_assets()]:
+        response = client.get(path, follow_redirects=False)
+        assert response.status_code == 401 and TITLE not in response.text, path
+        assert response.headers["www-authenticate"] == CHALLENGE
+    assert client.get("/pipeline/", headers=AUTH).status_code == 200
+
+
+def test_null_byte_asset_path_is_404_not_500(private):
+    assert private.get("/pipeline/assets/a%00.js", headers=AUTH).status_code == 404
+    assert _servable(PRIVATE_ROOT, "assets/a\x00.js") is None
