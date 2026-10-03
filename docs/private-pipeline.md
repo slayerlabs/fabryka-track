@@ -70,3 +70,76 @@ Bodies must be UTF-8 `application/json` (optionally `charset=utf-8`) of at most 
 
 Storage transfers go directly from the browser to signed storage URLs and never pass through
 this proxy or carry Basic credentials.
+
+## Operator journey
+
+1. Open `/pipeline/` and sign in with the shared pipeline pair (the browser keeps it; the page never
+   stores it).
+2. Choose a JSONL or Parquet file (at most 512 MiB) and fill in **Source** (lowercase letters, digits,
+   `_`) and **Added date**. Default license, author and reference are optional and omitted when blank;
+   **Require a reference in each record** turns on per-record provenance.
+3. **Upload** checks the file type and size locally, computes its SHA-256 in the browser, creates the
+   job, waits until storage is ready, sends 8 MiB parts straight to signed storage URLs, confirms the
+   upload and then follows the job.
+4. The status panel shows processing, publication and cleanup separately. While publication or cleanup
+   is unresolved the title is **Finalizing…** with the time of the last update; a verdict is shown only
+   once it is published.
+5. When the job ends: **Upload passed** offers **Download result**; **QA failed — diagnostic only**
+   offers **Download diagnostic result**, never a passed result; an empty curated output or a failed
+   job shows **No result available**. **View report** appears once the report is published and shows
+   only aggregate counts. **Results expired** offers nothing.
+
+### Reading the QA report
+
+Blocking checks decide the verdict: any failed check makes the job diagnostic only. Warnings
+(`masking_only_duplicate`, `license_needs_legal_review`) never block a passed result. Records removed
+during curation (filtering, deduplication) show as the difference between rows read and rows written;
+removal fails the job only through a blocking check such as `rejection_share`. PII is masked, not
+removed. Detection covers PESEL, e-mail and phone numbers; **PERSON and street-address coverage is unmeasured**, so a passed report is not a
+claim that names or addresses are absent.
+
+### Errors and retries
+
+Messages are fixed English texts; server error text, job IDs and signed URLs are never shown.
+
+| Response | Message |
+| --- | --- |
+| 401 | Authentication required |
+| 403 | Request origin denied |
+| 409 | Operation is not available in this state |
+| 410 | Upload or artifact expired |
+| 413 | Input exceeds the limit |
+| 422 | Invalid input or metadata |
+| 429 | Pipeline capacity is full |
+| 502, 503, 504 | Pipeline temporarily unavailable |
+
+- Transient control errors are retried automatically up to three times with the same idempotency key
+  and body. A lost connection stops automatic attempts and shows **Retry**, which repeats exactly the
+  last step (create, part transfer, confirm, cancel or status) with its original key and body; it never
+  creates a second job. **Upload** stays disabled while a job is unfinished.
+- Status is polled every 2 s. Polling stops on `complete`, `rejected` or `expired`, after three
+  consecutive failed requests, after 60 s of **Finalizing…**, or when an unfinished job passes its
+  upload or job deadline; each case shows **Retry**. **Refresh status**, report and result stay
+  available after processing ends, until the artifacts expire.
+- **Cancel job** aborts the local transfer and, once a job exists, sends a cancel request with its own
+  stable key.
+- `sessionStorage` keeps only the job's upload session (IDs, hash, size, deadlines) and the three
+  operation keys, never the file name, metadata or signed URLs. After a reload the screen shows the
+  original upload deadline and asks for the original file; a file with a different hash or size is
+  refused, and the matching file continues the same job and parts.
+
+## Local browser tests
+
+`frontend/playwright.pipeline.config.ts` serves the actual private build with `vite preview` and
+answers every control and storage request from approved contract fixtures
+(`frontend/tests/pipeline/journey.ts`). These are local fixture results, not evidence of a deployed
+controller, storage or provider.
+
+```bash
+cd frontend
+npm run build
+PIPELINE_BROWSER_CHANNEL=chrome npx playwright test --config playwright.pipeline.config.ts
+```
+
+`PIPELINE_BROWSER_CHANNEL` selects an installed browser channel when the bundled Playwright Chromium
+is not installed; leave it unset to use the bundled browser.

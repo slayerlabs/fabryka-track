@@ -1,6 +1,7 @@
 :root {
   color-scheme: light dark;
   font-family: system-ui, sans-serif;
+  line-height: 1.5;
 }
 
 .pipeline {
@@ -13,4 +14,67 @@
   display: grid;
   gap: 0.25rem;
   margin-block: 1rem;
+}
+
+.pipeline label.check {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.pipeline input:not([type="checkbox"]) {
+  font: inherit;
+  padding: 0.35rem 0.5rem;
+}
+
+.pipeline input:invalid:not(:placeholder-shown):not(:focus) {
+  outline: 2px solid #c62828;
+}
+
+.pipeline .hint {
+  margin-block: -0.75rem 1rem;
+  font-size: 0.875rem;
+  opacity: 0.8;
+}
+
+.pipeline button {
+  font: inherit;
+  padding: 0.4rem 1rem;
+  cursor: pointer;
+}
+
+.pipeline button:disabled {
+  cursor: not-allowed;
+}
+
+.pipeline :focus-visible {
+  outline: 3px solid #1565c0;
+  outline-offset: 2px;
+}
+
+.pipeline .message {
+  min-height: 1.5em;
+  font-weight: 600;
+}
+
+.pipeline .actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-block: 1rem;
+}
+
+.pipeline .job,
+.pipeline .report,
+.pipeline .resume {
+  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+  border-radius: 0.5rem;
+  padding: 0 1rem;
+  margin-block: 1rem;
+}
+
+.pipeline progress {
+  width: 100%;
+  max-width: 20rem;
+  vertical-align: middle;
 }

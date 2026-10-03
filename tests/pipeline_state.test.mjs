@@ -2,7 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { decode } from "../frontend/src/pipeline/contract.ts";
-import { fromStatus, terminalView } from "../frontend/src/pipeline/state.ts";
+import { ApiError, PipelineApi } from "../frontend/src/pipeline/api.ts";
+import { FINALIZING_LIMIT_MS, POLL_MS, errorText, fromStatus, pollJob, terminalView }
+  from "../frontend/src/pipeline/state.ts";
+import { BASE_TIME, FakeBackend, JOB_ID } from "../frontend/tests/pipeline/fixtures.ts";
 const fixtures = JSON.parse(readFileSync(
   new URL("../frontend/src/pipeline/contracts/upload-v1.examples.json", import.meta.url), "utf8"));
 const job = fixtures.fixtures.find((c) => c.name === "JobStatus-valid").body;
@@ -119,4 +122,120 @@ test("report is offered once published for any outcome, never while pending or e
     client_phase: "expired" })).reportAllowed, false);
   assert.equal(terminalView(status({ publication_state: "published", artifacts: [result] }))
     .reportAllowed, false);
+});
+
+test("finalizing never claims a verdict before publication and cleanup resolve", () => {
+  const view = terminalView(status({ processing_state: "passed", client_phase: "finalizing",
+    publication_state: "pending", cleanup_state: "pending", artifacts: [result, report, manifest] }));
+  assert.equal(view.title, "Finalizing…");
+  assert.equal(view.resultAllowed, false);
+});
+
+const iso = (ms) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, "Z");
+const admitted = (backend, overrides = {}) => backend.status({ admitted: true,
+  admitted_at: iso(BASE_TIME), job_deadline: iso(BASE_TIME + 7200000), transfer_state: "closed",
+  processing_state: "running", client_phase: "running", ...overrides });
+
+function scripted(replies) {
+  const backend = new FakeBackend();
+  let index = 0;
+  backend.faults.push((request) => {
+    if (request.method !== "GET") return undefined;
+    const next = replies[Math.min(index++, replies.length - 1)];
+    return typeof next === "function" ? next(backend) : next;
+  });
+  const api = new PipelineApi(backend.fetch, { now: backend.clock, sleep: backend.sleep });
+  return { backend, api };
+}
+
+const ok = (overrides) => (backend) => ({ status: 200, body: admitted(backend, overrides) });
+
+test("pollJob follows the job every 2 s until complete and then stops", async () => {
+  const { backend, api } = scripted([ok({ processing_state: "queued", client_phase: "queued" }), ok(),
+    ok({ processing_state: "passed", client_phase: "finalizing", publication_state: "pending",
+      cleanup_state: "pending" }),
+    ok({ processing_state: "passed", client_phase: "complete", publication_state: "published",
+      cleanup_state: "confirmed" })]);
+  const seen = [];
+  await pollJob(api, JOB_ID, new AbortController().signal, (s) => seen.push(s.client_phase));
+  assert.deepEqual(seen, ["queued", "running", "finalizing", "complete"]);
+  assert.deepEqual(backend.sleeps, [POLL_MS, POLL_MS, POLL_MS]);
+  assert.equal(backend.controlCalls().length, 4);
+});
+
+test("pollJob ends on rejected and expired", async () => {
+  for (const client_phase of ["rejected", "expired"]) {
+    const { backend, api } = scripted([ok({ client_phase })]);
+    await pollJob(api, JOB_ID, new AbortController().signal, () => {});
+    assert.equal(backend.controlCalls().length, 1, client_phase);
+  }
+});
+
+test("three consecutive lost status requests pause polling for manual retry", async () => {
+  const { backend, api } = scripted(["network", ok(), "network", "network", "network", ok()]);
+  await assert.rejects(pollJob(api, JOB_ID, new AbortController().signal, () => {}),
+    (error) => error instanceof ApiError && error.code === "network_lost" && error.retryable);
+  assert.equal(backend.controlCalls().length, 5, "a success resets the count; the third consecutive loss stops");
+});
+
+test("non-retryable status failures stop at once", async () => {
+  const { backend, api } = scripted([(b) => b.error(401, "unauthorized")]);
+  await assert.rejects(pollJob(api, JOB_ID, new AbortController().signal, () => {}),
+    (error) => error.status === 401);
+  assert.equal(backend.controlCalls().length, 1);
+});
+
+test("finalizing stops automatic polling after 60 s with an explicit retryable state", async () => {
+  const { backend, api } = scripted([ok({ processing_state: "passed", client_phase: "finalizing",
+    publication_state: "pending", cleanup_state: "pending" })]);
+  const seen = [];
+  await assert.rejects(pollJob(api, JOB_ID, new AbortController().signal, (s) => seen.push(s)),
+    (error) => error.code === "finalizing_stalled" && error.retryable);
+  assert.equal(seen.length, FINALIZING_LIMIT_MS / POLL_MS + 1);
+  assert.ok(backend.now - BASE_TIME <= FINALIZING_LIMIT_MS);
+});
+
+test("processing past its absolute job deadline stops after one refresh", async () => {
+  const { backend, api } = scripted([ok({ job_deadline: iso(BASE_TIME - 1000) })]);
+  await assert.rejects(pollJob(api, JOB_ID, new AbortController().signal, () => {}),
+    (error) => error.code === "deadline_passed" && error.retryable);
+  assert.equal(backend.controlCalls().length, 1);
+});
+
+test("an unadmitted upload is bounded by its upload deadline", async () => {
+  const { backend, api } = scripted([(b) => ({ status: 200, body: b.status({
+    upload_deadline: iso(BASE_TIME - 1000) }) })]);
+  await assert.rejects(pollJob(api, JOB_ID, new AbortController().signal, () => {}),
+    (error) => error.code === "deadline_passed");
+  assert.equal(backend.controlCalls().length, 1);
+});
+
+test("a terminal verdict is still refreshed after the processing deadline", async () => {
+  const { api } = scripted([ok({ processing_state: "failed_qa", failure_code: "qa_failed",
+    client_phase: "complete", publication_state: "published", cleanup_state: "confirmed",
+    job_deadline: iso(BASE_TIME - 1000) })]);
+  const seen = [];
+  await pollJob(api, JOB_ID, new AbortController().signal, (s) => seen.push(s.client_phase));
+  assert.deepEqual(seen, ["complete"]);
+});
+
+test("aborting stops polling", async () => {
+  const { api } = scripted([ok()]);
+  const controller = new AbortController();
+  await assert.rejects(pollJob(api, JOB_ID, controller.signal, () => controller.abort()));
+});
+
+test("failure texts are fixed English, never server text", () => {
+  const cases = [[401, "unauthorized", "Authentication required"], [403, "forbidden_origin", "Request origin denied"],
+    [409, "invalid_state", "Operation is not available in this state"],
+    [410, "expired", "Upload or artifact expired"], [413, "body_too_large", "Input exceeds the limit"],
+    [422, "invalid_request", "Invalid input or metadata"], [429, "quota_exceeded", "Pipeline capacity is full"],
+    [503, "provider_unavailable", "Pipeline temporarily unavailable"],
+    [409, "no_result", "No result available"]];
+  for (const [code, name, text] of cases) assert.equal(errorText(new ApiError(code, name, false)), text);
+  assert.equal(errorText(new ApiError(0, "empty_file", false)), "The selected file is empty");
+  assert.equal(errorText(new ApiError(0, "file_too_large", false)), "Input exceeds the limit");
+  assert.match(errorText(new ApiError(0, "network_lost", true)), /Retry/);
+  assert.equal(errorText(new Error("<b>raw server text</b>")), "Unexpected error");
+  assert.equal(errorText(new ApiError(418, "<script>", false)), "Unexpected error");
 });

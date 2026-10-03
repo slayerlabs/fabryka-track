@@ -51,5 +51,7 @@ def test_public_build_never_contains_private_entry_and_private_never_imports_pub
             text = path.read_text(errors="ignore")
             assert "Data Pipeline Upload" not in text and "/pipeline/assets/" not in text, path
     private_js = "".join(p.read_text() for p in files(PRIVATE / "assets") if p.suffix == ".js")
+    assert "/pipeline/api/" in private_js
+    private_js = private_js.replace("/pipeline/api/", "")
     for public_marker in ("Fabryka Track", "Sign in", "huggingface", "/api/"):
         assert public_marker not in private_js, public_marker
