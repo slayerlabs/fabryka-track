@@ -1,5 +1,7 @@
 import base64
+import json
 import logging
+import re
 import secrets
 from dataclasses import dataclass
 from pathlib import Path
@@ -8,7 +10,7 @@ from uuid import uuid4
 
 import httpx
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from pydantic import SecretStr
 from starlette._utils import get_route_path
 
@@ -18,6 +20,53 @@ PIPELINE_ORIGIN = "https://track.fabryka.ai"
 PRIVATE_ROOT = Path(__file__).parent / "pipeline_web"
 CHALLENGE = 'Basic realm="Pipeline Upload", charset="UTF-8"'
 PRIVATE_HEADERS = {"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", "X-Frame-Options": "DENY"}
+PROTOCOL = "upload-control-v1"
+MAX_REQUEST_BODY = 65536
+# JobReport bodies may reach the 1 MiB report limit; the margin covers the JSON envelope.
+MAX_RESPONSE_BODY = 1048576 + 65536
+API_PREFIX = "/pipeline/api/"
+UUID = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+ROUTES = [
+    ("GET", r"jobs"), ("POST", r"jobs"),
+    ("GET", rf"jobs/{UUID}"),
+    ("POST", rf"jobs/{UUID}/parts"),
+    ("POST", rf"jobs/{UUID}/confirm"),
+    ("POST", rf"jobs/{UUID}/cancel"),
+    ("GET", rf"jobs/{UUID}/report"),
+    ("GET", rf"jobs/{UUID}/result"), ("HEAD", rf"jobs/{UUID}/result"),
+]
+ROUTED_METHODS = ("GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "TRACE")
+LIMIT = re.compile(r"[0-9]{1,3}")
+CURSOR = re.compile(r"[A-Za-z0-9_-]{1,256}")
+DIGITS = re.compile(r"[0-9]{1,12}")
+FORWARDED_REQUEST_HEADERS = ("authorization", "content-type", "idempotency-key", "x-pipeline-request",
+                             "origin", "sec-fetch-site")
+FORWARDED_RESPONSE_HEADERS = ("content-type", "www-authenticate", "retry-after", "allow")
+MESSAGES = {
+    "invalid_request": "The request does not match the contract.",
+    "unsupported_version": "The protocol version is not supported.",
+    "idempotency_key_required": "An Idempotency-Key header is required.",
+    "idempotency_conflict": "The Idempotency-Key was used with a different body.",
+    "not_found": "Not found.",
+    "method_not_allowed": "Method not allowed.",
+    "unauthorized": "Authentication is required.",
+    "forbidden_origin": "The request origin is not allowed.",
+    "quota_exceeded": "Upload capacity is exhausted.",
+    "transfer_not_ready": "The transfer is not ready yet.",
+    "expired": "The resource has expired.",
+    "stale_attempt": "The attempt is no longer current.",
+    "lease_expired": "The attempt lease has expired.",
+    "integrity_mismatch": "The content does not match its declared integrity.",
+    "report_pending": "The report is not available yet.",
+    "result_pending": "The result is not available yet.",
+    "diagnostic_required": "This result is diagnostic; request it with diagnostic=true.",
+    "no_result": "This job has no result.",
+    "provider_unavailable": "A dependency is temporarily unavailable.",
+    "invalid_state": "The operation is not valid in the current state.",
+    "body_too_large": "The request body is too large.",
+}
+STATUS = {"invalid_request": 422, "not_found": 404, "method_not_allowed": 405, "forbidden_origin": 403,
+          "body_too_large": 413}
 
 
 @dataclass
@@ -67,11 +116,171 @@ def check_private_basic(request: Request, config: PipelineConfig) -> None:
         raise PermissionError("unauthorized")
 
 
+class RouteError(ValueError):
+    def __init__(self, code: str, allow: tuple[str, ...] = ()):
+        super().__init__(code)
+        self.code = code
+        self.allow = allow
+
+
+def control_error(status: int, code: str, retryable: bool = False, headers: dict | None = None) -> JSONResponse:
+    extra = dict(headers or {})
+    if status in (429, 503):
+        extra["Retry-After"] = "5"
+    body = {"protocol": PROTOCOL, "request_id": str(uuid4()), "code": code, "message": MESSAGES[code],
+            "retryable": retryable or status in (429, 503)}
+    return JSONResponse(body, status_code=status, headers={**extra, **PRIVATE_HEADERS})
+
+
 def _denial(path: str, status: int, code: str, message: str, retryable: bool, headers: dict) -> JSONResponse:
-    body = ({"protocol": "upload-control-v1", "request_id": str(uuid4()), "code": code,
-             "message": message, "retryable": retryable}
-            if path.startswith("/pipeline/api/") else {"detail": message})
-    return JSONResponse(body, status_code=status, headers={**headers, **PRIVATE_HEADERS})
+    if path.startswith(API_PREFIX):
+        return control_error(status, code, retryable, headers)
+    return JSONResponse({"detail": message}, status_code=status, headers={**headers, **PRIVATE_HEADERS})
+
+
+def route_error(exc: RouteError) -> JSONResponse:
+    headers = {"Allow": ", ".join(exc.allow)} if exc.allow else {}
+    return control_error(STATUS[exc.code], exc.code, headers=headers)
+
+
+def normalize_route(raw_path: bytes, method: str) -> str:
+    try:
+        path = raw_path.decode("ascii")
+    except UnicodeDecodeError:
+        raise RouteError("invalid_request") from None
+    if not path.startswith(API_PREFIX):
+        raise RouteError("not_found")
+    # Never decode a second time: any escape, separator run or dot segment is refused outright.
+    if "%" in path or "//" in path or "\\" in path or any(p in {".", ".."} for p in path.split("/")):
+        raise RouteError("invalid_request")
+    relative = path[len(API_PREFIX):]
+    allowed = tuple(verb for verb, pattern in ROUTES if re.fullmatch(pattern, relative))
+    if not allowed:
+        raise RouteError("not_found")
+    if method not in allowed:
+        raise RouteError("method_not_allowed", allowed)
+    return "/uploads/v1/" + relative
+
+
+def _query(route: str, method: str, raw: bytes) -> str:
+    if not raw:
+        return ""
+    try:
+        pairs = [item.split("=", 1) for item in raw.decode("ascii").split("&")]
+    except UnicodeDecodeError:
+        raise RouteError("invalid_request") from None
+    if any(len(pair) != 2 for pair in pairs) or len({k for k, _ in pairs}) != len(pairs):
+        raise RouteError("invalid_request")
+    params = dict(pairs)
+    if route == "/uploads/v1/jobs" and method == "GET":
+        limit, cursor = params.pop("limit", None), params.pop("cursor", None)
+        if limit is not None and not (LIMIT.fullmatch(limit) and 1 <= int(limit) <= 100):
+            raise RouteError("invalid_request")
+        if cursor is not None and not CURSOR.fullmatch(cursor):
+            raise RouteError("invalid_request")
+        kept = [("limit", limit), ("cursor", cursor)]
+    elif route.endswith("/result"):
+        diagnostic = params.pop("diagnostic", None)
+        if diagnostic not in (None, "true", "false"):
+            raise RouteError("invalid_request")
+        kept = [("diagnostic", diagnostic)]
+    else:
+        kept = []
+    if params:
+        raise RouteError("invalid_request")
+    return "&".join(f"{k}={v}" for k, v in kept if v is not None)
+
+
+def check_browser_mutation(request: Request, config: PipelineConfig) -> None:
+    # Browsers replay cached Basic credentials cross-site, so Basic alone never authorizes a mutation.
+    if (request.headers.getlist("x-pipeline-request") != ["1"]
+            or request.headers.getlist("origin") != [config.origin]
+            or request.headers.getlist("sec-fetch-site") not in ([], ["same-origin"])):
+        raise RouteError("forbidden_origin")
+
+
+def _json_media(value: str | None) -> bool:
+    media = (value or "").split(";")
+    return media[0].strip().lower() == "application/json" and all(
+        part.strip().lower() in ("charset=utf-8", "") for part in media[1:])
+
+
+async def _read_body(request: Request) -> bytes:
+    declared = request.headers.get("content-length")
+    if declared is not None and (not DIGITS.fullmatch(declared) or int(declared) > MAX_REQUEST_BODY):
+        raise RouteError("body_too_large")
+    data = bytearray()
+    async for chunk in request.stream():
+        data.extend(chunk)
+        if len(data) > MAX_REQUEST_BODY:
+            raise RouteError("body_too_large")
+    return bytes(data)
+
+
+def _valid_error(body) -> bool:
+    return (isinstance(body, dict) and set(body) == {"protocol", "request_id", "code", "message", "retryable"}
+            and body["protocol"] == PROTOCOL and isinstance(body["request_id"], str)
+            and re.fullmatch(UUID, body["request_id"]) is not None and body["code"] in MESSAGES
+            and isinstance(body["message"], str) and len(body["message"]) <= 256
+            and isinstance(body["retryable"], bool))
+
+
+def _bad_gateway() -> JSONResponse:
+    return control_error(502, "provider_unavailable", True)
+
+
+async def proxy(request: Request, target: str, client: httpx.AsyncClient) -> Response:
+    if not target.startswith("https://"):
+        return control_error(503, "provider_unavailable")
+    body = await _read_body(request)
+    if request.method == "POST":
+        if not _json_media(request.headers.get("content-type")):
+            raise RouteError("invalid_request")
+        try:
+            json.loads(body.decode("utf-8"))
+        except (UnicodeDecodeError, ValueError, RecursionError):
+            raise RouteError("invalid_request") from None
+    elif body:
+        raise RouteError("invalid_request")
+    headers = {name: request.headers[name] for name in FORWARDED_REQUEST_HEADERS if name in request.headers}
+    if request.method != "POST":
+        headers.pop("content-type", None)
+    headers.update({"Accept": "application/json", "Accept-Encoding": "identity"})
+    outbound = client.build_request(request.method, target, headers=headers,
+                                    content=body if request.method == "POST" else None)
+    try:
+        upstream = await client.send(outbound, stream=True, follow_redirects=False)
+        try:
+            if 300 <= upstream.status_code < 400:
+                return _bad_gateway()
+            data = bytearray()
+            async for chunk in upstream.aiter_bytes():
+                data.extend(chunk)
+                if len(data) > MAX_RESPONSE_BODY:
+                    return _bad_gateway()
+        finally:
+            await upstream.aclose()
+    except httpx.HTTPError as exc:
+        log.warning("Pipeline controller request failed: %s", type(exc).__name__)
+        return control_error(503, "provider_unavailable", True)
+    kept = {name: upstream.headers[name] for name in FORWARDED_RESPONSE_HEADERS if name in upstream.headers}
+    if request.method == "HEAD":
+        return Response(status_code=upstream.status_code, headers={**kept, **PRIVATE_HEADERS})
+    if not _json_media(upstream.headers.get("content-type")):
+        return _bad_gateway()
+    try:
+        parsed = json.loads(bytes(data).decode("utf-8"))
+    except (UnicodeDecodeError, ValueError, RecursionError):
+        return _bad_gateway()
+    if upstream.status_code >= 400 and not _valid_error(parsed):
+        return _bad_gateway()
+    return Response(bytes(data), status_code=upstream.status_code, headers={**kept, **PRIVATE_HEADERS})
+
+
+def _upstream_url(config: PipelineConfig, route: str, query: str) -> str:
+    controller = urlsplit(config.controller_url)
+    base = f"{controller.scheme}://{controller.netloc}{controller.path.rstrip('/')}"
+    return base + route + (f"?{query}" if query else "")
 
 
 def install_private_boundary(app: FastAPI, config: PipelineConfig) -> None:
@@ -88,6 +297,12 @@ def install_private_boundary(app: FastAPI, config: PipelineConfig) -> None:
         except PermissionError:
             return _denial(path, 401, "unauthorized", "Authentication required", False,
                            {"WWW-Authenticate": CHALLENGE})
+        if (path == API_PREFIX.rstrip("/") or path.startswith(API_PREFIX)) and request.method not in ROUTED_METHODS:
+            # Methods outside the router's list would otherwise get Starlette's plain 405 with a wrong Allow.
+            try:
+                normalize_route(request.scope.get("raw_path") or b"", request.method)
+            except RouteError as exc:
+                return route_error(exc)
         response = await call_next(request)
         response.headers.update(PRIVATE_HEADERS)
         return response
@@ -116,6 +331,28 @@ def make_pipeline_router(config: PipelineConfig, client: httpx.AsyncClient) -> A
                                 headers={"WWW-Authenticate": CHALLENGE, **PRIVATE_HEADERS}) from None
 
     router = APIRouter(include_in_schema=False, dependencies=[Depends(require_basic)])
+
+    async def pipeline_api(request: Request) -> Response:
+        if not config.enabled:
+            return control_error(503, "provider_unavailable")
+        try:
+            check_private_basic(request, config)
+        except PermissionError:
+            return control_error(401, "unauthorized", headers={"WWW-Authenticate": CHALLENGE})
+        try:
+            raw_path = request.scope.get("raw_path")
+            if not isinstance(raw_path, bytes):
+                raise RouteError("invalid_request")
+            route = normalize_route(raw_path, request.method)
+            query = _query(route, request.method, request.scope.get("query_string", b""))
+            if request.method == "POST":
+                check_browser_mutation(request, config)
+            return await proxy(request, _upstream_url(config, route, query), client)
+        except RouteError as exc:
+            return route_error(exc)
+
+    router.add_api_route("/pipeline/api", pipeline_api, methods=list(ROUTED_METHODS))
+    router.add_api_route("/pipeline/api/{rest:path}", pipeline_api, methods=list(ROUTED_METHODS))
 
     @router.api_route("/pipeline", methods=["GET", "HEAD"])
     def pipeline_slash():
