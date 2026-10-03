@@ -1,12 +1,20 @@
 import re
+import subprocess
+import tarfile
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
+
+REPO = Path(__file__).resolve().parents[1]
+PRIVATE = REPO / "src/fabryka_track/pipeline_web"
+PUBLIC = REPO / "src/fabryka_track/web"
+WORKFLOW = REPO / ".github/workflows/deploy.yml"
 
 
 def test_private_build_requires_basic_before_bytes(private_app):
     client = TestClient(private_app, base_url="https://track.fabryka.ai")
-    root = Path("src/fabryka_track/pipeline_web")
+    root = PRIVATE
     assert (root / "index.html").is_file()
     paths = ["/pipeline/", "/pipeline"] + [
         "/pipeline/" + p.relative_to(root).as_posix()
@@ -18,10 +26,6 @@ def test_private_build_requires_basic_before_bytes(private_app):
             assert "Basic" in response.headers["www-authenticate"]
             assert "Data Pipeline Upload" not in response.text
     assert client.get("/assets/pipeline/index.html").status_code == 404
-
-
-PRIVATE = Path("src/fabryka_track/pipeline_web")
-PUBLIC = Path("src/fabryka_track/web")
 
 
 def files(root):
@@ -55,3 +59,34 @@ def test_public_build_never_contains_private_entry_and_private_never_imports_pub
     private_js = private_js.replace("/pipeline/api/", "")
     for public_marker in ("Fabryka Track", "Sign in", "huggingface", "/api/"):
         assert public_marker not in private_js, public_marker
+
+
+def package_commands() -> list[str]:
+    match = re.search(r"- name: Package the tested release\n\s+run: \|\n((?:\s{10}.+\n)+)", WORKFLOW.read_text())
+    assert match, "release packaging step missing"
+    return [line.strip() for line in match.group(1).splitlines() if line.strip()]
+
+
+@pytest.fixture()
+def local_release_archive(tmp_path):
+    archive = tmp_path / "release.tar"
+    for command in package_commands():
+        # Same commands as CI, written to a scratch archive instead of the worktree.
+        subprocess.run(["bash", "-ec", command.replace("release.tar", str(archive))], cwd=REPO, check=True)
+    return archive
+
+
+def test_release_includes_private_output(local_release_archive):
+    actual = {p.relative_to(REPO).as_posix() for p in PRIVATE.rglob("*") if p.is_file()}
+    assert actual
+    with tarfile.open(local_release_archive) as archive:
+        names = set(archive.getnames())
+    assert actual <= names
+    assert {p.relative_to(REPO).as_posix() for p in PUBLIC.rglob("*") if p.is_file()} <= names
+    assert "src/fabryka_track/pipeline.py" in names
+    assert not list(PRIVATE.rglob("*.map"))
+
+
+def test_public_graph_has_no_private_entry():
+    for path in PUBLIC.rglob("*.js"):
+        assert "Data Pipeline Upload" not in path.read_text()

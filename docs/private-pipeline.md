@@ -66,7 +66,9 @@ Bodies must be UTF-8 `application/json` (optionally `charset=utf-8`) of at most 
 - Upstream error bodies must match the contract `Error` schema; otherwise, like non-JSON or oversized
   (> 1 MiB + 64 KiB) bodies, they are replaced by 502 `provider_unavailable`. Transport failures and
   timeouts (10 s) are 503 `provider_unavailable` with `Retry-After: 5`.
-- Logs record only the failure type, never credentials, bodies or URLs with signatures.
+- Track's own log lines record only the failure type, never credentials or bodies. httpx may log the
+  upstream request line (method, controller route, status) at INFO; that route holds at most a job ID
+  and the validated `limit`, `cursor` or `diagnostic` values, never credentials or signed storage URLs.
 
 Storage transfers go directly from the browser to signed storage URLs and never pass through
 this proxy or carry Basic credentials.
@@ -130,16 +132,62 @@ Messages are fixed English texts; server error text, job IDs and signed URLs are
 
 ## Local browser tests
 
-`frontend/playwright.pipeline.config.ts` serves the actual private build with `vite preview` and
-answers every control and storage request from approved contract fixtures
-(`frontend/tests/pipeline/journey.ts`). These are local fixture results, not evidence of a deployed
-controller, storage or provider.
+`frontend/playwright.pipeline.config.ts` starts `scripts/serve_pipeline_test.py` on `127.0.0.1:4174`. It
+serves the actual private build through the production `pipeline_app` boundary (Basic, static allowlist,
+controller proxy, literal origin `https://track.fabryka.ai`) with the non-secret test pair
+`operator` / `local-test-password`; its controller transport answers every request with 503, so nothing
+leaves the machine. `/health` (`"evidence": "local_fixture"`) exists only in this harness.
+
+- Journey tests (`frontend/tests/pipeline/fixtures.ts`, `installFixtureJourney`) load the page through
+  Basic and intercept control and storage requests in the browser with approved contract fixtures
+  (outcomes passed, failed_qa, empty_result, failed, expired, quota, invalid). The local origin is
+  accepted only by these interceptors, never by the application guard. Any other host is aborted and
+  fails the test; storage requests carrying `Authorization` or cookies fail it too.
+- Server tests send requests to the harness without interception: every built path, `/pipeline`,
+  `/pipeline/api/jobs` × GET/HEAD/conditional without the pair → 401 with no bytes; alternates and
+  source maps → 404 after auth; a POST from the local origin → 403 `forbidden_origin`.
+
+Trace, video and screenshots are off. These are local fixture results, not evidence of a deployed
+controller, storage, provider or TLS; live browser, API, storage and cost proof belongs to #765.
 
 ```bash
 cd frontend
-npm run build
-PIPELINE_BROWSER_CHANNEL=chrome npx playwright test --config playwright.pipeline.config.ts
+npm ci && npm run build
+npx playwright install chromium
+npx playwright test --config playwright.pipeline.config.ts
 ```
 
-`PIPELINE_BROWSER_CHANNEL` selects an installed browser channel when the bundled Playwright Chromium
-is not installed; leave it unset to use the bundled browser.
+`PIPELINE_TEST_PYTHON` selects the interpreter for the harness (default `../.venv/bin/python`, else
+`python`); it needs the `test` extra and `src` on `PYTHONPATH`, which the config sets.
+`PIPELINE_BROWSER_CHANNEL` selects an installed browser channel instead of the bundled Chromium.
+
+## Release and hand-off
+
+CI builds both entries once (`npm run build` = public `web/` + private `pipeline_web/`), runs the Node
+contract/state tests, the full pytest suite and the private browser suite, then packages:
+
+```bash
+git archive --format=tar --output=release.tar HEAD
+tar -rf release.tar src/fabryka_track/web src/fabryka_track/pipeline_web
+```
+
+`tests/test_pipeline_build.py` replays exactly these packaging lines from the workflow into a scratch
+archive and checks that every built private file is included and no source map exists. The SDK wheel
+(`src/fabryka`) is unchanged.
+
+Private path manifest of a build (all behind Basic): `/pipeline` (308 to `/pipeline/`), `/pipeline/`,
+`/pipeline/assets/index-<hash>.js`, `/pipeline/assets/index-<hash>.css`, `/pipeline/api/<route>` (table
+above). `pipeline_web/.vite/manifest.json` ships in the archive but is never served (404). List a build
+with `find src/fabryka_track/pipeline_web -type f | sort | xargs shasum -a 256`.
+
+Operator check after a separately authorized deploy (#765): Basic prompt → choose JSONL or Parquet →
+metadata → direct PUT to storage → confirm (a replay keeps its key) → status → report, result or
+diagnostic → expiry.
+
+### Rollback
+
+Rollback touches only the private feature: clear `FABRYKA_PIPELINE_USERNAME` / `FABRYKA_PIPELINE_PASSWORD`
+(every `/pipeline*` answers 503) or ship a release without `pipeline_web` (`/pipeline/` answers 503,
+assets 404); optionally drop the `@pipeline` Caddy handle, which falls through to the same app. The
+public Track site, HF login, training jobs and jobs already held by the controller keep their behavior;
+controller-side jobs continue and expire on their own deadlines.

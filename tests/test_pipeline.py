@@ -797,3 +797,33 @@ def test_proxy_get_does_not_forward_unchecked_browser_metadata():
     assert response.status_code == 200
     sent = upstream.requests[0]
     assert "sec-fetch-site" not in sent.headers and "origin" not in sent.headers
+
+
+def load_test_server():
+    import importlib.util
+    path = Path(__file__).resolve().parents[1] / "scripts/serve_pipeline_test.py"
+    spec = importlib.util.spec_from_file_location("serve_pipeline_test", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_browser_test_server_uses_production_guard_with_literal_origin():
+    server = load_test_server()
+    assert server.TEST_PAIR == PIPELINE_TEST_PAIR
+    client = TestClient(server.build_app(), base_url="http://127.0.0.1:4174")
+    assert client.get("/health").json() == {"status": "ok", "evidence": "local_fixture"}
+    for path in ["/pipeline/", "/pipeline/api/jobs", *built_assets()]:
+        assert_denied(client.get(path))
+    assert TITLE in client.get("/pipeline/", headers=AUTH).text
+    mutation = {**AUTH, "X-Pipeline-Request": "1", "Content-Type": "application/json"}
+    for origin in ("http://127.0.0.1:4174", "null", "https://evil.example"):
+        denied = client.post("/pipeline/api/jobs", headers={**mutation, "Origin": origin}, content="{}")
+        assert (denied.status_code, denied.json()["code"]) == (403, "forbidden_origin"), origin
+    passed = client.post("/pipeline/api/jobs", headers={**mutation, "Origin": PIPELINE_ORIGIN}, content="{}")
+    assert (passed.status_code, passed.json()["code"]) == (503, "provider_unavailable")
+
+
+def test_track_health_is_not_the_browser_harness_health(client):
+    body = client.get("/health").json()
+    assert body["status"] == "ok" and "evidence" not in body

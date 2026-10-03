@@ -1,5 +1,5 @@
-import { test, expect, type Page } from "@playwright/test";
-import { installFixtureJourney, type Journey } from "./journey.ts";
+import { test, expect, type APIRequestContext, type Page } from "@playwright/test";
+import { installFixtureJourney, type Journey } from "./fixtures.ts";
 
 const JSONL = '{"text":"Synthetic corpus record","license":"CC0-1.0"}\n';
 
@@ -227,4 +227,63 @@ test("the private screen has no public navigation or HF login", async ({ page })
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Data Pipeline Upload");
   await expect(page.getByRole("navigation")).toHaveCount(0);
   await expect(page.getByText(/Hugging Face|Sign in/i)).toHaveCount(0);
+});
+
+test.describe("actual private server without fixture interception", () => {
+  const CHALLENGE = 'Basic realm="Pipeline Upload", charset="UTF-8"';
+
+  async function builtPaths(request: APIRequestContext) {
+    const html = await (await request.get("/pipeline/")).text();
+    const assets = [...html.matchAll(/(?:src|href)="(\/pipeline\/assets\/[^"]+)"/g)].map((match) => match[1]);
+    expect(assets.length).toBeGreaterThanOrEqual(2);
+    return assets;
+  }
+
+  test("every private path needs Basic before any bytes", async ({ request, baseURL }) => {
+    const paths = ["/pipeline", "/pipeline/", "/pipeline/index.html", "/pipeline/api/jobs",
+      ...await builtPaths(request)];
+    // Plain fetch: Playwright request contexts inherit the configured operator pair.
+    for (const path of paths) {
+      for (const method of ["GET", "HEAD"]) {
+        const response = await fetch(baseURL + path, { method, redirect: "manual", headers: { "If-None-Match": "*" } });
+        expect(response.status, method + " " + path).toBe(401);
+        expect(response.headers.get("www-authenticate")).toBe(CHALLENGE);
+        expect(response.headers.get("cache-control")).toBe("no-store");
+        expect(await response.text()).not.toContain("Data Pipeline Upload");
+      }
+    }
+  });
+
+  test("authenticated operator gets only the built entry and assets", async ({ request }) => {
+    for (const path of await builtPaths(request)) {
+      expect((await request.get(path)).status(), path).toBe(200);
+      expect((await request.get(path + ".map")).status()).toBe(404);
+    }
+    for (const path of ["/pipeline/index.html", "/pipeline/.vite/manifest.json", "/pipeline/src/pipeline/main.tsx",
+      "/pipeline/assets/", "/pipeline/assets/%2e%2e/index.html"]) {
+      expect((await request.get(path)).status(), path).toBe(404);
+    }
+  });
+
+  test("a browser without the pair sees no private screen", async ({ browser }) => {
+    const context = await browser.newContext({ httpCredentials: undefined });
+    const page = await context.newPage();
+    const response = await page.goto("/pipeline/");
+    expect(response?.status()).toBe(401);
+    await expect(page.getByRole("heading", { name: "Data Pipeline Upload" })).toHaveCount(0);
+    await context.close();
+  });
+
+  test("the guard refuses the local test origin and never reaches a controller", async ({ page }) => {
+    await page.goto("/pipeline/");
+    const replies = await page.evaluate(async () => {
+      const post = (headers: Record<string, string>) => fetch("/pipeline/api/jobs", { method: "POST",
+        headers: { "Content-Type": "application/json", ...headers }, body: "{}" })
+        .then(async (response) => [response.status, (await response.json()).code]);
+      return [await post({ "X-Pipeline-Request": "1" }), await post({})];
+    });
+    expect(replies).toEqual([[403, "forbidden_origin"], [403, "forbidden_origin"]]);
+    const status = await page.request.get("/pipeline/api/jobs/10000000-0000-4000-8000-000000000001");
+    expect([status.status(), (await status.json()).code]).toEqual([503, "provider_unavailable"]);
+  });
 });
