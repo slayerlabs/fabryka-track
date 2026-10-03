@@ -4,7 +4,12 @@ import httpx
 import uvicorn
 from pydantic import SecretStr
 
-from fabryka_track.pipeline import PIPELINE_ORIGIN, PRIVATE_ROOT, PipelineConfig, pipeline_app
+from fabryka_track.pipeline import (
+    PIPELINE_ORIGIN,
+    PRIVATE_ROOT,
+    PipelineConfig,
+    pipeline_app,
+)
 
 HOST, PORT = "127.0.0.1", 4174
 TEST_PAIR = ("operator", "local-test-password")

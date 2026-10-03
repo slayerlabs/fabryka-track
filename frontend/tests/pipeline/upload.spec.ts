@@ -370,6 +370,8 @@ test.describe("actual private server without fixture interception", () => {
     });
     expect(replies).toEqual([[403, "forbidden_origin"], [403, "forbidden_origin"]]);
     const status = await page.request.get("/pipeline/api/jobs/10000000-0000-4000-8000-000000000001");
-    expect([status.status(), (await status.json()).code]).toEqual([503, "provider_unavailable"]);
+    // The fixed request_id proves the request passed the guard and reached the harness transport.
+    expect([status.status(), await status.json()]).toEqual([503, expect.objectContaining({
+      code: "provider_unavailable", request_id: "90000000-0000-4000-8000-000000000001" })]);
   });
 });

@@ -821,7 +821,7 @@ def test_browser_test_server_uses_production_guard_with_literal_origin():
         denied = client.post("/pipeline/api/jobs", headers={**mutation, "Origin": origin}, content="{}")
         assert (denied.status_code, denied.json()["code"]) == (403, "forbidden_origin"), origin
     passed = client.post("/pipeline/api/jobs", headers={**mutation, "Origin": PIPELINE_ORIGIN}, content="{}")
-    assert (passed.status_code, passed.json()["code"]) == (503, "provider_unavailable")
+    assert passed.status_code == 503 and passed.json() == server.UNAVAILABLE
 
 
 def test_track_health_is_not_the_browser_harness_health(client):
