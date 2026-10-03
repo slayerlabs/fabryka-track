@@ -73,7 +73,7 @@ def assert_denied(response, status=401):
     {"Authorization": "Basic " + base64.b64encode(b"\xff\xfe:x").decode()},
 ])
 def test_wrong_or_missing_basic_gets_exact_challenge_without_bytes(private, headers):
-    for path in ["/pipeline", "/pipeline/", "/pipeline/index.html", "/pipeline/unknown",
+    for path in ["/pipeline/", "/pipeline/index.html", "/pipeline/unknown",
                  "/pipeline/.vite/manifest.json", "/pipeline/src/pipeline/main.tsx", *built_assets()]:
         for method in ("GET", "HEAD", "POST", "OPTIONS"):
             assert_denied(private.request(method, path, headers=headers))
@@ -104,10 +104,23 @@ def test_authenticated_operator_gets_private_index_and_actual_assets(private):
     assert head.status_code == 200 and head.content == b""
 
 
-def test_redirect_to_slash_happens_only_after_auth(private):
-    assert_denied(private.get("/pipeline", follow_redirects=False))
-    response = private.get("/pipeline", headers=AUTH, follow_redirects=False)
+def assert_slash_redirect(response):
     assert response.status_code == 308 and response.headers["location"] == "/pipeline/"
+    assert response.content == b"" and "www-authenticate" not in response.headers
+    assert {k: response.headers[k] for k in PRIVATE_HEADERS} == PRIVATE_HEADERS
+
+
+@pytest.mark.parametrize("app_factory", ["private", "track"])
+def test_no_slash_redirects_before_basic_so_the_protection_space_stays_under_pipeline(
+        app_factory, private_app, track_pipeline):
+    app = private_app if app_factory == "private" else track_pipeline.app
+    client = TestClient(app, base_url="https://track.fabryka.ai")
+    for path in ("/pipeline", "/pipeline?next=https://evil.invalid&x=%2F%2Fevil"):
+        for method in ("GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"):
+            for headers in ({}, AUTH, basic("intruder", "wrong")):
+                assert_slash_redirect(client.request(method, path, headers=headers, follow_redirects=False))
+    assert_denied(client.get("/pipeline/", follow_redirects=False))
+    assert_denied(client.get("/pipeline", follow_redirects=True))
 
 
 @pytest.mark.parametrize("path", [
@@ -286,7 +299,7 @@ def test_router_enforces_basic_even_without_boundary_middleware():
     bare = FastAPI()
     bare.include_router(make_pipeline_router(config(), no_network()))
     client = TestClient(bare, base_url="https://track.fabryka.ai")
-    for path in ["/pipeline", "/pipeline/", *built_assets()]:
+    for path in ["/pipeline/", *built_assets()]:
         response = client.get(path, follow_redirects=False)
         assert response.status_code == 401 and TITLE not in response.text, path
         assert response.headers["www-authenticate"] == CHALLENGE
@@ -827,3 +840,14 @@ def test_browser_test_server_uses_production_guard_with_literal_origin():
 def test_track_health_is_not_the_browser_harness_health(client):
     body = client.get("/health").json()
     assert body["status"] == "ok" and "evidence" not in body
+
+
+def test_track_lifespan_closes_the_controller_client_and_reopens_on_restart(monkeypatch):
+    from fabryka_track import api
+    monkeypatch.setattr(api, "start_benchmark_queue", lambda: None)
+    with TestClient(api.app):
+        first = api.pipeline_client
+        assert not first.is_closed
+    assert first.is_closed
+    with TestClient(api.app):
+        assert not api.pipeline_client.is_closed and api.pipeline_client is not first

@@ -326,7 +326,7 @@ test.describe("actual private server without fixture interception", () => {
   }
 
   test("every private path needs Basic before any bytes", async ({ request, baseURL }) => {
-    const paths = ["/pipeline", "/pipeline/", "/pipeline/index.html", "/pipeline/api/jobs",
+    const paths = ["/pipeline/", "/pipeline/index.html", "/pipeline/api/jobs",
       ...await builtPaths(request)];
     // Plain fetch: Playwright request contexts inherit the configured operator pair.
     for (const path of paths) {
@@ -338,6 +338,20 @@ test.describe("actual private server without fixture interception", () => {
         expect(await response.text()).not.toContain("Data Pipeline Upload");
       }
     }
+  });
+
+  test("the slashless entry redirects before Basic so credentials stay scoped to /pipeline/", async ({ baseURL }) => {
+    for (const method of ["GET", "HEAD", "POST"]) {
+      const response = await fetch(baseURL + "/pipeline?next=//evil.invalid", { method, redirect: "manual" });
+      expect(response.status, method).toBe(308);
+      expect(response.headers.get("location")).toBe("/pipeline/");
+      expect(response.headers.get("www-authenticate")).toBeNull();
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      expect(await response.text()).toBe("");
+    }
+    const target = await fetch(baseURL + "/pipeline/", { redirect: "manual" });
+    expect(target.status).toBe(401);
+    expect(target.headers.get("www-authenticate")).toBe(CHALLENGE);
   });
 
   test("authenticated operator gets only the built entry and assets", async ({ request }) => {

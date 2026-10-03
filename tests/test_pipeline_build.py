@@ -16,7 +16,7 @@ def test_private_build_requires_basic_before_bytes(private_app):
     client = TestClient(private_app, base_url="https://track.fabryka.ai")
     root = PRIVATE
     assert (root / "index.html").is_file()
-    paths = ["/pipeline/", "/pipeline"] + [
+    paths = ["/pipeline/"] + [
         "/pipeline/" + p.relative_to(root).as_posix()
         for p in root.rglob("*") if p.is_file()]
     for path in paths:

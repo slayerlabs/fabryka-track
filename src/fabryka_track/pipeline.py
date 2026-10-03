@@ -3,6 +3,7 @@ import json
 import logging
 import re
 import secrets
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -10,7 +11,7 @@ from uuid import uuid4
 
 import httpx
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import SecretStr
 from starlette._utils import get_route_path
 
@@ -102,6 +103,10 @@ def controller_client() -> httpx.AsyncClient:
 
 def _is_private(path: str) -> bool:
     return path == "/pipeline" or path.startswith("/pipeline/")
+
+
+def slash_redirect() -> Response:
+    return Response(status_code=308, headers={"Location": "/pipeline/", **PRIVATE_HEADERS})
 
 
 def check_private_basic(request: Request, config: PipelineConfig) -> None:
@@ -297,6 +302,9 @@ def install_private_boundary(app: FastAPI, config: PipelineConfig) -> None:
             return await call_next(request)
         if not config.enabled:
             return _denial(path, 503, "provider_unavailable", "Pipeline upload is not configured", False, {})
+        if path == "/pipeline":
+            # A challenge here would scope the browser's Basic cache to "/", leaking it onto public Track.
+            return slash_redirect()
         try:
             check_private_basic(request, config)
         except PermissionError:
@@ -325,7 +333,8 @@ def _servable(root: Path, relative: str) -> Path | None:
     return target
 
 
-def make_pipeline_router(config: PipelineConfig, client: httpx.AsyncClient) -> APIRouter:
+def make_pipeline_router(config: PipelineConfig,
+                         client: httpx.AsyncClient | Callable[[], httpx.AsyncClient]) -> APIRouter:
     def require_basic(request: Request) -> None:
         if not config.enabled:
             raise HTTPException(503, "Pipeline upload is not configured", headers=PRIVATE_HEADERS)
@@ -352,16 +361,13 @@ def make_pipeline_router(config: PipelineConfig, client: httpx.AsyncClient) -> A
             query = _query(route, request.method, request.scope.get("query_string", b""))
             if request.method == "POST":
                 check_browser_mutation(request, config)
-            return await proxy(request, _upstream_url(config, route, query), client)
+            active = client() if callable(client) else client
+            return await proxy(request, _upstream_url(config, route, query), active)
         except RouteError as exc:
             return route_error(exc)
 
     router.add_api_route("/pipeline/api", pipeline_api, methods=list(ROUTED_METHODS))
     router.add_api_route("/pipeline/api/{rest:path}", pipeline_api, methods=list(ROUTED_METHODS))
-
-    @router.api_route("/pipeline", methods=["GET", "HEAD"])
-    def pipeline_slash():
-        return RedirectResponse("/pipeline/", status_code=308)
 
     @router.api_route("/pipeline/", methods=["GET", "HEAD"])
     def pipeline_index():
