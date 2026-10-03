@@ -1,5 +1,5 @@
 import { test, expect, type APIRequestContext, type Page } from "@playwright/test";
-import { installFixtureJourney, type Journey } from "./fixtures.ts";
+import { TEST_NOW, installFixtureJourney, type Journey } from "./fixtures.ts";
 
 const JSONL = '{"text":"Synthetic corpus record","license":"CC0-1.0"}\n';
 
@@ -227,6 +227,92 @@ test("the private screen has no public navigation or HF login", async ({ page })
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Data Pipeline Upload");
   await expect(page.getByRole("navigation")).toHaveCount(0);
   await expect(page.getByText(/Hugging Face|Sign in/i)).toHaveCount(0);
+});
+
+test("a stalled cleanup after the verdict never blocks the operator", async ({ page }) => {
+  const journey = await installFixtureJourney(page, "passed");
+  journey.stallCleanup = true;
+  await fill(page);
+  await page.getByRole("button", { name: "Upload" }).click();
+  await expect(page.getByRole("button", { name: "Download result" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Cancel job" })).toHaveCount(0);
+  await page.clock.setFixedTime(TEST_NOW + 61000);
+  await expect(page.getByRole("status")).toHaveText(
+    "Finalizing is taking longer than expected. Select Retry to check again");
+  await expect(page.getByRole("button", { name: "Upload" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Cancel job" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Download result" })).toBeVisible();
+  expect(journey.backend.controlCalls().filter((call) => call.url.endsWith("/cancel"))).toHaveLength(0);
+  clean(journey);
+});
+
+test("cancel after a lost create replays the same create and cancels that job", async ({ page }) => {
+  const journey = await installFixtureJourney(page, "passed");
+  journey.createReply = (attempt) => (attempt === 1
+    ? journey.backend.error(503, "provider_unavailable", true, { "Retry-After": "120" }) : undefined);
+  await fill(page);
+  await page.getByRole("button", { name: "Upload" }).click();
+  await expect(page.getByRole("status")).toHaveText("Pipeline temporarily unavailable");
+  await page.getByRole("button", { name: "Cancel job" }).click();
+  await expect(page.getByRole("heading", { name: "Upload cancelled" })).toBeVisible();
+  const [first, second] = journey.createCalls();
+  expect(second.key).toBe(first.key);
+  expect(second.body).toBe(first.body);
+  expect(journey.createCalls()).toHaveLength(2);
+  expect(journey.backend.controlCalls().filter((call) => call.url.endsWith("/cancel"))).toHaveLength(1);
+  expect(journey.backend.storageCalls()).toHaveLength(0);
+  await expect(page.getByRole("button", { name: "Upload" })).toBeEnabled();
+  clean(journey);
+});
+
+test("an unconfirmed cancel keeps the operation and says a job may exist", async ({ page }) => {
+  const journey = await installFixtureJourney(page, "passed");
+  journey.createReply = (attempt) => (attempt <= 2
+    ? journey.backend.error(503, "provider_unavailable", true, { "Retry-After": "120" }) : undefined);
+  await fill(page);
+  await page.getByRole("button", { name: "Upload" }).click();
+  await expect(page.getByRole("status")).toHaveText("Pipeline temporarily unavailable");
+  await page.getByRole("button", { name: "Cancel job" }).click();
+  await expect(page.getByRole("status")).toHaveText(
+    "Cancellation is not confirmed and a job may have been created. Select Retry to cancel it");
+  await expect(page.getByRole("button", { name: "Upload" })).toBeDisabled();
+  await page.getByRole("button", { name: "Retry" }).click();
+  await expect(page.getByRole("heading", { name: "Upload cancelled" })).toBeVisible();
+  expect(new Set(journey.createCalls().map((call) => call.key)).size).toBe(1);
+  expect(journey.backend.controlCalls().filter((call) => call.url.endsWith("/cancel"))).toHaveLength(1);
+  clean(journey);
+});
+
+test("a confirm refused after the upload window shows the expired job", async ({ page }) => {
+  const journey = await installFixtureJourney(page, "passed");
+  journey.confirmReply = () => {
+    journey.uploadExpired = true;
+    return journey.backend.error(410, "expired");
+  };
+  await fill(page);
+  await page.getByRole("button", { name: "Upload" }).click();
+  await expect(page.getByRole("heading", { name: "Upload window expired" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Retry" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Upload" })).toBeEnabled();
+  expect(journey.confirmCalls()).toHaveLength(1);
+  clean(journey);
+});
+
+test("download waits for its grant and an expired grant refreshes the job", async ({ page }) => {
+  const journey = await installFixtureJourney(page, "passed");
+  let release = () => {};
+  journey.resultGate = new Promise((resolve) => { release = resolve; });
+  journey.resultExpired = true;
+  await fill(page);
+  await page.getByRole("button", { name: "Upload" }).click();
+  await expect(page.getByRole("heading", { name: "Upload passed" })).toBeVisible();
+  await page.getByRole("button", { name: "Download result" }).click();
+  await expect(page.getByRole("button", { name: "Download result" })).toBeDisabled();
+  release();
+  await expect(page.getByRole("heading", { name: "Results expired" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Download|View report/ })).toHaveCount(0);
+  expect(journey.downloads).toEqual([]);
+  clean(journey);
 });
 
 test.describe("actual private server without fixture interception", () => {

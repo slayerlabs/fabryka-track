@@ -13,6 +13,7 @@ type Operation = {
   sha: string;
   size: number;
   body: CreateUpload | null;
+  createSent: boolean;
   keys: Keys;
   session: UploadSession | null;
   completed: ConfirmUpload["parts"];
@@ -91,7 +92,7 @@ function restore(): Operation | null {
     const keys = saved.keys as Keys;
     if (![keys.create, keys.confirm, keys.cancel].every((key) => KEY.test(key))) return null;
     if (session.input_sha256 !== saved.sha || session.encoded_bytes !== saved.size) return null;
-    return { file: null, sha: saved.sha, size: saved.size, body: null, keys, session, completed: [],
+    return { file: null, sha: saved.sha, size: saved.size, body: null, createSent: true, keys, session, completed: [],
       confirm: null, failed: "transfer" };
   } catch {
     return null;
@@ -113,6 +114,7 @@ export function UploadScreen() {
   const [progress, setProgress] = useState<Progress | null>(null);
   const [busy, setBusy] = useState(false);
   const [paused, setPaused] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [needsFile, setNeedsFile] = useState(false);
   const [resumeFile, setResumeFile] = useState<File | null>(null);
   const opRef = useRef<Operation | null>(null);
@@ -122,7 +124,9 @@ export function UploadScreen() {
 
   const view = status ? terminalView(status) : null;
   const done = settled(status);
-  const jobActive = !!opRef.current?.session && !done;
+  const verdict = !!status && VERDICTS.has(status.processing_state);
+  const jobActive = !!opRef.current?.session && !verdict && !done;
+  const blocked = busy || jobActive || (paused && !verdict);
 
   useEffect(() => {
     if (done) headingRef.current?.focus();
@@ -134,9 +138,10 @@ export function UploadScreen() {
 
   useEffect(() => {
     const op = restore();
-    if (!op) return;
-    opRef.current = op;
-    void recover(op);
+    if (op) {
+      opRef.current = op;
+      void recover(op);
+    }
     return () => abortRef.current?.abort();
   }, []);
 
@@ -184,11 +189,19 @@ export function UploadScreen() {
     try {
       if (current === "cancel") {
         setMessage("Cancelling the job…");
+        if (!op.session) {
+          // The lost create may have stored a job; replaying its key returns that job so it can be cancelled.
+          const session = await api.create(op.body!, op.keys.create, signal);
+          assertSameInput(session, op.file!, op.sha);
+          op.session = session;
+          save(op);
+        }
         show(await api.cancel(op.session!.job_id, op.keys.cancel, signal));
         current = "poll";
       }
       if (current === "create") {
         setMessage("Creating the upload job…");
+        op.createSent = true;
         const session = await api.create(op.body!, op.keys.create, signal);
         assertSameInput(session, op.file!, op.sha);
         op.session = session;
@@ -217,10 +230,26 @@ export function UploadScreen() {
     } catch (error) {
       if (signal.aborted) return;
       op.failed = current;
+      if (error instanceof ApiError && error.status === 410 && op.session && current !== "poll") {
+        op.failed = "poll";
+        try {
+          const latest = await api.status(op.session.job_id, signal);
+          show(latest);
+          if (settled(latest)) {
+            setPaused(false);
+            setMessage(errorText(error));
+            return;
+          }
+        } catch {
+          // The 410 message below still applies; Retry refreshes the status.
+        }
+      }
       const resumable = op.session !== null || (error instanceof ApiError && error.retryable);
       if (!resumable) opRef.current = null;
       setPaused(resumable);
-      setMessage(errorText(error));
+      setMessage(resumable && current === "cancel" && !op.session
+        ? "Cancellation is not confirmed and a job may have been created. Select Retry to cancel it"
+        : errorText(error));
     } finally {
       if (!signal.aborted) {
         setBusy(false);
@@ -240,7 +269,7 @@ export function UploadScreen() {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (busy || jobActive) return;
+    if (blocked) return;
     if (!file) {
       setMessage("Select an input file.");
       return;
@@ -256,7 +285,7 @@ export function UploadScreen() {
       const sha = await sha256File(file, controller.signal,
         (bytes) => setProgress({ label: "Checksum computed for", value: bytes, max: file.size }));
       const body = createBody(file, metadata(), sha, format);
-      opRef.current = { file, sha, size: file.size, body, session: null, completed: [], confirm: null,
+      opRef.current = { file, sha, size: file.size, body, createSent: false, session: null, completed: [], confirm: null,
         failed: null, keys: { create: newOperationKey(), confirm: newOperationKey(), cancel: newOperationKey() } };
     } catch (error) {
       if (controller.signal.aborted) return;
@@ -304,7 +333,7 @@ export function UploadScreen() {
   async function cancel() {
     abortRef.current?.abort();
     const op = opRef.current;
-    if (!op?.session) {
+    if (!op?.session && !op?.createSent) {
       opRef.current = null;
       setBusy(false);
       setPaused(false);
@@ -322,19 +351,30 @@ export function UploadScreen() {
     await run("poll", begin());
   }
 
+  async function refreshAfterExpiry(error: unknown, jobId: string) {
+    setMessage(errorText(error));
+    if (!(error instanceof ApiError) || error.status !== 410) return;
+    try {
+      show(await api.status(jobId));
+    } catch {
+      // Keep the 410 message; Refresh status remains available.
+    }
+  }
+
   async function loadReport() {
     const op = opRef.current;
     if (!op?.session) return;
     try {
       setReport(await api.report(op.session.job_id));
     } catch (error) {
-      setMessage(errorText(error));
+      await refreshAfterExpiry(error, op.session.job_id);
     }
   }
 
   async function download() {
     const op = opRef.current;
-    if (!op?.session || !view) return;
+    if (!op?.session || !view || downloading) return;
+    setDownloading(true);
     try {
       const grant = await api.result(op.session.job_id, view.diagnostic);
       const url = new URL(grant.url);
@@ -349,14 +389,16 @@ export function UploadScreen() {
       anchor.remove();
       setMessage(view.diagnostic ? "Diagnostic result download started." : "Result download started.");
     } catch (error) {
-      setMessage(errorText(error));
+      await refreshAfterExpiry(error, op.session.job_id);
+    } finally {
+      setDownloading(false);
     }
   }
 
   const finished = done && status && VERDICTS.has(status.processing_state);
   const noResult = finished && !view?.resultAllowed && status?.client_phase === "complete"
     && status.processing_state !== "cancelled" && status.processing_state !== "rejected";
-  const canCancel = !done && (busy || jobActive || (paused && !!opRef.current));
+  const canCancel = !verdict && !done && (busy || jobActive || (paused && !!opRef.current));
   const failure = status?.failure_code ? failureLabels[status.failure_code] : null;
 
   return (
@@ -395,7 +437,7 @@ export function UploadScreen() {
           <input type="checkbox" checked={perRecord} onChange={(e) => setPerRecord(e.target.checked)} />
           Require a reference in each record
         </label>
-        <button type="submit" disabled={busy || jobActive || paused}>Upload</button>
+        <button type="submit" disabled={blocked}>Upload</button>
       </form>
 
       {needsFile && (
@@ -442,13 +484,13 @@ export function UploadScreen() {
 
       <div className="actions">
         {view?.resultAllowed && (
-          <button type="button" onClick={download}>
+          <button type="button" onClick={download} disabled={downloading}>
             {view.diagnostic ? "Download diagnostic result" : "Download result"}
           </button>
         )}
         {view?.reportAllowed && <button type="button" onClick={loadReport}>View report</button>}
         {paused && <button type="button" ref={retryRef} onClick={retry}>Retry</button>}
-        {done && !busy && <button type="button" onClick={refresh}>Refresh status</button>}
+        {(done || verdict) && !busy && !paused && <button type="button" onClick={refresh}>Refresh status</button>}
         {canCancel && <button type="button" onClick={cancel}>Cancel job</button>}
       </div>
 

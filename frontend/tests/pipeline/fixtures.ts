@@ -174,6 +174,10 @@ export class Journey {
   confirmed = false;
   cancelled = false;
   polls = 0;
+  stallCleanup = false;
+  uploadExpired = false;
+  resultExpired = false;
+  resultGate: Promise<void> | null = null;
   unexpected: string[] = [];
   credentialLeaks: string[] = [];
   downloads: string[] = [];
@@ -206,6 +210,10 @@ export class Journey {
   }
 
   private settled(): Record<string, unknown> {
+    if (this.cancelled && !this.confirmed) {
+      return this.backend.status({ processing_state: "cancelled", client_phase: "complete",
+        transfer_state: "closed", cleanup_state: "confirmed" });
+    }
     if (this.cancelled) {
       return this.admitted({ processing_state: "cancelled", client_phase: "complete", publication_state: "none",
         cleanup_state: "confirmed" });
@@ -220,12 +228,16 @@ export class Journey {
       Object.assign(published, { publication_state: "none" });
     }
     if (this.outcome === "expired") Object.assign(published, { client_phase: "expired", publication_state: "expired" });
+    else if (this.stallCleanup) Object.assign(published, { client_phase: "finalizing", cleanup_state: "pending" });
     return this.admitted(published);
   }
 
   private progress(): Record<string, unknown> {
-    if (!this.confirmed) return this.backend.status();
+    if (this.uploadExpired) {
+      return this.backend.status({ client_phase: "expired", transfer_state: "closed", cleanup_state: "pending" });
+    }
     if (this.cancelled) return this.settled();
+    if (!this.confirmed) return this.backend.status();
     this.polls += 1;
     if (this.polls === 1) return this.admitted({ processing_state: "running", client_phase: "running" });
     if (this.polls === 2) {
@@ -269,13 +281,14 @@ export class Journey {
     }
     if (request.method === "POST" && path === `${job}/cancel`) {
       this.cancelled = true;
-      return { status: 202, body: this.admitted({ processing_state: "cancelled", client_phase: "finalizing",
+      return { status: 200, body: this.admitted({ processing_state: "cancelled", client_phase: "finalizing",
         publication_state: "none", cleanup_state: "pending", ...(this.confirmed ? {} : { admitted: false,
           admitted_at: null, job_deadline: null, transfer_state: "closed" }) }) };
     }
     if (request.method === "GET" && path === job) return { status: 200, body: this.progress() };
     if (request.method === "GET" && path === `${job}/report`) return { status: 200, body: this.report() };
     if (request.method === "GET" && path === `${job}/result`) {
+      if (this.resultExpired) this.outcome = "expired";
       if (this.outcome === "expired") return this.backend.error(410, "expired");
       const diagnostic = new URL(request.url, APP_ORIGIN).searchParams.get("diagnostic") === "true";
       const failedQa = this.outcome === "failed_qa";
@@ -299,6 +312,7 @@ export class Journey {
 
   private async control(route: Route, request: PlaywrightRequest, url: URL) {
     const headers = await request.allHeaders();
+    if (url.pathname.endsWith("/result")) await this.resultGate;
     let response: Response;
     try {
       response = await this.backend.fetch(url.pathname + url.search, { method: request.method(), headers,
