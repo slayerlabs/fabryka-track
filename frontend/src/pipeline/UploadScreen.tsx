@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { decode } from "./contract.ts";
 import { ApiError, PipelineApi } from "./api.ts";
-import { errorText, pollJob, terminalView } from "./state.ts";
+import { errorText, isSettled, isVerdict, pollJob, terminalView } from "./state.ts";
 import { assertSameInput, createBody, detectFormat, newOperationKey, sha256File, uploadParts }
   from "./transfer.ts";
 import type { ConfirmUpload, CreateUpload, FileMetadata, JobReport, JobStatus, UploadSession } from "./types.ts";
@@ -25,8 +25,6 @@ type Progress = { label: string; value: number; max: number };
 const api = new PipelineApi();
 const STORE_KEY = "pipeline-upload-operation";
 const KEY = /^[\x21-\x7e]{16,128}$/;
-const SETTLED_PHASES = new Set<JobStatus["client_phase"]>(["complete", "expired", "rejected"]);
-const VERDICTS = new Set<JobStatus["processing_state"]>(["passed", "failed_qa", "failed", "cancelled", "rejected"]);
 
 const processingLabels: Record<JobStatus["processing_state"], string> = {
   uploading: "Waiting for upload",
@@ -45,6 +43,11 @@ const publicationLabels: Record<JobStatus["publication_state"], string> = {
   pending: "Pending",
   published: "Published",
   expired: "Expired",
+};
+const outcomeLabels: Record<JobReport["outcome"], string> = {
+  passed: "passed",
+  failed_qa: "QA failed (diagnostic only)",
+  failed: "failed",
 };
 const cleanupLabels: Record<JobStatus["cleanup_state"], string> = {
   not_due: "Not due",
@@ -73,7 +76,6 @@ const today = () => {
 };
 const when = (value: string | number) =>
   new Date(value).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "medium" });
-const settled = (status: JobStatus | null) => !!status && SETTLED_PHASES.has(status.client_phase);
 
 function save(op: Operation) {
   try {
@@ -90,6 +92,13 @@ function forget() {
   } catch {
     // Unavailable storage holds nothing to forget.
   }
+}
+
+async function ensureSession(op: Operation, signal: AbortSignal): Promise<void> {
+  const session = await api.create(op.body!, op.keys.create, signal);
+  assertSameInput(session, op.file!, op.sha);
+  op.session = session;
+  save(op);
 }
 
 function restore(): Operation | null {
@@ -131,8 +140,8 @@ export function UploadScreen() {
   const retryRef = useRef<HTMLButtonElement>(null);
 
   const view = status ? terminalView(status) : null;
-  const done = settled(status);
-  const verdict = !!status && VERDICTS.has(status.processing_state);
+  const done = isSettled(status);
+  const verdict = isVerdict(status);
   const jobActive = !!opRef.current?.session && !verdict && !done;
   const blocked = busy || jobActive || (paused && !verdict);
 
@@ -154,7 +163,7 @@ export function UploadScreen() {
   }, []);
 
   function show(next: JobStatus) {
-    if (settled(next)) forget();
+    if (isSettled(next)) forget();
     setStatus(next);
     setUpdatedAt(api.now());
   }
@@ -168,33 +177,47 @@ export function UploadScreen() {
     return controller;
   }
 
+  function fail(controller: AbortController, error: unknown) {
+    if (controller.signal.aborted) return;
+    setMessage(errorText(error));
+    setProgress(null);
+    setBusy(false);
+  }
+
+  function hashProgress(max: number) {
+    let shown = -1;
+    return (bytes: number) => {
+      const percent = Math.floor((bytes / Math.max(max, 1)) * 100);
+      if (percent === shown) return;
+      shown = percent;
+      setProgress({ label: "Checksum computed for", value: bytes, max });
+    };
+  }
+
   async function recover(op: Operation) {
     const controller = begin();
     try {
       const current = await api.status(op.session!.job_id, controller.signal);
       show(current);
-      if (current.processing_state === "uploading" && !settled(current)) {
+      if (current.processing_state === "uploading" && !isSettled(current)) {
         setNeedsFile(true);
         setMessage("An unfinished upload was found. Select the original file to resume it before "
           + when(current.upload_deadline) + ".");
         setBusy(false);
         return;
       }
-      if (!settled(current)) await run("poll", controller);
+      if (!isSettled(current)) await run("poll", controller);
       else setBusy(false);
     } catch (error) {
       if (controller.signal.aborted) return;
       if (error instanceof ApiError && error.code === "not_found") {
         forget();
         opRef.current = null;
-        setMessage(errorText(error));
-        setBusy(false);
-        return;
+      } else {
+        op.failed = "poll";
+        setPaused(true);
       }
-      op.failed = "poll";
-      setPaused(true);
-      setMessage(errorText(error));
-      setBusy(false);
+      fail(controller, error);
     }
   }
 
@@ -205,23 +228,15 @@ export function UploadScreen() {
     try {
       if (current === "cancel") {
         setMessage("Cancelling the job…");
-        if (!op.session) {
-          // The lost create may have stored a job; replaying its key returns that job so it can be cancelled.
-          const session = await api.create(op.body!, op.keys.create, signal);
-          assertSameInput(session, op.file!, op.sha);
-          op.session = session;
-          save(op);
-        }
+        // The lost create may have stored a job; replaying its key returns that job so it can be cancelled.
+        if (!op.session) await ensureSession(op, signal);
         show(await api.cancel(op.session!.job_id, op.keys.cancel, signal));
         current = "poll";
       }
       if (current === "create") {
         setMessage("Creating the upload job…");
         op.createSent = true;
-        const session = await api.create(op.body!, op.keys.create, signal);
-        assertSameInput(session, op.file!, op.sha);
-        op.session = session;
-        save(op);
+        await ensureSession(op, signal);
         current = "transfer";
       }
       if (current === "transfer") {
@@ -251,7 +266,7 @@ export function UploadScreen() {
         try {
           const latest = await api.status(op.session.job_id, signal);
           show(latest);
-          if (settled(latest)) {
+          if (isSettled(latest)) {
             setPaused(false);
             setMessage(errorText(error));
             return;
@@ -298,16 +313,12 @@ export function UploadScreen() {
     try {
       setMessage("Checking the file…");
       const format = await detectFormat(file);
-      const sha = await sha256File(file, controller.signal,
-        (bytes) => setProgress({ label: "Checksum computed for", value: bytes, max: file.size }));
+      const sha = await sha256File(file, controller.signal, hashProgress(file.size));
       const body = createBody(file, metadata(), sha, format);
       opRef.current = { file, sha, size: file.size, body, createSent: false, session: null, completed: [], confirm: null,
         failed: null, keys: { create: newOperationKey(), confirm: newOperationKey(), cancel: newOperationKey() } };
     } catch (error) {
-      if (controller.signal.aborted) return;
-      setMessage(errorText(error));
-      setProgress(null);
-      setBusy(false);
+      fail(controller, error);
       return;
     }
     await run("create", controller);
@@ -320,16 +331,12 @@ export function UploadScreen() {
     const controller = begin();
     try {
       setMessage("Checking that the file matches the unfinished upload…");
-      const sha = await sha256File(resumeFile, controller.signal,
-        (bytes) => setProgress({ label: "Checksum computed for", value: bytes, max: resumeFile.size }));
+      const sha = await sha256File(resumeFile, controller.signal, hashProgress(resumeFile.size));
       assertSameInput(op.session!, resumeFile, sha);
       op.file = resumeFile;
       setNeedsFile(false);
     } catch (error) {
-      if (controller.signal.aborted) return;
-      setMessage(errorText(error));
-      setProgress(null);
-      setBusy(false);
+      fail(controller, error);
       return;
     }
     await run(op.failed ?? "transfer", controller);
@@ -411,8 +418,7 @@ export function UploadScreen() {
     }
   }
 
-  const finished = done && status && VERDICTS.has(status.processing_state);
-  const noResult = finished && !view?.resultAllowed && status?.client_phase === "complete"
+  const noResult = done && verdict && !view?.resultAllowed && status?.client_phase === "complete"
     && status.processing_state !== "cancelled" && status.processing_state !== "rejected";
   const canCancel = !verdict && !done && (busy || jobActive || (paused && !!opRef.current));
   const failure = status?.failure_code ? failureLabels[status.failure_code] : null;
@@ -513,8 +519,7 @@ export function UploadScreen() {
       {report && (
         <section aria-label="QA report" className="report">
           <h2>QA report</h2>
-          <p>Outcome: {report.outcome === "passed" ? "passed" : report.outcome === "failed_qa"
-            ? "QA failed (diagnostic only)" : "failed"}.</p>
+          <p>Outcome: {outcomeLabels[report.outcome]}.</p>
           <p>Rows read: {report.rows_in}. Rows written: {report.rows_out}.</p>
           <p>PERSON and street-address coverage is unmeasured.</p>
           {report.qa ? (

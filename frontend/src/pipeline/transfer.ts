@@ -4,10 +4,10 @@ import { decode } from "./contract.ts";
 import type { ConfirmUpload, CreateUpload, FileMetadata, TransferGrant, UploadSession } from "./types.ts";
 import { ApiError, MAX_RETRIES, PROTOCOL, PipelineApi, backoff } from "./api.ts";
 
-export const HASH_CHUNK_BYTES = 1048576;
-export const MAX_INPUT_BYTES = 536870912;
-export const PUT_TIMEOUT_MS = 120000;
-export const READY_POLL_MS = 2000;
+const HASH_CHUNK_BYTES = 1048576;
+const MAX_INPUT_BYTES = 536870912;
+const PUT_TIMEOUT_MS = 120000;
+const READY_POLL_MS = 2000;
 // Renew a grant this close to expiry so storage never rejects a request already in flight.
 const GRANT_SKEW_MS = 5000;
 

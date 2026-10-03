@@ -32,7 +32,7 @@ export class ApiError extends Error {
   }
 }
 
-export type ApiOptions = {
+type ApiOptions = {
   timeoutMs?: number;
   now?: () => number;
   sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;

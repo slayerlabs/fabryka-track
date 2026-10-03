@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { decode } from "../frontend/src/pipeline/contract.ts";
 import { ApiError, PipelineApi } from "../frontend/src/pipeline/api.ts";
-import { FINALIZING_LIMIT_MS, POLL_MS, errorText, fromStatus, pollJob, terminalView }
+import { FINALIZING_LIMIT_MS, POLL_MS, errorText, isSettled, pollJob, terminalView }
   from "../frontend/src/pipeline/state.ts";
 import { BASE_TIME, FakeBackend, JOB_ID } from "../frontend/tests/pipeline/fixtures.ts";
 const fixtures = JSON.parse(readFileSync(
@@ -18,7 +18,7 @@ const status = (overrides) => decode("JobStatus", { ...job, ...overrides });
 test("passed processing with pending cleanup is finalizing", () => {
   const status = { ...job, processing_state: "passed",
     client_phase: "finalizing", publication_state: "published", cleanup_state: "pending" };
-  assert.equal(fromStatus(status).phase, "finalizing");
+  assert.equal(terminalView(status).title, "Finalizing…");
 });
 test("failed QA remains diagnostic", () => {
   const status = { ...job, processing_state: "failed_qa",
@@ -36,7 +36,9 @@ test("published passed result is downloadable and not diagnostic", () => {
 test("every contract client_phase is carried through literally", () => {
   for (const phase of ["uploading", "validating", "queued", "running", "finalizing",
     "complete", "expired", "rejected"]) {
-    assert.equal(fromStatus(status({ client_phase: phase })).phase, phase);
+    const s = status({ client_phase: phase });
+    assert.equal(s.client_phase, phase);
+    assert.equal(isSettled(s), ["complete", "expired", "rejected"].includes(phase));
   }
 });
 
@@ -44,8 +46,7 @@ test("processing, publication and cleanup stay independent while finalizing", ()
   const view = terminalView(status({ client_phase: "finalizing", publication_state: "pending",
     cleanup_state: "pending", cleanup_obligations: ["input_delete", "publication"] }));
   assert.equal(view.resultAllowed, false, "unpublished result must not be offered (report/result 409)");
-  assert.equal(fromStatus(status({ client_phase: "finalizing", publication_state: "pending" })).phase,
-    "finalizing");
+  assert.equal(view.title, "Finalizing…");
 });
 
 test("diagnostic failed_qa result is downloadable only as diagnostic", () => {
@@ -69,7 +70,7 @@ test("rejected input is explicit and offers nothing", () => {
     publication_state: "none", failure_code: "input_corrupt", artifacts: [],
     attempt_id: null, generation: 0, attempts_used: 0, admitted_at: null, job_deadline: null,
     first_result_stored_at: null, expires_at: null });
-  assert.equal(fromStatus(s).phase, "rejected");
+  assert.equal(isSettled(s), true);
   assert.deepEqual(terminalView(s), { title: "Input rejected", diagnostic: false, resultAllowed: false,
     reportAllowed: false });
 });
@@ -77,7 +78,7 @@ test("rejected input is explicit and offers nothing", () => {
 test("expired artifacts are explicit and never downloadable", () => {
   const s = status({ client_phase: "expired", publication_state: "expired",
     artifacts: [result, report, manifest] });
-  assert.equal(fromStatus(s).phase, "expired");
+  assert.equal(isSettled(s), true);
   const view = terminalView(s);
   assert.equal(view.resultAllowed, false);
   assert.equal(view.title, "Results expired");

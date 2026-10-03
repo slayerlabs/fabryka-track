@@ -15,7 +15,7 @@ export type {
   ErrorBody,
 } from "./types.ts";
 
-const ajv = new Ajv2020({ allErrors: true, strict: false });
+const ajv = new Ajv2020({ allErrors: false, strict: false });
 addFormats(ajv);
 const decoders = new Map<string, ReturnType<typeof ajv.compile>>();
 

@@ -27,7 +27,7 @@ MAX_REQUEST_BODY = 65536
 MAX_RESPONSE_BODY = 1048576 + 65536
 API_PREFIX = "/pipeline/api/"
 UUID = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
-ROUTES = [
+ROUTES = [(verb, re.compile(pattern)) for verb, pattern in [
     ("GET", r"jobs"), ("POST", r"jobs"),
     ("GET", rf"jobs/{UUID}"),
     ("POST", rf"jobs/{UUID}/parts"),
@@ -35,13 +35,17 @@ ROUTES = [
     ("POST", rf"jobs/{UUID}/cancel"),
     ("GET", rf"jobs/{UUID}/report"),
     ("GET", rf"jobs/{UUID}/result"), ("HEAD", rf"jobs/{UUID}/result"),
-]
+]]
 ROUTED_METHODS = ("GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "TRACE")
 LIMIT = re.compile(r"[0-9]{1,3}")
 CURSOR = re.compile(r"[A-Za-z0-9_-]{1,256}")
 DIGITS = re.compile(r"[0-9]{1,12}")
-FORWARDED_REQUEST_HEADERS = ("authorization", "content-type", "idempotency-key", "x-pipeline-request",
-                             "origin", "sec-fetch-site")
+# Only a POST has had its browser metadata checked exactly, so only a POST forwards it.
+FORWARDED_REQUEST_HEADERS = {
+    "GET": ("authorization", "idempotency-key", "x-pipeline-request"),
+    "HEAD": ("authorization", "idempotency-key", "x-pipeline-request"),
+    "POST": ("authorization", "content-type", "idempotency-key", "x-pipeline-request", "origin", "sec-fetch-site"),
+}
 HEADER_VALUE = re.compile(r"[\x20-\x7e]{1,1024}")
 FORWARDED_RESPONSE_HEADERS = ("content-type", "www-authenticate", "retry-after", "allow")
 MESSAGES = {
@@ -160,7 +164,7 @@ def normalize_route(raw_path: bytes, method: str) -> str:
     if "%" in path or "//" in path or "\\" in path or any(p in {".", ".."} for p in path.split("/")):
         raise RouteError("invalid_request")
     relative = path[len(API_PREFIX):]
-    allowed = tuple(verb for verb, pattern in ROUTES if re.fullmatch(pattern, relative))
+    allowed = tuple(verb for verb, pattern in ROUTES if pattern.fullmatch(relative))
     if not allowed:
         raise RouteError("not_found")
     if method not in allowed:
@@ -248,11 +252,8 @@ async def proxy(request: Request, target: str, client: httpx.AsyncClient) -> Res
             raise RouteError("invalid_request") from None
     elif body:
         raise RouteError("invalid_request")
-    headers = {name: request.headers[name] for name in FORWARDED_REQUEST_HEADERS if name in request.headers}
-    if request.method != "POST":
-        # only a POST has had its browser metadata checked exactly
-        for name in ("content-type", "origin", "sec-fetch-site"):
-            headers.pop(name, None)
+    headers = {name: request.headers[name] for name in FORWARDED_REQUEST_HEADERS.get(request.method, ())
+               if name in request.headers}
     if not all(HEADER_VALUE.fullmatch(value) for value in headers.values()):
         raise RouteError("invalid_request")
     headers.update({"Accept": "application/json", "Accept-Encoding": "identity"})
@@ -279,7 +280,7 @@ async def proxy(request: Request, target: str, client: httpx.AsyncClient) -> Res
     if not _json_media(upstream.headers.get("content-type")):
         return _bad_gateway()
     try:
-        parsed = json.loads(bytes(data).decode("utf-8"))
+        parsed = json.loads(data.decode("utf-8"))
     except (UnicodeDecodeError, ValueError, RecursionError):
         return _bad_gateway()
     if upstream.status_code >= 400 and not _valid_error(parsed):
@@ -347,12 +348,6 @@ def make_pipeline_router(config: PipelineConfig,
     router = APIRouter(include_in_schema=False, dependencies=[Depends(require_basic)])
 
     async def pipeline_api(request: Request) -> Response:
-        if not config.enabled:
-            return control_error(503, "provider_unavailable")
-        try:
-            check_private_basic(request, config)
-        except PermissionError:
-            return control_error(401, "unauthorized", headers={"WWW-Authenticate": CHALLENGE})
         try:
             raw_path = request.scope.get("raw_path")
             if not isinstance(raw_path, bytes):

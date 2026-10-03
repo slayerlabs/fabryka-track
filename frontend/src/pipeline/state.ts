@@ -2,12 +2,8 @@ import { ApiError, type PipelineApi } from "./api.ts";
 import type { JobStatus } from "./types.ts";
 
 export const POLL_MS = 2000;
-export const POLL_FAILURE_LIMIT = 3;
+const POLL_FAILURE_LIMIT = 3;
 export const FINALIZING_LIMIT_MS = 60000;
-
-export type UploadState =
-  | { phase: JobStatus["client_phase"]; status: JobStatus }
-  | { phase: "idle" | "hashing" | "paused"; status: JobStatus | null };
 
 export type TerminalView = {
   title: string;
@@ -29,10 +25,6 @@ const titles: Record<JobStatus["processing_state"], string> = {
   rejected: "Input rejected",
 };
 
-export function fromStatus(status: JobStatus): UploadState {
-  return { phase: status.client_phase, status };
-}
-
 export function terminalView(status: JobStatus): TerminalView {
   const diagnostic = status.processing_state === "failed_qa";
   const expired = status.client_phase === "expired" || status.publication_state === "expired";
@@ -46,8 +38,11 @@ export function terminalView(status: JobStatus): TerminalView {
   return { title, resultAllowed, reportAllowed, diagnostic };
 }
 
-const ENDED = new Set<JobStatus["client_phase"]>(["complete", "rejected", "expired"]);
+const SETTLED = new Set<JobStatus["client_phase"]>(["complete", "rejected", "expired"]);
 const VERDICTS = new Set<JobStatus["processing_state"]>(["passed", "failed_qa", "failed", "cancelled", "rejected"]);
+
+export const isSettled = (status: JobStatus | null): boolean => !!status && SETTLED.has(status.client_phase);
+export const isVerdict = (status: JobStatus | null): boolean => !!status && VERDICTS.has(status.processing_state);
 
 export async function pollJob(api: PipelineApi, jobId: string, signal: AbortSignal,
   update: (status: JobStatus) => void): Promise<void> {
@@ -64,14 +59,14 @@ export async function pollJob(api: PipelineApi, jobId: string, signal: AbortSign
     }
     if (status) {
       update(status);
-      if (ENDED.has(status.client_phase)) return;
+      if (isSettled(status)) return;
       const now = api.now();
       finalizingSince = status.client_phase === "finalizing" ? finalizingSince ?? now : null;
       if (finalizingSince !== null && now - finalizingSince >= FINALIZING_LIMIT_MS) {
         throw new ApiError(0, "finalizing_stalled", true);
       }
       const deadline = status.admitted ? status.job_deadline : status.upload_deadline;
-      if (!VERDICTS.has(status.processing_state) && deadline && now >= Date.parse(deadline)) {
+      if (!isVerdict(status) && deadline && now >= Date.parse(deadline)) {
         throw new ApiError(0, "deadline_passed", true);
       }
     }
