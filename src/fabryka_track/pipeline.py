@@ -41,6 +41,7 @@ CURSOR = re.compile(r"[A-Za-z0-9_-]{1,256}")
 DIGITS = re.compile(r"[0-9]{1,12}")
 FORWARDED_REQUEST_HEADERS = ("authorization", "content-type", "idempotency-key", "x-pipeline-request",
                              "origin", "sec-fetch-site")
+HEADER_VALUE = re.compile(r"[\x20-\x7e]{1,1024}")
 FORWARDED_RESPONSE_HEADERS = ("content-type", "www-authenticate", "retry-after", "allow")
 MESSAGES = {
     "invalid_request": "The request does not match the contract.",
@@ -244,11 +245,15 @@ async def proxy(request: Request, target: str, client: httpx.AsyncClient) -> Res
         raise RouteError("invalid_request")
     headers = {name: request.headers[name] for name in FORWARDED_REQUEST_HEADERS if name in request.headers}
     if request.method != "POST":
-        headers.pop("content-type", None)
+        # only a POST has had its browser metadata checked exactly
+        for name in ("content-type", "origin", "sec-fetch-site"):
+            headers.pop(name, None)
+    if not all(HEADER_VALUE.fullmatch(value) for value in headers.values()):
+        raise RouteError("invalid_request")
     headers.update({"Accept": "application/json", "Accept-Encoding": "identity"})
-    outbound = client.build_request(request.method, target, headers=headers,
-                                    content=body if request.method == "POST" else None)
     try:
+        outbound = client.build_request(request.method, target, headers=headers,
+                                        content=body if request.method == "POST" else None)
         upstream = await client.send(outbound, stream=True, follow_redirects=False)
         try:
             if 300 <= upstream.status_code < 400:

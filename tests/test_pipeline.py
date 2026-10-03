@@ -780,3 +780,20 @@ def test_proxy_rejects_unlisted_paths(raw):
 def test_proxy_only_maps_approved_job_route():
     from fabryka_track.pipeline import normalize_route
     assert normalize_route(b"/pipeline/api/jobs", "POST") == "/uploads/v1/jobs"
+
+
+def test_proxy_rejects_non_ascii_forwarded_header_values_safely():
+    upstream = Upstream()
+    client = proxied(upstream)
+    headers = {**MUTATION, "Idempotency-Key": b"op-\xe9-0123456789", "Content-Type": "application/json"}
+    assert_error(send(client, "POST", "jobs", headers=headers), 422, "invalid_request")
+    assert upstream.requests == []
+
+
+def test_proxy_get_does_not_forward_unchecked_browser_metadata():
+    upstream = Upstream()
+    response = proxied(upstream).get(f"/pipeline/api/jobs/{JOB}",
+                                     headers={**AUTH, "Sec-Fetch-Site": b"s\xe9", "Origin": b"\xe9"})
+    assert response.status_code == 200
+    sent = upstream.requests[0]
+    assert "sec-fetch-site" not in sent.headers and "origin" not in sent.headers
