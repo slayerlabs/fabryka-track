@@ -87,6 +87,7 @@ async function awaitReady(api: PipelineApi, jobId: string, deadline: number,
     if (api.now() >= deadline) throw expired();
     await api.sleep(READY_POLL_MS, signal);
     const status = await api.status(jobId, signal);
+    if (status.client_phase === "expired") throw expired();
     if (status.processing_state !== "uploading" || status.transfer_state === "closed") {
       throw new ApiError(409, "invalid_state", false);
     }
@@ -152,13 +153,15 @@ export async function uploadParts(api: PipelineApi, session: UploadSession, file
   const size = session.part_size_bytes;
   const count = Math.ceil(file.size / size);
   const partBytes = (number: number) => Math.min(size, file.size - (number - 1) * size);
-  if (completed.some((part) => part.part_number < 1 || part.part_number > count)) {
+  const numbers = completed.map((part) => part.part_number);
+  if (numbers.some((n) => n < 1 || n > count) || new Set(numbers).size !== numbers.length) {
     throw new ApiError(0, "input_mismatch", false);
   }
   if (api.now() >= deadline) throw expired();
   if (session.transfer_state === "pending") await awaitReady(api, session.job_id, deadline, signal);
   const done = new Set(completed.map((part) => part.part_number));
   let sent = [...done].reduce((total, number) => total + partBytes(number), 0);
+  if (sent > 0) progress(sent);
   for (let number = 1; number <= count; number++) {
     if (done.has(number)) continue;
     signal.throwIfAborted();
@@ -169,5 +172,9 @@ export async function uploadParts(api: PipelineApi, session: UploadSession, file
     progress(sent);
   }
   const parts = [...completed].sort((a, b) => a.part_number - b.part_number);
+  // the controller accepts only exactly 1..count; fail here rather than with a non-retryable remote 422
+  if (parts.length !== count || parts.some((part, index) => part.part_number !== index + 1)) {
+    throw new ApiError(0, "input_mismatch", false);
+  }
   return { protocol: PROTOCOL, parts, encoded_bytes: file.size, input_sha256: session.input_sha256 };
 }

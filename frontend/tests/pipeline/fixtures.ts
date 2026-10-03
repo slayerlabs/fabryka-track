@@ -32,6 +32,7 @@ export class FakeBackend {
   faults: Fault[] = [];
   transferState: "pending" | "ready" = "ready";
   readyAfterPolls = 0;
+  statusOverrides: Record<string, unknown> = {};
   grantTtlMs = 300000;
   etagPrefix = '"opaque-';
   confirmations = new Map<string, string>();
@@ -123,7 +124,7 @@ export class FakeBackend {
     }
     if (request.method === "GET" && path === `/pipeline/api/jobs/${JOB_ID}`) {
       if (this.transferState === "pending" && --this.readyAfterPolls <= 0) this.transferState = "ready";
-      return { status: 200, body: this.status() };
+      return { status: 200, body: this.status(this.statusOverrides) };
     }
     return this.error(404, "not_found");
   }

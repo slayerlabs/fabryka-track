@@ -426,3 +426,36 @@ test("operation keys satisfy the Idempotency-Key contract", () => {
   assert.match(key, /^[!-~]{16,128}$/);
   assert.notEqual(key, newOperationKey());
 });
+
+
+test("resume confirms exactly parts 1..count in order and refuses duplicates", async () => {
+  const bytes = patterned(2 * 8388608 + 3);
+  const backend = new FakeBackend(bytes.length, sha256(bytes));
+  const { body, progress } = await upload(backend, new File([bytes], "x.jsonl"), backend.session(),
+    [{ part_number: 2, etag: '"kept-2"' }]);
+  assert.deepEqual(body.parts.map((p) => p.part_number), [1, 2, 3]);
+  assert.equal(body.parts[1].etag, '"kept-2"');
+  assert.deepEqual(backend.storageCalls().length, 2);
+  assert.equal(progress[0], 8388608);
+
+  const twice = new FakeBackend(5);
+  await assert.rejects(upload(twice, new File(["hello"], "x.jsonl"), twice.session(),
+    [{ part_number: 1, etag: '"a"' }, { part_number: 1, etag: '"b"' }]), code("input_mismatch"));
+  assert.equal(twice.storageCalls().length, 0);
+});
+
+test("a job closed or expired during the ready wait stops promptly with its own code", async () => {
+  const cancelled = new FakeBackend(5);
+  cancelled.transferState = "pending";
+  cancelled.readyAfterPolls = Infinity;
+  cancelled.statusOverrides = { processing_state: "cancelled", client_phase: "complete", transfer_state: "closed" };
+  await assert.rejects(upload(cancelled, new File(["hello"], "x.jsonl")), code("invalid_state"));
+  assert.equal(cancelled.controlCalls().length, 1);
+
+  const lapsed = new FakeBackend(5);
+  lapsed.transferState = "pending";
+  lapsed.readyAfterPolls = Infinity;
+  lapsed.statusOverrides = { processing_state: "failed", client_phase: "expired", failure_code: "deadline",
+    transfer_state: "closed" };
+  await assert.rejects(upload(lapsed, new File(["hello"], "x.jsonl")), code("expired"));
+});
