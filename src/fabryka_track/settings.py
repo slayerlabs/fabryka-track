@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     r2_bucket: str | None = None
     r2_access_key: str | None = None
     r2_secret_key: str | None = None
+    # Shared Basic pair for the private /pipeline/ upload screen; independent of HF login and API keys.
+    pipeline_username: str | None = None
+    pipeline_password: SecretStr | None = None
+    pipeline_controller_url: str = "https://data-pipeline.fabryka.ai"
 
 
 settings = Settings()

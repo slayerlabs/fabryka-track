@@ -1,6 +1,13 @@
 track.fabryka.ai {
     encode zstd gzip
-    reverse_proxy 127.0.0.1:8130
+    # The Track application owns Basic auth and the narrow controller proxy for /pipeline/.
+    @pipeline path /pipeline /pipeline/*
+    handle @pipeline {
+        reverse_proxy 127.0.0.1:8130
+    }
+    handle {
+        reverse_proxy 127.0.0.1:8130
+    }
     header {
         Cache-Control "no-store"
         Strict-Transport-Security "max-age=31536000"

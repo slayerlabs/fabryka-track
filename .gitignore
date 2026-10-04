@@ -16,3 +16,4 @@ backups/
 corpus-samples/
 frontend/node_modules/
 src/fabryka_track/web/
+src/fabryka_track/pipeline_web/

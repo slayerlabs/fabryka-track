@@ -1,0 +1,2728 @@
+{
+  "revision": "1.0-draft.2",
+  "notice": "Synthetic shape fixtures only. example.invalid URLs and placeholder hashes/library versions are not real provider grants or runtime attestations. Semantic cases are required behavior, not executed integration tests.",
+  "fixtures": [
+    {
+      "name": "FileMetadata-valid",
+      "schema": "FileMetadata",
+      "valid": true,
+      "body": {
+        "source": "synthetic_760",
+        "added": "2026-10-02",
+        "license": "CC0-1.0",
+        "per_record_provenance": false
+      }
+    },
+    {
+      "name": "CreateUpload-valid",
+      "schema": "CreateUpload",
+      "valid": true,
+      "body": {
+        "protocol": "upload-control-v1",
+        "metadata": {
+          "source": "synthetic_760",
+          "added": "2026-10-02",
+          "license": "CC0-1.0",
+          "per_record_provenance": false
+        },
+        "format": "jsonl",
+        "encoded_bytes": 1024,
+        "input_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "filename": "synthetic.jsonl"
+      }
+    },
+    {
+      "name": "UploadSession-valid",
+      "schema": "UploadSession",
+      "valid": true,
+      "body": {
+        "protocol": "upload-control-v1",
+        "job_id": "10000000-0000-4000-8000-000000000001",
+        "admitted": false,
+        "processing_state": "uploading",
+        "transfer_state": "ready",
+        "upload_started_at": "2026-10-02T09:55:00Z",
+        "upload_deadline": "2026-10-03T09:55:00Z",
+        "encoded_bytes": 1024,
+        "input_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "part_size_bytes": 8388608
+      }
+    },
+    {
+      "name": "PartRequest-valid",
+      "schema": "PartRequest",
+      "valid": true,
+      "body": {
+        "protocol": "upload-control-v1",
+        "part_number": 1
+      }
+    },
+    {
+      "name": "TransferGrant-valid",
+      "schema": "TransferGrant",
+      "valid": true,
+      "body": {
+        "protocol": "upload-control-v1",
+        "method": "PUT",
+        "url": "https://storage.example.invalid/synthetic/part",
+        "expires_at": "2026-10-02T09:59:00Z",
+        "part_number": 1
+      }
+    },
+    {
+      "name": "ConfirmUpload-valid",
+      "schema": "ConfirmUpload",
+      "valid": true,
+      "body": {
+        "protocol": "upload-control-v1",
+        "parts": [
+          {
+            "part_number": 1,
+            "etag": "\"opaque-etag\""
+          }
+        ],
+        "encoded_bytes": 1024,
+        "input_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    {
+      "name": "CancelJob-valid",
+      "schema": "CancelJob",
+      "valid": true,
+      "body": {
+        "protocol": "upload-control-v1"
+      }
+    },
+    {
+      "name": "ArtifactSummary-valid",
+      "schema": "ArtifactSummary",
+      "valid": true,
+      "body": {
+        "artifact_id": "30000000-0000-4000-8000-000000000001",
+        "kind": "result",
+        "bytes": 2048,
+        "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "first_stored_at": "2026-10-02T10:00:00Z",
+        "expires_at": "2026-11-01T10:00:00Z"
+      }
+    },
+    {
+      "name": "JobStatus-valid",
+      "schema": "JobStatus",
+      "valid": true,
+      "body": {
+        "protocol": "upload-control-v1",
+        "job_id": "10000000-0000-4000-8000-000000000001",
+        "admitted": true,
+        "processing_state": "passed",
+        "client_phase": "complete",
+        "publication_state": "published",
+        "cleanup_state": "confirmed",
+        "transfer_state": "closed",
+        "attempt_id": "20000000-0000-4000-8000-000000000001",
+        "generation": 1,
+        "attempts_used": 1,
+        "upload_started_at": "2026-10-02T09:55:00Z",
+        "upload_deadline": "2026-10-03T09:55:00Z",
+        "admitted_at": "2026-10-02T10:00:00Z",
+        "job_deadline": "2026-10-02T12:00:00Z",
+        "first_result_stored_at": "2026-10-02T10:00:00Z",
+        "expires_at": "2026-11-01T10:00:00Z",
+        "failure_code": null,
+        "artifacts": [
+          {
+            "artifact_id": "30000000-0000-4000-8000-000000000001",
+            "kind": "result",
+            "bytes": 2048,
+            "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "first_stored_at": "2026-10-02T10:00:00Z",
+            "expires_at": "2026-11-01T10:00:00Z"
+          }
+        ],
+        "cleanup_obligations": [],
+        "input_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "encoded_bytes": 1024
+      }
+    },
+    {
+      "name": "JobList-valid",
+      "schema": "JobList",
+      "valid": true,
+      "body": {
+        "protocol": "upload-control-v1",
+        "jobs": [
+          {
+            "protocol": "upload-control-v1",
+            "job_id": "10000000-0000-4000-8000-000000000001",
+            "admitted": true,
+            "processing_state": "passed",
+            "client_phase": "complete",
+            "publication_state": "published",
+            "cleanup_state": "confirmed",
+            "transfer_state": "closed",
+            "attempt_id": "20000000-0000-4000-8000-000000000001",
+            "generation": 1,
+            "attempts_used": 1,
+            "upload_started_at": "2026-10-02T09:55:00Z",
+            "upload_deadline": "2026-10-03T09:55:00Z",
+            "admitted_at": "2026-10-02T10:00:00Z",
+            "job_deadline": "2026-10-02T12:00:00Z",
+            "first_result_stored_at": "2026-10-02T10:00:00Z",
+            "expires_at": "2026-11-01T10:00:00Z",
+            "failure_code": null,
+            "artifacts": [
+              {
+                "artifact_id": "30000000-0000-4000-8000-000000000001",
+                "kind": "result",
+                "bytes": 2048,
+                "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                "first_stored_at": "2026-10-02T10:00:00Z",
+                "expires_at": "2026-11-01T10:00:00Z"
+              }
+            ],
+            "cleanup_obligations": [],
+            "input_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "encoded_bytes": 1024
+          }
+        ],
+        "next_cursor": null
+      }
+    },
+    {
+      "name": "DownloadGrant-valid",
+      "schema": "DownloadGrant",
+      "valid": true,
+      "body": {
+        "protocol": "upload-control-v1",
+        "job_id": "10000000-0000-4000-8000-000000000001",
+        "artifact": {
+          "artifact_id": "30000000-0000-4000-8000-000000000001",
+          "kind": "result",
+          "bytes": 2048,
+          "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "first_stored_at": "2026-10-02T10:00:00Z",
+          "expires_at": "2026-11-01T10:00:00Z"
+        },
+        "diagnostic": false,
+        "method": "GET",
+        "url": "https://storage.example.invalid/synthetic/result",
+        "expires_at": "2026-10-02T10:05:00Z"
+      }
+    },
+    {
+      "name": "Runtime-valid",
+      "schema": "Runtime",
+      "valid": true,
+      "body": {
+        "code_revision": "502ba3b9ccab2b1fec60c9a7176d07f5993c128a",
+        "lock_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "recipe_version": "upload-recipe-v2",
+        "recipe_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "qa_version": "qa-v3",
+        "data_contract": "upload-v2",
+        "image_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "nergal_version": "1.1.2",
+        "nergal_revision": "e0caa8b88afe213c52394afe425fb1504070f5ee",
+        "nergal_snapshot_sha256": "c9b42824902eec74a112598e5eca53db285427779ad60c782588128166fa4f58",
+        "tokenizer": "cl100k_base",
+        "device": "cuda",
+        "libraries": [
+          {
+            "name": "torch",
+            "version": "2.8.0"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Limits-valid",
+      "schema": "Limits",
+      "valid": true,
+      "body": {
+        "encoded_bytes": 1048576,
+        "decoded_bytes": 4194304,
+        "memory_bytes": 6442450944,
+        "scratch_bytes": 8589934592,
+        "attempt_seconds": 3600,
+        "startup_seconds": 600,
+        "heartbeat_seconds": 15,
+        "lease_seconds": 60,
+        "grace_seconds": 30,
+        "max_attempts": 2,
+        "max_output_bytes": 8589934592
+      }
+    },
+    {
+      "name": "BootstrapRequest-valid",
+      "schema": "BootstrapRequest",
+      "valid": true,
+      "body": {
+        "protocol": "upload-control-v1",
+        "job_id": "10000000-0000-4000-8000-000000000001",
+        "attempt_id": "20000000-0000-4000-8000-000000000001",
+        "generation": 1
+      }
+    },
+    {
+      "name": "Assignment-valid",
+      "schema": "Assignment",
+      "valid": true,
+      "body": {
+        "protocol": "upload-control-v1",
+        "job_id": "10000000-0000-4000-8000-000000000001",
+        "attempt_id": "20000000-0000-4000-8000-000000000001",
+        "generation": 1,
+        "resource_id": "synthetic_pod_760",
+        "input": {
+          "object_id": "60000000-0000-4000-8000-000000000001",
+          "bytes": 1024,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "format": "jsonl",
+          "url": "https://storage.example.invalid/synthetic/input",
+          "grant_expires_at": "2026-10-02T10:01:00Z"
+        },
+        "metadata": {
+          "source": "synthetic_760",
+          "added": "2026-10-02",
+          "license": "CC0-1.0",
+          "per_record_provenance": false
+        },
+        "runtime": {
+          "code_revision": "502ba3b9ccab2b1fec60c9a7176d07f5993c128a",
+          "lock_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "recipe_version": "upload-recipe-v2",
+          "recipe_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "qa_version": "qa-v3",
+          "data_contract": "upload-v2",
+          "image_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "nergal_version": "1.1.2",
+          "nergal_revision": "e0caa8b88afe213c52394afe425fb1504070f5ee",
+          "nergal_snapshot_sha256": "c9b42824902eec74a112598e5eca53db285427779ad60c782588128166fa4f58",
+          "tokenizer": "cl100k_base",
+          "device": "cuda",
+          "libraries": [
+            {
+              "name": "torch",
+              "version": "2.8.0"
+            }
+          ]
+        },
+        "limits": {
+          "encoded_bytes": 1048576,
+          "decoded_bytes": 4194304,
+          "memory_bytes": 6442450944,
+          "scratch_bytes": 8589934592,
+          "attempt_seconds": 3600,
+          "startup_seconds": 600,
+          "heartbeat_seconds": 15,
+          "lease_seconds": 60,
+          "grace_seconds": 30,
+          "max_attempts": 2,
+          "max_output_bytes": 8589934592
+        },
+        "server_time": "2026-10-02T10:00:00Z",
+        "lease_expires_at": "2026-10-02T10:01:00Z",
+        "attempt_deadline": "2026-10-02T11:00:00Z",
+        "job_deadline": "2026-10-02T12:00:00Z",
+        "credential_expires_at": "2026-10-02T11:00:00Z",
+        "attempt_token": "synthetic_fixture_token_never_a_usable_secret_760"
+      }
+    },
+    {
+      "name": "Counters-valid",
+      "schema": "Counters",
+      "valid": true,
+      "body": {
+        "elapsed_ms": 30000,
+        "input_bytes": 1024,
+        "decoded_bytes": 1024,
+        "output_bytes": 2048,
+        "rss_bytes": 1000000,
+        "vram_bytes": 1000000,
+        "scratch_bytes": 3072
+      }
+    },
+    {
+      "name": "Heartbeat-valid",
+      "schema": "Heartbeat",
+      "valid": true,
+      "body": {
+        "protocol": "upload-control-v1",
+        "job_id": "10000000-0000-4000-8000-000000000001",
+        "attempt_id": "20000000-0000-4000-8000-000000000001",
+        "generation": 1,
+        "sequence": 1,
+        "stage": "pii_mask",
+        "counters": {
+          "elapsed_ms": 30000,
+          "input_bytes": 1024,
+          "decoded_bytes": 1024,
+          "output_bytes": 2048,
+          "rss_bytes": 1000000,
+          "vram_bytes": 1000000,
+          "scratch_bytes": 3072
+        }
+      }
+    },
+    {
+      "name": "Lease-valid",
+      "schema": "Lease",
+      "valid": true,
+      "body": {
+        "protocol": "upload-control-v1",
+        "job_id": "10000000-0000-4000-8000-000000000001",
+        "attempt_id": "20000000-0000-4000-8000-000000000001",
+        "generation": 1,
+        "sequence": 1,
+        "server_time": "2026-10-02T10:00:15Z",
+        "lease_expires_at": "2026-10-02T10:01:15Z",
+        "cancel_requested": false
+      }
+    },
+    {
+      "name": "ArtifactIntent-valid",
+      "schema": "ArtifactIntent",
+      "valid": true,
+      "body": {
+        "protocol": "upload-control-v1",
+        "job_id": "10000000-0000-4000-8000-000000000001",
+        "attempt_id": "20000000-0000-4000-8000-000000000001",
+        "generation": 1,
+        "kind": "result",
+        "bytes": 2048,
+        "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    },
+    {
+      "name": "ArtifactSlot-valid",
+      "schema": "ArtifactSlot",
+      "valid": true,
+      "body": {
+        "protocol": "upload-control-v1",
+        "job_id": "10000000-0000-4000-8000-000000000001",
+        "attempt_id": "20000000-0000-4000-8000-000000000001",
+        "generation": 1,
+        "artifact_id": "30000000-0000-4000-8000-000000000001",
+        "kind": "result",
+        "transfer_state": "ready",
+        "upload_started_at": "2026-10-02T10:00:00Z",
+        "upload_deadline": "2026-10-03T10:00:00Z",
+        "part_size_bytes": 8388608
+      }
+    },
+    {
+      "name": "ConfirmArtifact-valid",
+      "schema": "ConfirmArtifact",
+      "valid": true,
+      "body": {
+        "protocol": "upload-control-v1",
+        "job_id": "10000000-0000-4000-8000-000000000001",
+        "attempt_id": "20000000-0000-4000-8000-000000000001",
+        "generation": 1,
+        "parts": [
+          {
+            "part_number": 1,
+            "etag": "\"opaque-etag\""
+          }
+        ]
+      }
+    },
+    {
+      "name": "ArtifactReceipt-valid",
+      "schema": "ArtifactReceipt",
+      "valid": true,
+      "body": {
+        "protocol": "upload-control-v1",
+        "job_id": "10000000-0000-4000-8000-000000000001",
+        "attempt_id": "20000000-0000-4000-8000-000000000001",
+        "generation": 1,
+        "artifact_id": "30000000-0000-4000-8000-000000000001",
+        "kind": "result",
+        "state": "verified",
+        "bytes": 2048,
+        "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "first_stored_at": "2026-10-02T10:00:00Z",
+        "expires_at": "2026-11-01T10:00:00Z"
+      }
+    },
+    {
+      "name": "Qa-valid",
+      "schema": "Qa",
+      "valid": true,
+      "body": {
+        "version": "qa-v3",
+        "passed": true,
+        "binding_checks": [
+          {
+            "name": "schema",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "record",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "token_count",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "record_balance",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "rejection_share",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "exact_duplicate",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "near_duplicate",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "residual_pii",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "empty_result",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "metadata_conflict",
+            "status": "passed",
+            "count": 0
+          }
+        ],
+        "stats": {
+          "rows": 2,
+          "token_count": 200,
+          "exact_duplicate_pairs": 0,
+          "near_duplicate_pairs": 0,
+          "masking_only_duplicate_pairs": 0,
+          "residual_pii_records": 0,
+          "license_review_records": 0
+        },
+        "license_review_sha256": [],
+        "pii_detected": [
+          "PESEL",
+          "email",
+          "phone"
+        ],
+        "pii_unmeasured": [
+          "PERSON",
+          "street_address"
+        ],
+        "near_dup_seed": 2,
+        "build_seed": 1,
+        "advisory_checks": [
+          {
+            "name": "masking_only_duplicate",
+            "count": 0
+          },
+          {
+            "name": "license_needs_legal_review",
+            "count": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "JobReport-valid",
+      "schema": "JobReport",
+      "valid": true,
+      "body": {
+        "protocol": "upload-control-v1",
+        "job_id": "10000000-0000-4000-8000-000000000001",
+        "attempt_id": "20000000-0000-4000-8000-000000000001",
+        "generation": 1,
+        "outcome": "passed",
+        "input_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "runtime": {
+          "code_revision": "502ba3b9ccab2b1fec60c9a7176d07f5993c128a",
+          "lock_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "recipe_version": "upload-recipe-v2",
+          "recipe_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "qa_version": "qa-v3",
+          "data_contract": "upload-v2",
+          "image_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "nergal_version": "1.1.2",
+          "nergal_revision": "e0caa8b88afe213c52394afe425fb1504070f5ee",
+          "nergal_snapshot_sha256": "c9b42824902eec74a112598e5eca53db285427779ad60c782588128166fa4f58",
+          "tokenizer": "cl100k_base",
+          "device": "cuda",
+          "libraries": [
+            {
+              "name": "torch",
+              "version": "2.8.0"
+            }
+          ]
+        },
+        "qa": {
+          "version": "qa-v3",
+          "passed": true,
+          "binding_checks": [
+            {
+              "name": "schema",
+              "status": "passed",
+              "count": 0
+            },
+            {
+              "name": "record",
+              "status": "passed",
+              "count": 0
+            },
+            {
+              "name": "token_count",
+              "status": "passed",
+              "count": 0
+            },
+            {
+              "name": "record_balance",
+              "status": "passed",
+              "count": 0
+            },
+            {
+              "name": "rejection_share",
+              "status": "passed",
+              "count": 0
+            },
+            {
+              "name": "exact_duplicate",
+              "status": "passed",
+              "count": 0
+            },
+            {
+              "name": "near_duplicate",
+              "status": "passed",
+              "count": 0
+            },
+            {
+              "name": "residual_pii",
+              "status": "passed",
+              "count": 0
+            },
+            {
+              "name": "empty_result",
+              "status": "passed",
+              "count": 0
+            },
+            {
+              "name": "metadata_conflict",
+              "status": "passed",
+              "count": 0
+            }
+          ],
+          "stats": {
+            "rows": 2,
+            "token_count": 200,
+            "exact_duplicate_pairs": 0,
+            "near_duplicate_pairs": 0,
+            "masking_only_duplicate_pairs": 0,
+            "residual_pii_records": 0,
+            "license_review_records": 0
+          },
+          "license_review_sha256": [],
+          "pii_detected": [
+            "PESEL",
+            "email",
+            "phone"
+          ],
+          "pii_unmeasured": [
+            "PERSON",
+            "street_address"
+          ],
+          "near_dup_seed": 2,
+          "build_seed": 1,
+          "advisory_checks": [
+            {
+              "name": "masking_only_duplicate",
+              "count": 0
+            },
+            {
+              "name": "license_needs_legal_review",
+              "count": 0
+            }
+          ]
+        },
+        "rows_in": 3,
+        "rows_out": 2,
+        "counters": {
+          "elapsed_ms": 30000,
+          "input_bytes": 1024,
+          "decoded_bytes": 1024,
+          "output_bytes": 2048,
+          "rss_bytes": 1000000,
+          "vram_bytes": 1000000,
+          "scratch_bytes": 3072
+        },
+        "failure_code": null
+      }
+    },
+    {
+      "name": "JobManifest-valid",
+      "schema": "JobManifest",
+      "valid": true,
+      "body": {
+        "protocol": "upload-control-v1",
+        "job_id": "10000000-0000-4000-8000-000000000001",
+        "attempt_id": "20000000-0000-4000-8000-000000000001",
+        "generation": 1,
+        "input_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "input_bytes": 1024,
+        "output_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "output_bytes": 2048,
+        "report_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "runtime": {
+          "code_revision": "502ba3b9ccab2b1fec60c9a7176d07f5993c128a",
+          "lock_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "recipe_version": "upload-recipe-v2",
+          "recipe_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "qa_version": "qa-v3",
+          "data_contract": "upload-v2",
+          "image_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "nergal_version": "1.1.2",
+          "nergal_revision": "e0caa8b88afe213c52394afe425fb1504070f5ee",
+          "nergal_snapshot_sha256": "c9b42824902eec74a112598e5eca53db285427779ad60c782588128166fa4f58",
+          "tokenizer": "cl100k_base",
+          "device": "cuda",
+          "libraries": [
+            {
+              "name": "torch",
+              "version": "2.8.0"
+            }
+          ]
+        },
+        "outcome": "passed",
+        "build_seed": 1,
+        "qa_seed": 2
+      }
+    },
+    {
+      "name": "Outcome-valid",
+      "schema": "Outcome",
+      "valid": true,
+      "body": {
+        "protocol": "upload-control-v1",
+        "job_id": "10000000-0000-4000-8000-000000000001",
+        "attempt_id": "20000000-0000-4000-8000-000000000001",
+        "generation": 1,
+        "outcome": "passed",
+        "input_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "runtime": {
+          "code_revision": "502ba3b9ccab2b1fec60c9a7176d07f5993c128a",
+          "lock_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "recipe_version": "upload-recipe-v2",
+          "recipe_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "qa_version": "qa-v3",
+          "data_contract": "upload-v2",
+          "image_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "nergal_version": "1.1.2",
+          "nergal_revision": "e0caa8b88afe213c52394afe425fb1504070f5ee",
+          "nergal_snapshot_sha256": "c9b42824902eec74a112598e5eca53db285427779ad60c782588128166fa4f58",
+          "tokenizer": "cl100k_base",
+          "device": "cuda",
+          "libraries": [
+            {
+              "name": "torch",
+              "version": "2.8.0"
+            }
+          ]
+        },
+        "report_artifact_id": "50000000-0000-4000-8000-000000000001",
+        "manifest_artifact_id": "40000000-0000-4000-8000-000000000001",
+        "result_artifact_id": "30000000-0000-4000-8000-000000000001",
+        "failure_code": null,
+        "counters": {
+          "elapsed_ms": 30000,
+          "input_bytes": 1024,
+          "decoded_bytes": 1024,
+          "output_bytes": 2048,
+          "rss_bytes": 1000000,
+          "vram_bytes": 1000000,
+          "scratch_bytes": 3072
+        }
+      }
+    },
+    {
+      "name": "OutcomeReceipt-valid",
+      "schema": "OutcomeReceipt",
+      "valid": true,
+      "body": {
+        "protocol": "upload-control-v1",
+        "job_id": "10000000-0000-4000-8000-000000000001",
+        "attempt_id": "20000000-0000-4000-8000-000000000001",
+        "generation": 1,
+        "callback_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "state": "committed",
+        "processing_state": "passed",
+        "publication_state": "published",
+        "error_code": null
+      }
+    },
+    {
+      "name": "Error-valid",
+      "schema": "Error",
+      "valid": true,
+      "body": {
+        "protocol": "upload-control-v1",
+        "request_id": "70000000-0000-4000-8000-000000000001",
+        "code": "stale_attempt",
+        "message": "Attempt is no longer current.",
+        "retryable": false
+      }
+    },
+    {
+      "name": "empty-result-outcome",
+      "schema": "Outcome",
+      "valid": true,
+      "body": {
+        "protocol": "upload-control-v1",
+        "job_id": "10000000-0000-4000-8000-000000000001",
+        "attempt_id": "20000000-0000-4000-8000-000000000001",
+        "generation": 1,
+        "outcome": "failed_qa",
+        "input_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "runtime": {
+          "code_revision": "502ba3b9ccab2b1fec60c9a7176d07f5993c128a",
+          "lock_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "recipe_version": "upload-recipe-v2",
+          "recipe_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "qa_version": "qa-v3",
+          "data_contract": "upload-v2",
+          "image_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "nergal_version": "1.1.2",
+          "nergal_revision": "e0caa8b88afe213c52394afe425fb1504070f5ee",
+          "nergal_snapshot_sha256": "c9b42824902eec74a112598e5eca53db285427779ad60c782588128166fa4f58",
+          "tokenizer": "cl100k_base",
+          "device": "cuda",
+          "libraries": [
+            {
+              "name": "torch",
+              "version": "2.8.0"
+            }
+          ]
+        },
+        "report_artifact_id": "50000000-0000-4000-8000-000000000001",
+        "manifest_artifact_id": "40000000-0000-4000-8000-000000000001",
+        "result_artifact_id": null,
+        "failure_code": "empty_result",
+        "counters": {
+          "elapsed_ms": 30000,
+          "input_bytes": 1024,
+          "decoded_bytes": 1024,
+          "output_bytes": 2048,
+          "rss_bytes": 1000000,
+          "vram_bytes": 1000000,
+          "scratch_bytes": 3072
+        }
+      }
+    },
+    {
+      "name": "empty-result-report",
+      "schema": "JobReport",
+      "valid": true,
+      "body": {
+        "protocol": "upload-control-v1",
+        "job_id": "10000000-0000-4000-8000-000000000001",
+        "attempt_id": "20000000-0000-4000-8000-000000000001",
+        "generation": 1,
+        "outcome": "failed_qa",
+        "input_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "runtime": {
+          "code_revision": "502ba3b9ccab2b1fec60c9a7176d07f5993c128a",
+          "lock_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "recipe_version": "upload-recipe-v2",
+          "recipe_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "qa_version": "qa-v3",
+          "data_contract": "upload-v2",
+          "image_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "nergal_version": "1.1.2",
+          "nergal_revision": "e0caa8b88afe213c52394afe425fb1504070f5ee",
+          "nergal_snapshot_sha256": "c9b42824902eec74a112598e5eca53db285427779ad60c782588128166fa4f58",
+          "tokenizer": "cl100k_base",
+          "device": "cuda",
+          "libraries": [
+            {
+              "name": "torch",
+              "version": "2.8.0"
+            }
+          ]
+        },
+        "qa": {
+          "version": "qa-v3",
+          "passed": false,
+          "binding_checks": [
+            {
+              "name": "schema",
+              "status": "passed",
+              "count": 0
+            },
+            {
+              "name": "record",
+              "status": "passed",
+              "count": 0
+            },
+            {
+              "name": "token_count",
+              "status": "passed",
+              "count": 0
+            },
+            {
+              "name": "record_balance",
+              "status": "passed",
+              "count": 0
+            },
+            {
+              "name": "rejection_share",
+              "status": "passed",
+              "count": 0
+            },
+            {
+              "name": "exact_duplicate",
+              "status": "passed",
+              "count": 0
+            },
+            {
+              "name": "near_duplicate",
+              "status": "passed",
+              "count": 0
+            },
+            {
+              "name": "residual_pii",
+              "status": "passed",
+              "count": 0
+            },
+            {
+              "name": "empty_result",
+              "status": "failed",
+              "count": 1
+            },
+            {
+              "name": "metadata_conflict",
+              "status": "passed",
+              "count": 0
+            }
+          ],
+          "stats": {
+            "rows": 0,
+            "token_count": 0,
+            "exact_duplicate_pairs": 0,
+            "near_duplicate_pairs": 0,
+            "masking_only_duplicate_pairs": 0,
+            "residual_pii_records": 0,
+            "license_review_records": 0
+          },
+          "license_review_sha256": [],
+          "pii_detected": [
+            "PESEL",
+            "email",
+            "phone"
+          ],
+          "pii_unmeasured": [
+            "PERSON",
+            "street_address"
+          ],
+          "near_dup_seed": 2,
+          "build_seed": 1,
+          "advisory_checks": [
+            {
+              "name": "masking_only_duplicate",
+              "count": 0
+            },
+            {
+              "name": "license_needs_legal_review",
+              "count": 0
+            }
+          ]
+        },
+        "rows_in": 3,
+        "rows_out": 0,
+        "counters": {
+          "elapsed_ms": 30000,
+          "input_bytes": 1024,
+          "decoded_bytes": 1024,
+          "output_bytes": 2048,
+          "rss_bytes": 1000000,
+          "vram_bytes": 1000000,
+          "scratch_bytes": 3072
+        },
+        "failure_code": "empty_result"
+      }
+    },
+    {
+      "name": "diagnostic-qa-outcome",
+      "schema": "Outcome",
+      "valid": true,
+      "body": {
+        "protocol": "upload-control-v1",
+        "job_id": "10000000-0000-4000-8000-000000000001",
+        "attempt_id": "20000000-0000-4000-8000-000000000001",
+        "generation": 1,
+        "outcome": "failed_qa",
+        "input_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "runtime": {
+          "code_revision": "502ba3b9ccab2b1fec60c9a7176d07f5993c128a",
+          "lock_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "recipe_version": "upload-recipe-v2",
+          "recipe_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "qa_version": "qa-v3",
+          "data_contract": "upload-v2",
+          "image_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "nergal_version": "1.1.2",
+          "nergal_revision": "e0caa8b88afe213c52394afe425fb1504070f5ee",
+          "nergal_snapshot_sha256": "c9b42824902eec74a112598e5eca53db285427779ad60c782588128166fa4f58",
+          "tokenizer": "cl100k_base",
+          "device": "cuda",
+          "libraries": [
+            {
+              "name": "torch",
+              "version": "2.8.0"
+            }
+          ]
+        },
+        "report_artifact_id": "50000000-0000-4000-8000-000000000001",
+        "manifest_artifact_id": "40000000-0000-4000-8000-000000000001",
+        "result_artifact_id": "30000000-0000-4000-8000-000000000001",
+        "failure_code": "qa_failed",
+        "counters": {
+          "elapsed_ms": 30000,
+          "input_bytes": 1024,
+          "decoded_bytes": 1024,
+          "output_bytes": 2048,
+          "rss_bytes": 1000000,
+          "vram_bytes": 1000000,
+          "scratch_bytes": 3072
+        }
+      }
+    },
+    {
+      "name": "unknown-metadata",
+      "schema": "CreateUpload",
+      "valid": false,
+      "body": {
+        "protocol": "upload-control-v1",
+        "metadata": {
+          "source": "synthetic_760",
+          "added": "2026-10-02",
+          "license": "CC0-1.0",
+          "per_record_provenance": false,
+          "remote_url": "https://untrusted.invalid"
+        },
+        "format": "jsonl",
+        "encoded_bytes": 1024,
+        "input_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "filename": "synthetic.jsonl"
+      }
+    },
+    {
+      "name": "unsupported-version",
+      "schema": "CreateUpload",
+      "valid": false,
+      "body": {
+        "protocol": "upload-control-v2",
+        "metadata": {
+          "source": "synthetic_760",
+          "added": "2026-10-02",
+          "license": "CC0-1.0",
+          "per_record_provenance": false
+        },
+        "format": "jsonl",
+        "encoded_bytes": 1024,
+        "input_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "filename": "synthetic.jsonl"
+      }
+    },
+    {
+      "name": "invalid-source",
+      "schema": "CreateUpload",
+      "valid": false,
+      "body": {
+        "protocol": "upload-control-v1",
+        "metadata": {
+          "source": "../source",
+          "added": "2026-10-02",
+          "license": "CC0-1.0",
+          "per_record_provenance": false
+        },
+        "format": "jsonl",
+        "encoded_bytes": 1024,
+        "input_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "filename": "synthetic.jsonl"
+      }
+    },
+    {
+      "name": "invalid-date",
+      "schema": "CreateUpload",
+      "valid": false,
+      "body": {
+        "protocol": "upload-control-v1",
+        "metadata": {
+          "source": "synthetic_760",
+          "added": "2026-02-30",
+          "license": "CC0-1.0",
+          "per_record_provenance": false
+        },
+        "format": "jsonl",
+        "encoded_bytes": 1024,
+        "input_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "filename": "synthetic.jsonl"
+      }
+    },
+    {
+      "name": "oversized-input",
+      "schema": "CreateUpload",
+      "valid": false,
+      "body": {
+        "protocol": "upload-control-v1",
+        "metadata": {
+          "source": "synthetic_760",
+          "added": "2026-10-02",
+          "license": "CC0-1.0",
+          "per_record_provenance": false
+        },
+        "format": "jsonl",
+        "encoded_bytes": 536870913,
+        "input_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "filename": "synthetic.jsonl"
+      }
+    },
+    {
+      "name": "invalid-part",
+      "schema": "PartRequest",
+      "valid": false,
+      "body": {
+        "protocol": "upload-control-v1",
+        "part_number": 0
+      }
+    },
+    {
+      "name": "unknown-worker-field",
+      "schema": "Heartbeat",
+      "valid": false,
+      "body": {
+        "protocol": "upload-control-v1",
+        "job_id": "10000000-0000-4000-8000-000000000001",
+        "attempt_id": "20000000-0000-4000-8000-000000000001",
+        "generation": 1,
+        "sequence": 1,
+        "stage": "pii_mask",
+        "counters": {
+          "elapsed_ms": 30000,
+          "input_bytes": 1024,
+          "decoded_bytes": 1024,
+          "output_bytes": 2048,
+          "rss_bytes": 1000000,
+          "vram_bytes": 1000000,
+          "scratch_bytes": 3072
+        },
+        "raw_text": "not allowed"
+      }
+    },
+    {
+      "name": "non-https-grant",
+      "schema": "DownloadGrant",
+      "valid": false,
+      "body": {
+        "protocol": "upload-control-v1",
+        "job_id": "10000000-0000-4000-8000-000000000001",
+        "artifact": {
+          "artifact_id": "30000000-0000-4000-8000-000000000001",
+          "kind": "result",
+          "bytes": 2048,
+          "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "first_stored_at": "2026-10-02T10:00:00Z",
+          "expires_at": "2026-11-01T10:00:00Z"
+        },
+        "diagnostic": false,
+        "method": "GET",
+        "url": "http://storage.example.invalid/result",
+        "expires_at": "2026-10-02T10:05:00Z"
+      }
+    },
+    {
+      "name": "missing-passed-result",
+      "schema": "Outcome",
+      "valid": false,
+      "body": {
+        "protocol": "upload-control-v1",
+        "job_id": "10000000-0000-4000-8000-000000000001",
+        "attempt_id": "20000000-0000-4000-8000-000000000001",
+        "generation": 1,
+        "outcome": "passed",
+        "input_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "runtime": {
+          "code_revision": "502ba3b9ccab2b1fec60c9a7176d07f5993c128a",
+          "lock_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "recipe_version": "upload-recipe-v2",
+          "recipe_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "qa_version": "qa-v3",
+          "data_contract": "upload-v2",
+          "image_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "nergal_version": "1.1.2",
+          "nergal_revision": "e0caa8b88afe213c52394afe425fb1504070f5ee",
+          "nergal_snapshot_sha256": "c9b42824902eec74a112598e5eca53db285427779ad60c782588128166fa4f58",
+          "tokenizer": "cl100k_base",
+          "device": "cuda",
+          "libraries": [
+            {
+              "name": "torch",
+              "version": "2.8.0"
+            }
+          ]
+        },
+        "report_artifact_id": "50000000-0000-4000-8000-000000000001",
+        "manifest_artifact_id": "40000000-0000-4000-8000-000000000001",
+        "result_artifact_id": null,
+        "failure_code": null,
+        "counters": {
+          "elapsed_ms": 30000,
+          "input_bytes": 1024,
+          "decoded_bytes": 1024,
+          "output_bytes": 2048,
+          "rss_bytes": 1000000,
+          "vram_bytes": 1000000,
+          "scratch_bytes": 3072
+        }
+      }
+    },
+    {
+      "name": "empty-result-with-parquet",
+      "schema": "Outcome",
+      "valid": false,
+      "body": {
+        "protocol": "upload-control-v1",
+        "job_id": "10000000-0000-4000-8000-000000000001",
+        "attempt_id": "20000000-0000-4000-8000-000000000001",
+        "generation": 1,
+        "outcome": "failed_qa",
+        "input_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "runtime": {
+          "code_revision": "502ba3b9ccab2b1fec60c9a7176d07f5993c128a",
+          "lock_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "recipe_version": "upload-recipe-v2",
+          "recipe_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "qa_version": "qa-v3",
+          "data_contract": "upload-v2",
+          "image_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "nergal_version": "1.1.2",
+          "nergal_revision": "e0caa8b88afe213c52394afe425fb1504070f5ee",
+          "nergal_snapshot_sha256": "c9b42824902eec74a112598e5eca53db285427779ad60c782588128166fa4f58",
+          "tokenizer": "cl100k_base",
+          "device": "cuda",
+          "libraries": [
+            {
+              "name": "torch",
+              "version": "2.8.0"
+            }
+          ]
+        },
+        "report_artifact_id": "50000000-0000-4000-8000-000000000001",
+        "manifest_artifact_id": "40000000-0000-4000-8000-000000000001",
+        "result_artifact_id": "30000000-0000-4000-8000-000000000001",
+        "failure_code": "empty_result",
+        "counters": {
+          "elapsed_ms": 30000,
+          "input_bytes": 1024,
+          "decoded_bytes": 1024,
+          "output_bytes": 2048,
+          "rss_bytes": 1000000,
+          "vram_bytes": 1000000,
+          "scratch_bytes": 3072
+        }
+      }
+    },
+    {
+      "name": "passed-report-qa-failed",
+      "schema": "JobReport",
+      "valid": false,
+      "body": {
+        "protocol": "upload-control-v1",
+        "job_id": "10000000-0000-4000-8000-000000000001",
+        "attempt_id": "20000000-0000-4000-8000-000000000001",
+        "generation": 1,
+        "outcome": "passed",
+        "input_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "runtime": {
+          "code_revision": "502ba3b9ccab2b1fec60c9a7176d07f5993c128a",
+          "lock_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "recipe_version": "upload-recipe-v2",
+          "recipe_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "qa_version": "qa-v3",
+          "data_contract": "upload-v2",
+          "image_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "nergal_version": "1.1.2",
+          "nergal_revision": "e0caa8b88afe213c52394afe425fb1504070f5ee",
+          "nergal_snapshot_sha256": "c9b42824902eec74a112598e5eca53db285427779ad60c782588128166fa4f58",
+          "tokenizer": "cl100k_base",
+          "device": "cuda",
+          "libraries": [
+            {
+              "name": "torch",
+              "version": "2.8.0"
+            }
+          ]
+        },
+        "qa": {
+          "version": "qa-v3",
+          "passed": false,
+          "binding_checks": [
+            {
+              "name": "schema",
+              "status": "passed",
+              "count": 0
+            },
+            {
+              "name": "record",
+              "status": "passed",
+              "count": 0
+            },
+            {
+              "name": "token_count",
+              "status": "passed",
+              "count": 0
+            },
+            {
+              "name": "record_balance",
+              "status": "passed",
+              "count": 0
+            },
+            {
+              "name": "rejection_share",
+              "status": "passed",
+              "count": 0
+            },
+            {
+              "name": "exact_duplicate",
+              "status": "passed",
+              "count": 0
+            },
+            {
+              "name": "near_duplicate",
+              "status": "passed",
+              "count": 0
+            },
+            {
+              "name": "residual_pii",
+              "status": "passed",
+              "count": 0
+            },
+            {
+              "name": "empty_result",
+              "status": "passed",
+              "count": 0
+            },
+            {
+              "name": "metadata_conflict",
+              "status": "passed",
+              "count": 0
+            }
+          ],
+          "stats": {
+            "rows": 2,
+            "token_count": 200,
+            "exact_duplicate_pairs": 0,
+            "near_duplicate_pairs": 0,
+            "masking_only_duplicate_pairs": 0,
+            "residual_pii_records": 0,
+            "license_review_records": 0
+          },
+          "license_review_sha256": [],
+          "pii_detected": [
+            "PESEL",
+            "email",
+            "phone"
+          ],
+          "pii_unmeasured": [
+            "PERSON",
+            "street_address"
+          ],
+          "near_dup_seed": 2,
+          "build_seed": 1,
+          "advisory_checks": [
+            {
+              "name": "masking_only_duplicate",
+              "count": 0
+            },
+            {
+              "name": "license_needs_legal_review",
+              "count": 0
+            }
+          ]
+        },
+        "rows_in": 3,
+        "rows_out": 2,
+        "counters": {
+          "elapsed_ms": 30000,
+          "input_bytes": 1024,
+          "decoded_bytes": 1024,
+          "output_bytes": 2048,
+          "rss_bytes": 1000000,
+          "vram_bytes": 1000000,
+          "scratch_bytes": 3072
+        },
+        "failure_code": null
+      }
+    },
+    {
+      "name": "oversized-report",
+      "schema": "ArtifactIntent",
+      "valid": false,
+      "body": {
+        "protocol": "upload-control-v1",
+        "job_id": "10000000-0000-4000-8000-000000000001",
+        "attempt_id": "20000000-0000-4000-8000-000000000001",
+        "generation": 1,
+        "kind": "report",
+        "bytes": 1048577,
+        "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    },
+    {
+      "name": "unbounded-lease",
+      "schema": "Limits",
+      "valid": false,
+      "body": {
+        "encoded_bytes": 1048576,
+        "decoded_bytes": 4194304,
+        "memory_bytes": 6442450944,
+        "scratch_bytes": 8589934592,
+        "attempt_seconds": 3600,
+        "startup_seconds": 600,
+        "heartbeat_seconds": 15,
+        "lease_seconds": 3600,
+        "grace_seconds": 30,
+        "max_attempts": 2,
+        "max_output_bytes": 8589934592
+      }
+    },
+    {
+      "name": "arbitrary-provider-url",
+      "schema": "ArtifactIntent",
+      "valid": false,
+      "body": {
+        "protocol": "upload-control-v1",
+        "job_id": "10000000-0000-4000-8000-000000000001",
+        "attempt_id": "20000000-0000-4000-8000-000000000001",
+        "generation": 1,
+        "kind": "result",
+        "bytes": 2048,
+        "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "url": "https://untrusted.invalid/artifact"
+      }
+    },
+    {
+      "name": "wrong-model-revision",
+      "schema": "Assignment",
+      "valid": false,
+      "body": {
+        "protocol": "upload-control-v1",
+        "job_id": "10000000-0000-4000-8000-000000000001",
+        "attempt_id": "20000000-0000-4000-8000-000000000001",
+        "generation": 1,
+        "resource_id": "synthetic_pod_760",
+        "input": {
+          "object_id": "60000000-0000-4000-8000-000000000001",
+          "bytes": 1024,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "format": "jsonl",
+          "url": "https://storage.example.invalid/synthetic/input",
+          "grant_expires_at": "2026-10-02T10:01:00Z"
+        },
+        "metadata": {
+          "source": "synthetic_760",
+          "added": "2026-10-02",
+          "license": "CC0-1.0",
+          "per_record_provenance": false
+        },
+        "runtime": {
+          "code_revision": "502ba3b9ccab2b1fec60c9a7176d07f5993c128a",
+          "lock_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "recipe_version": "upload-recipe-v2",
+          "recipe_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "qa_version": "qa-v3",
+          "data_contract": "upload-v2",
+          "image_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "nergal_version": "1.1.2",
+          "nergal_revision": "mutable-main",
+          "nergal_snapshot_sha256": "c9b42824902eec74a112598e5eca53db285427779ad60c782588128166fa4f58",
+          "tokenizer": "cl100k_base",
+          "device": "cuda",
+          "libraries": [
+            {
+              "name": "torch",
+              "version": "2.8.0"
+            }
+          ]
+        },
+        "limits": {
+          "encoded_bytes": 1048576,
+          "decoded_bytes": 4194304,
+          "memory_bytes": 6442450944,
+          "scratch_bytes": 8589934592,
+          "attempt_seconds": 3600,
+          "startup_seconds": 600,
+          "heartbeat_seconds": 15,
+          "lease_seconds": 60,
+          "grace_seconds": 30,
+          "max_attempts": 2,
+          "max_output_bytes": 8589934592
+        },
+        "server_time": "2026-10-02T10:00:00Z",
+        "lease_expires_at": "2026-10-02T10:01:00Z",
+        "attempt_deadline": "2026-10-02T11:00:00Z",
+        "job_deadline": "2026-10-02T12:00:00Z",
+        "credential_expires_at": "2026-10-02T11:00:00Z",
+        "attempt_token": "synthetic_fixture_token_never_a_usable_secret_760"
+      }
+    },
+    {
+      "name": "masking-only-warning-passes",
+      "schema": "Qa",
+      "valid": true,
+      "body": {
+        "version": "qa-v3",
+        "passed": true,
+        "binding_checks": [
+          {
+            "name": "schema",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "record",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "token_count",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "record_balance",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "rejection_share",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "exact_duplicate",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "near_duplicate",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "residual_pii",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "empty_result",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "metadata_conflict",
+            "status": "passed",
+            "count": 0
+          }
+        ],
+        "stats": {
+          "rows": 2,
+          "token_count": 200,
+          "exact_duplicate_pairs": 0,
+          "near_duplicate_pairs": 0,
+          "masking_only_duplicate_pairs": 1,
+          "residual_pii_records": 0,
+          "license_review_records": 0
+        },
+        "license_review_sha256": [],
+        "pii_detected": [
+          "PESEL",
+          "email",
+          "phone"
+        ],
+        "pii_unmeasured": [
+          "PERSON",
+          "street_address"
+        ],
+        "near_dup_seed": 2,
+        "build_seed": 1,
+        "advisory_checks": [
+          {
+            "name": "masking_only_duplicate",
+            "count": 1
+          },
+          {
+            "name": "license_needs_legal_review",
+            "count": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "passed-report-with-masking-warning",
+      "schema": "JobReport",
+      "valid": true,
+      "body": {
+        "protocol": "upload-control-v1",
+        "job_id": "10000000-0000-4000-8000-000000000001",
+        "attempt_id": "20000000-0000-4000-8000-000000000001",
+        "generation": 1,
+        "outcome": "passed",
+        "input_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "runtime": {
+          "code_revision": "502ba3b9ccab2b1fec60c9a7176d07f5993c128a",
+          "lock_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "recipe_version": "upload-recipe-v2",
+          "recipe_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "qa_version": "qa-v3",
+          "data_contract": "upload-v2",
+          "image_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "nergal_version": "1.1.2",
+          "nergal_revision": "e0caa8b88afe213c52394afe425fb1504070f5ee",
+          "nergal_snapshot_sha256": "c9b42824902eec74a112598e5eca53db285427779ad60c782588128166fa4f58",
+          "tokenizer": "cl100k_base",
+          "device": "cuda",
+          "libraries": [
+            {
+              "name": "torch",
+              "version": "2.8.0"
+            }
+          ]
+        },
+        "qa": {
+          "version": "qa-v3",
+          "passed": true,
+          "binding_checks": [
+            {
+              "name": "schema",
+              "status": "passed",
+              "count": 0
+            },
+            {
+              "name": "record",
+              "status": "passed",
+              "count": 0
+            },
+            {
+              "name": "token_count",
+              "status": "passed",
+              "count": 0
+            },
+            {
+              "name": "record_balance",
+              "status": "passed",
+              "count": 0
+            },
+            {
+              "name": "rejection_share",
+              "status": "passed",
+              "count": 0
+            },
+            {
+              "name": "exact_duplicate",
+              "status": "passed",
+              "count": 0
+            },
+            {
+              "name": "near_duplicate",
+              "status": "passed",
+              "count": 0
+            },
+            {
+              "name": "residual_pii",
+              "status": "passed",
+              "count": 0
+            },
+            {
+              "name": "empty_result",
+              "status": "passed",
+              "count": 0
+            },
+            {
+              "name": "metadata_conflict",
+              "status": "passed",
+              "count": 0
+            }
+          ],
+          "stats": {
+            "rows": 2,
+            "token_count": 200,
+            "exact_duplicate_pairs": 0,
+            "near_duplicate_pairs": 0,
+            "masking_only_duplicate_pairs": 1,
+            "residual_pii_records": 0,
+            "license_review_records": 0
+          },
+          "license_review_sha256": [],
+          "pii_detected": [
+            "PESEL",
+            "email",
+            "phone"
+          ],
+          "pii_unmeasured": [
+            "PERSON",
+            "street_address"
+          ],
+          "near_dup_seed": 2,
+          "build_seed": 1,
+          "advisory_checks": [
+            {
+              "name": "masking_only_duplicate",
+              "count": 1
+            },
+            {
+              "name": "license_needs_legal_review",
+              "count": 0
+            }
+          ]
+        },
+        "rows_in": 3,
+        "rows_out": 2,
+        "counters": {
+          "elapsed_ms": 30000,
+          "input_bytes": 1024,
+          "decoded_bytes": 1024,
+          "output_bytes": 2048,
+          "rss_bytes": 1000000,
+          "vram_bytes": 1000000,
+          "scratch_bytes": 3072
+        },
+        "failure_code": null
+      }
+    },
+    {
+      "name": "record-violation-fails-qa",
+      "schema": "JobReport",
+      "valid": true,
+      "body": {
+        "protocol": "upload-control-v1",
+        "job_id": "10000000-0000-4000-8000-000000000001",
+        "attempt_id": "20000000-0000-4000-8000-000000000001",
+        "generation": 1,
+        "outcome": "failed_qa",
+        "input_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "runtime": {
+          "code_revision": "502ba3b9ccab2b1fec60c9a7176d07f5993c128a",
+          "lock_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "recipe_version": "upload-recipe-v2",
+          "recipe_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "qa_version": "qa-v3",
+          "data_contract": "upload-v2",
+          "image_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "nergal_version": "1.1.2",
+          "nergal_revision": "e0caa8b88afe213c52394afe425fb1504070f5ee",
+          "nergal_snapshot_sha256": "c9b42824902eec74a112598e5eca53db285427779ad60c782588128166fa4f58",
+          "tokenizer": "cl100k_base",
+          "device": "cuda",
+          "libraries": [
+            {
+              "name": "torch",
+              "version": "2.8.0"
+            }
+          ]
+        },
+        "qa": {
+          "version": "qa-v3",
+          "passed": false,
+          "binding_checks": [
+            {
+              "name": "schema",
+              "status": "passed",
+              "count": 0
+            },
+            {
+              "name": "record",
+              "status": "failed",
+              "count": 1
+            },
+            {
+              "name": "token_count",
+              "status": "passed",
+              "count": 0
+            },
+            {
+              "name": "record_balance",
+              "status": "passed",
+              "count": 0
+            },
+            {
+              "name": "rejection_share",
+              "status": "passed",
+              "count": 0
+            },
+            {
+              "name": "exact_duplicate",
+              "status": "passed",
+              "count": 0
+            },
+            {
+              "name": "near_duplicate",
+              "status": "passed",
+              "count": 0
+            },
+            {
+              "name": "residual_pii",
+              "status": "passed",
+              "count": 0
+            },
+            {
+              "name": "empty_result",
+              "status": "passed",
+              "count": 0
+            },
+            {
+              "name": "metadata_conflict",
+              "status": "passed",
+              "count": 0
+            }
+          ],
+          "stats": {
+            "rows": 2,
+            "token_count": 200,
+            "exact_duplicate_pairs": 0,
+            "near_duplicate_pairs": 0,
+            "masking_only_duplicate_pairs": 0,
+            "residual_pii_records": 0,
+            "license_review_records": 0
+          },
+          "license_review_sha256": [],
+          "pii_detected": [
+            "PESEL",
+            "email",
+            "phone"
+          ],
+          "pii_unmeasured": [
+            "PERSON",
+            "street_address"
+          ],
+          "near_dup_seed": 2,
+          "build_seed": 1,
+          "advisory_checks": [
+            {
+              "name": "masking_only_duplicate",
+              "count": 0
+            },
+            {
+              "name": "license_needs_legal_review",
+              "count": 0
+            }
+          ]
+        },
+        "rows_in": 3,
+        "rows_out": 2,
+        "counters": {
+          "elapsed_ms": 30000,
+          "input_bytes": 1024,
+          "decoded_bytes": 1024,
+          "output_bytes": 2048,
+          "rss_bytes": 1000000,
+          "vram_bytes": 1000000,
+          "scratch_bytes": 3072
+        },
+        "failure_code": "qa_failed"
+      }
+    },
+    {
+      "name": "token_count-violation-fails-qa",
+      "schema": "JobReport",
+      "valid": true,
+      "body": {
+        "protocol": "upload-control-v1",
+        "job_id": "10000000-0000-4000-8000-000000000001",
+        "attempt_id": "20000000-0000-4000-8000-000000000001",
+        "generation": 1,
+        "outcome": "failed_qa",
+        "input_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "runtime": {
+          "code_revision": "502ba3b9ccab2b1fec60c9a7176d07f5993c128a",
+          "lock_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "recipe_version": "upload-recipe-v2",
+          "recipe_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "qa_version": "qa-v3",
+          "data_contract": "upload-v2",
+          "image_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "nergal_version": "1.1.2",
+          "nergal_revision": "e0caa8b88afe213c52394afe425fb1504070f5ee",
+          "nergal_snapshot_sha256": "c9b42824902eec74a112598e5eca53db285427779ad60c782588128166fa4f58",
+          "tokenizer": "cl100k_base",
+          "device": "cuda",
+          "libraries": [
+            {
+              "name": "torch",
+              "version": "2.8.0"
+            }
+          ]
+        },
+        "qa": {
+          "version": "qa-v3",
+          "passed": false,
+          "binding_checks": [
+            {
+              "name": "schema",
+              "status": "passed",
+              "count": 0
+            },
+            {
+              "name": "record",
+              "status": "passed",
+              "count": 0
+            },
+            {
+              "name": "token_count",
+              "status": "failed",
+              "count": 1
+            },
+            {
+              "name": "record_balance",
+              "status": "passed",
+              "count": 0
+            },
+            {
+              "name": "rejection_share",
+              "status": "passed",
+              "count": 0
+            },
+            {
+              "name": "exact_duplicate",
+              "status": "passed",
+              "count": 0
+            },
+            {
+              "name": "near_duplicate",
+              "status": "passed",
+              "count": 0
+            },
+            {
+              "name": "residual_pii",
+              "status": "passed",
+              "count": 0
+            },
+            {
+              "name": "empty_result",
+              "status": "passed",
+              "count": 0
+            },
+            {
+              "name": "metadata_conflict",
+              "status": "passed",
+              "count": 0
+            }
+          ],
+          "stats": {
+            "rows": 2,
+            "token_count": 200,
+            "exact_duplicate_pairs": 0,
+            "near_duplicate_pairs": 0,
+            "masking_only_duplicate_pairs": 0,
+            "residual_pii_records": 0,
+            "license_review_records": 0
+          },
+          "license_review_sha256": [],
+          "pii_detected": [
+            "PESEL",
+            "email",
+            "phone"
+          ],
+          "pii_unmeasured": [
+            "PERSON",
+            "street_address"
+          ],
+          "near_dup_seed": 2,
+          "build_seed": 1,
+          "advisory_checks": [
+            {
+              "name": "masking_only_duplicate",
+              "count": 0
+            },
+            {
+              "name": "license_needs_legal_review",
+              "count": 0
+            }
+          ]
+        },
+        "rows_in": 3,
+        "rows_out": 2,
+        "counters": {
+          "elapsed_ms": 30000,
+          "input_bytes": 1024,
+          "decoded_bytes": 1024,
+          "output_bytes": 2048,
+          "rss_bytes": 1000000,
+          "vram_bytes": 1000000,
+          "scratch_bytes": 3072
+        },
+        "failure_code": "qa_failed"
+      }
+    },
+    {
+      "name": "early-schema-failure-not-evaluated",
+      "schema": "Qa",
+      "valid": true,
+      "body": {
+        "version": "qa-v3",
+        "passed": false,
+        "binding_checks": [
+          {
+            "name": "schema",
+            "status": "failed",
+            "count": 1
+          },
+          {
+            "name": "record",
+            "status": "not_evaluated",
+            "count": null
+          },
+          {
+            "name": "token_count",
+            "status": "not_evaluated",
+            "count": null
+          },
+          {
+            "name": "record_balance",
+            "status": "not_evaluated",
+            "count": null
+          },
+          {
+            "name": "rejection_share",
+            "status": "not_evaluated",
+            "count": null
+          },
+          {
+            "name": "exact_duplicate",
+            "status": "not_evaluated",
+            "count": null
+          },
+          {
+            "name": "near_duplicate",
+            "status": "not_evaluated",
+            "count": null
+          },
+          {
+            "name": "residual_pii",
+            "status": "not_evaluated",
+            "count": null
+          },
+          {
+            "name": "empty_result",
+            "status": "not_evaluated",
+            "count": null
+          },
+          {
+            "name": "metadata_conflict",
+            "status": "not_evaluated",
+            "count": null
+          }
+        ],
+        "stats": {
+          "rows": null,
+          "token_count": null,
+          "exact_duplicate_pairs": null,
+          "near_duplicate_pairs": null,
+          "masking_only_duplicate_pairs": null,
+          "residual_pii_records": null,
+          "license_review_records": null
+        },
+        "license_review_sha256": [],
+        "pii_detected": [
+          "PESEL",
+          "email",
+          "phone"
+        ],
+        "pii_unmeasured": [
+          "PERSON",
+          "street_address"
+        ],
+        "near_dup_seed": 2,
+        "build_seed": 1,
+        "advisory_checks": [
+          {
+            "name": "masking_only_duplicate",
+            "count": null
+          },
+          {
+            "name": "license_needs_legal_review",
+            "count": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "duplicate-binding-names",
+      "schema": "Qa",
+      "valid": false,
+      "body": {
+        "version": "qa-v3",
+        "passed": true,
+        "binding_checks": [
+          {
+            "name": "schema",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "schema",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "schema",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "schema",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "schema",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "schema",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "schema",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "schema",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "schema",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "schema",
+            "status": "passed",
+            "count": 0
+          }
+        ],
+        "stats": {
+          "rows": 2,
+          "token_count": 200,
+          "exact_duplicate_pairs": 0,
+          "near_duplicate_pairs": 0,
+          "masking_only_duplicate_pairs": 0,
+          "residual_pii_records": 0,
+          "license_review_records": 0
+        },
+        "license_review_sha256": [],
+        "pii_detected": [
+          "PESEL",
+          "email",
+          "phone"
+        ],
+        "pii_unmeasured": [
+          "PERSON",
+          "street_address"
+        ],
+        "near_dup_seed": 2,
+        "build_seed": 1,
+        "advisory_checks": [
+          {
+            "name": "masking_only_duplicate",
+            "count": 0
+          },
+          {
+            "name": "license_needs_legal_review",
+            "count": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "passed-with-residual-pii-stat",
+      "schema": "Qa",
+      "valid": false,
+      "body": {
+        "version": "qa-v3",
+        "passed": true,
+        "binding_checks": [
+          {
+            "name": "schema",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "record",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "token_count",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "record_balance",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "rejection_share",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "exact_duplicate",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "near_duplicate",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "residual_pii",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "empty_result",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "metadata_conflict",
+            "status": "passed",
+            "count": 0
+          }
+        ],
+        "stats": {
+          "rows": 2,
+          "token_count": 200,
+          "exact_duplicate_pairs": 0,
+          "near_duplicate_pairs": 0,
+          "masking_only_duplicate_pairs": 0,
+          "residual_pii_records": 1,
+          "license_review_records": 0
+        },
+        "license_review_sha256": [],
+        "pii_detected": [
+          "PESEL",
+          "email",
+          "phone"
+        ],
+        "pii_unmeasured": [
+          "PERSON",
+          "street_address"
+        ],
+        "near_dup_seed": 2,
+        "build_seed": 1,
+        "advisory_checks": [
+          {
+            "name": "masking_only_duplicate",
+            "count": 0
+          },
+          {
+            "name": "license_needs_legal_review",
+            "count": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "missing-record-check",
+      "schema": "Qa",
+      "valid": false,
+      "body": {
+        "version": "qa-v3",
+        "passed": true,
+        "binding_checks": [
+          {
+            "name": "schema",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "token_count",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "record_balance",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "rejection_share",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "exact_duplicate",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "near_duplicate",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "residual_pii",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "empty_result",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "metadata_conflict",
+            "status": "passed",
+            "count": 0
+          }
+        ],
+        "stats": {
+          "rows": 2,
+          "token_count": 200,
+          "exact_duplicate_pairs": 0,
+          "near_duplicate_pairs": 0,
+          "masking_only_duplicate_pairs": 0,
+          "residual_pii_records": 0,
+          "license_review_records": 0
+        },
+        "license_review_sha256": [],
+        "pii_detected": [
+          "PESEL",
+          "email",
+          "phone"
+        ],
+        "pii_unmeasured": [
+          "PERSON",
+          "street_address"
+        ],
+        "near_dup_seed": 2,
+        "build_seed": 1,
+        "advisory_checks": [
+          {
+            "name": "masking_only_duplicate",
+            "count": 0
+          },
+          {
+            "name": "license_needs_legal_review",
+            "count": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "missing-token-count-check",
+      "schema": "Qa",
+      "valid": false,
+      "body": {
+        "version": "qa-v3",
+        "passed": true,
+        "binding_checks": [
+          {
+            "name": "schema",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "record",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "record_balance",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "rejection_share",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "exact_duplicate",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "near_duplicate",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "residual_pii",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "empty_result",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "metadata_conflict",
+            "status": "passed",
+            "count": 0
+          }
+        ],
+        "stats": {
+          "rows": 2,
+          "token_count": 200,
+          "exact_duplicate_pairs": 0,
+          "near_duplicate_pairs": 0,
+          "masking_only_duplicate_pairs": 0,
+          "residual_pii_records": 0,
+          "license_review_records": 0
+        },
+        "license_review_sha256": [],
+        "pii_detected": [
+          "PESEL",
+          "email",
+          "phone"
+        ],
+        "pii_unmeasured": [
+          "PERSON",
+          "street_address"
+        ],
+        "near_dup_seed": 2,
+        "build_seed": 1,
+        "advisory_checks": [
+          {
+            "name": "masking_only_duplicate",
+            "count": 0
+          },
+          {
+            "name": "license_needs_legal_review",
+            "count": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "false-verdict-with-no-failure",
+      "schema": "Qa",
+      "valid": false,
+      "body": {
+        "version": "qa-v3",
+        "passed": false,
+        "binding_checks": [
+          {
+            "name": "schema",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "record",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "token_count",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "record_balance",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "rejection_share",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "exact_duplicate",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "near_duplicate",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "residual_pii",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "empty_result",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "metadata_conflict",
+            "status": "passed",
+            "count": 0
+          }
+        ],
+        "stats": {
+          "rows": 2,
+          "token_count": 200,
+          "exact_duplicate_pairs": 0,
+          "near_duplicate_pairs": 0,
+          "masking_only_duplicate_pairs": 0,
+          "residual_pii_records": 0,
+          "license_review_records": 0
+        },
+        "license_review_sha256": [],
+        "pii_detected": [
+          "PESEL",
+          "email",
+          "phone"
+        ],
+        "pii_unmeasured": [
+          "PERSON",
+          "street_address"
+        ],
+        "near_dup_seed": 2,
+        "build_seed": 1,
+        "advisory_checks": [
+          {
+            "name": "masking_only_duplicate",
+            "count": 0
+          },
+          {
+            "name": "license_needs_legal_review",
+            "count": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "passed-with-unmeasured-check",
+      "schema": "Qa",
+      "valid": false,
+      "body": {
+        "version": "qa-v3",
+        "passed": true,
+        "binding_checks": [
+          {
+            "name": "schema",
+            "status": "not_evaluated",
+            "count": null
+          },
+          {
+            "name": "record",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "token_count",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "record_balance",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "rejection_share",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "exact_duplicate",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "near_duplicate",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "residual_pii",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "empty_result",
+            "status": "passed",
+            "count": 0
+          },
+          {
+            "name": "metadata_conflict",
+            "status": "passed",
+            "count": 0
+          }
+        ],
+        "stats": {
+          "rows": 2,
+          "token_count": 200,
+          "exact_duplicate_pairs": 0,
+          "near_duplicate_pairs": 0,
+          "masking_only_duplicate_pairs": 0,
+          "residual_pii_records": 0,
+          "license_review_records": 0
+        },
+        "license_review_sha256": [],
+        "pii_detected": [
+          "PESEL",
+          "email",
+          "phone"
+        ],
+        "pii_unmeasured": [
+          "PERSON",
+          "street_address"
+        ],
+        "near_dup_seed": 2,
+        "build_seed": 1,
+        "advisory_checks": [
+          {
+            "name": "masking_only_duplicate",
+            "count": 0
+          },
+          {
+            "name": "license_needs_legal_review",
+            "count": 0
+          }
+        ]
+      }
+    }
+  ],
+  "semantic_cases": [
+    {
+      "name": "duplicate-part-numbers",
+      "schema": "ConfirmUpload",
+      "expected_http_status": 422,
+      "expectation": "Duplicate part_number fails before completion."
+    },
+    {
+      "name": "confirmation-response-loss",
+      "schema": "ConfirmUpload",
+      "expected_http_status": 200,
+      "expectation": "Same key/body returns durable job; no second admission."
+    },
+    {
+      "name": "input-content-hash-mismatch",
+      "schema": "ConfirmUpload",
+      "expected_http_status": 200,
+      "expectation": "After initial202, status/replayed confirm returns200 processing_state=rejected, failure_code=input_corrupt; no compute provisioned."
+    },
+    {
+      "name": "foreign-generation",
+      "schema": "Outcome",
+      "expected_http_status": 409,
+      "expectation": "Prior generation cannot publish."
+    },
+    {
+      "name": "lease-expired-callback",
+      "schema": "Outcome",
+      "expected_http_status": 409,
+      "expectation": "Pending callback reserves no authority beyond lease."
+    },
+    {
+      "name": "duplicate-outcome",
+      "schema": "Outcome",
+      "expected_http_status": 200,
+      "expectation": "Recorded digest returns original receipt with unexpired hashed credential."
+    },
+    {
+      "name": "missing-artifact",
+      "schema": "Outcome",
+      "expected_http_status": 409,
+      "expectation": "Unverified artifact cannot publish."
+    },
+    {
+      "name": "empty-result",
+      "schema": "Outcome",
+      "expected_http_status": 200,
+      "expectation": "failed_qa has no Parquet; report/manifest required."
+    },
+    {
+      "name": "diagnostic-query-missing",
+      "schema": "DownloadGrant",
+      "expected_http_status": 409,
+      "expectation": "failed_qa result requires diagnostic=true."
+    },
+    {
+      "name": "artifact-expired",
+      "schema": "DownloadGrant",
+      "expected_http_status": 410,
+      "expectation": "Deny at expiry even during deletion outage."
+    },
+    {
+      "name": "retention-after-retry",
+      "schema": "ArtifactReceipt",
+      "expected_http_status": 200,
+      "expectation": "Earliest result completion +30 days survives retry."
+    },
+    {
+      "name": "multipart-resume-at-expiry",
+      "schema": "PartRequest",
+      "expected_http_status": 410,
+      "expectation": "First initiation +24h abort is never extended."
+    },
+    {
+      "name": "bootstrap-response-loss",
+      "schema": "BootstrapRequest",
+      "expected_http_status": 401,
+      "expectation": "Consumed token cannot replay; cleanup before replacement."
+    },
+    {
+      "name": "controller-create-timeout",
+      "schema": "BootstrapRequest",
+      "expected_http_status": 503,
+      "expectation": "Resolve uncertain Pod before second create."
+    },
+    {
+      "name": "foreign-browser-origin",
+      "schema": "CreateUpload",
+      "expected_http_status": 403,
+      "expectation": "Foreign Origin fails despite Basic/custom header."
+    },
+    {
+      "name": "basic-client-on-worker",
+      "schema": "Heartbeat",
+      "expected_http_status": 401,
+      "expectation": "Basic cannot authorize worker."
+    },
+    {
+      "name": "worker-on-client",
+      "schema": "CreateUpload",
+      "expected_http_status": 401,
+      "expectation": "Attempt token cannot admit client upload."
+    },
+    {
+      "name": "private-assets-without-auth",
+      "schema": "Error",
+      "expected_http_status": 401,
+      "expectation": "Deny private entry/assets before delivering bytes."
+    },
+    {
+      "name": "binding-stat-count-mismatch",
+      "schema": "JobReport",
+      "expected_http_status": 409,
+      "expectation": "Reject differing check counts and corresponding aggregate stats even if each field's JSON shape is valid."
+    }
+  ]
+}

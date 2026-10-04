@@ -47,10 +47,17 @@ jobs:
         run: node --experimental-strip-types --test tests/*.test.mjs
       - name: Python tests
         run: .ci-venv/bin/python -m pytest --durations=10
+      - name: Private upload browser tests against the built private entry
+        working-directory: frontend
+        env:
+          PIPELINE_TEST_PYTHON: ${{ github.workspace }}/.ci-venv/bin/python
+        run: |
+          npx playwright install --with-deps chromium
+          npx playwright test --config playwright.pipeline.config.ts
       - name: Package the tested release
         run: |
           git archive --format=tar --output=release.tar HEAD
-          tar -rf release.tar src/fabryka_track/web
+          tar -rf release.tar src/fabryka_track/web src/fabryka_track/pipeline_web
       - name: Upload immutable release artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:

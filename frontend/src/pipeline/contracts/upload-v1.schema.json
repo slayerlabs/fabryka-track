@@ -1,0 +1,2577 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:slayerlabs:upload-control-v1:1.0-draft.2",
+  "title": "Upload control v1 message definitions",
+  "description": "Select an exact $defs message schema. The root deliberately rejects untyped messages; normative semantic rules are in upload-v1.md.",
+  "not": {},
+  "$defs": {
+    "FileMetadata": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_]*$",
+          "maxLength": 128
+        },
+        "added": {
+          "type": "string",
+          "format": "date",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        },
+        "license": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "author": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "source_ref": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "per_record_provenance": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "source",
+        "added"
+      ],
+      "additionalProperties": false
+    },
+    "CreateUpload": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "upload-control-v1"
+        },
+        "metadata": {
+          "$ref": "#/$defs/FileMetadata"
+        },
+        "format": {
+          "type": "string",
+          "enum": [
+            "jsonl",
+            "parquet"
+          ]
+        },
+        "encoded_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 536870912
+        },
+        "input_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "filename": {
+          "type": "string",
+          "maxLength": 255
+        }
+      },
+      "required": [
+        "protocol",
+        "metadata",
+        "format",
+        "encoded_bytes",
+        "input_sha256"
+      ],
+      "additionalProperties": false
+    },
+    "UploadSession": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "upload-control-v1"
+        },
+        "job_id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "admitted": {
+          "const": false
+        },
+        "processing_state": {
+          "const": "uploading"
+        },
+        "transfer_state": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "ready"
+          ]
+        },
+        "upload_started_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        "upload_deadline": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        "encoded_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 536870912
+        },
+        "input_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "part_size_bytes": {
+          "const": 8388608
+        }
+      },
+      "required": [
+        "protocol",
+        "job_id",
+        "admitted",
+        "processing_state",
+        "transfer_state",
+        "upload_started_at",
+        "upload_deadline",
+        "encoded_bytes",
+        "input_sha256",
+        "part_size_bytes"
+      ],
+      "additionalProperties": false
+    },
+    "PartRequest": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "upload-control-v1"
+        },
+        "part_number": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        }
+      },
+      "required": [
+        "protocol",
+        "part_number"
+      ],
+      "additionalProperties": false
+    },
+    "TransferGrant": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "upload-control-v1"
+        },
+        "method": {
+          "const": "PUT"
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://",
+          "maxLength": 4096
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        "part_number": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        }
+      },
+      "required": [
+        "protocol",
+        "method",
+        "url",
+        "expires_at",
+        "part_number"
+      ],
+      "additionalProperties": false
+    },
+    "ConfirmUpload": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "upload-control-v1"
+        },
+        "parts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "part_number": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 10000
+              },
+              "etag": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              }
+            },
+            "required": [
+              "part_number",
+              "etag"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 10000,
+          "minItems": 1
+        },
+        "encoded_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 536870912
+        },
+        "input_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "protocol",
+        "parts",
+        "encoded_bytes",
+        "input_sha256"
+      ],
+      "additionalProperties": false
+    },
+    "CancelJob": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "upload-control-v1"
+        }
+      },
+      "required": [
+        "protocol"
+      ],
+      "additionalProperties": false
+    },
+    "ArtifactSummary": {
+      "type": "object",
+      "properties": {
+        "artifact_id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "result",
+            "report",
+            "manifest"
+          ]
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "first_stored_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "Z$"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "kind",
+        "bytes",
+        "sha256",
+        "first_stored_at",
+        "expires_at"
+      ],
+      "additionalProperties": false
+    },
+    "JobStatus": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "upload-control-v1"
+        },
+        "job_id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "admitted": {
+          "type": "boolean"
+        },
+        "processing_state": {
+          "type": "string",
+          "enum": [
+            "uploading",
+            "validating",
+            "queued",
+            "provisioning",
+            "running",
+            "passed",
+            "failed_qa",
+            "failed",
+            "cancelled",
+            "rejected"
+          ]
+        },
+        "client_phase": {
+          "type": "string",
+          "enum": [
+            "uploading",
+            "validating",
+            "queued",
+            "running",
+            "finalizing",
+            "complete",
+            "expired",
+            "rejected"
+          ]
+        },
+        "publication_state": {
+          "type": "string",
+          "enum": [
+            "none",
+            "pending",
+            "published",
+            "expired"
+          ]
+        },
+        "cleanup_state": {
+          "type": "string",
+          "enum": [
+            "not_due",
+            "pending",
+            "confirmed"
+          ]
+        },
+        "transfer_state": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "ready",
+            "closed"
+          ]
+        },
+        "attempt_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "attempts_used": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2
+        },
+        "upload_started_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        "upload_deadline": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        "admitted_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "Z$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "job_deadline": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "Z$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "first_result_stored_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "Z$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "expires_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "Z$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "failure_code": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "empty_result",
+                "qa_failed",
+                "metadata_conflict",
+                "provider_transient",
+                "lease_lost",
+                "transfer_transient",
+                "runtime_unsupported",
+                "input_corrupt",
+                "memory_limit",
+                "scratch_limit",
+                "deadline",
+                "recipe_failed"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "artifacts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ArtifactSummary"
+          },
+          "maxItems": 3,
+          "minItems": 0
+        },
+        "cleanup_obligations": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "input_delete",
+              "multipart_abort",
+              "scratch_cleanup",
+              "pod_terminate",
+              "artifact_delete",
+              "publication"
+            ]
+          },
+          "maxItems": 6,
+          "minItems": 0
+        },
+        "input_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "encoded_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 536870912
+        }
+      },
+      "required": [
+        "protocol",
+        "job_id",
+        "admitted",
+        "processing_state",
+        "client_phase",
+        "publication_state",
+        "cleanup_state",
+        "transfer_state",
+        "attempt_id",
+        "generation",
+        "attempts_used",
+        "upload_started_at",
+        "upload_deadline",
+        "admitted_at",
+        "job_deadline",
+        "first_result_stored_at",
+        "expires_at",
+        "failure_code",
+        "artifacts",
+        "cleanup_obligations",
+        "input_sha256",
+        "encoded_bytes"
+      ],
+      "additionalProperties": false
+    },
+    "JobList": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "upload-control-v1"
+        },
+        "jobs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/JobStatus"
+          },
+          "maxItems": 100,
+          "minItems": 0
+        },
+        "next_cursor": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "protocol",
+        "jobs",
+        "next_cursor"
+      ],
+      "additionalProperties": false
+    },
+    "DownloadGrant": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "upload-control-v1"
+        },
+        "job_id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "artifact": {
+          "$ref": "#/$defs/ArtifactSummary"
+        },
+        "diagnostic": {
+          "type": "boolean"
+        },
+        "method": {
+          "const": "GET"
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://",
+          "maxLength": 4096
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "Z$"
+        }
+      },
+      "required": [
+        "protocol",
+        "job_id",
+        "artifact",
+        "diagnostic",
+        "method",
+        "url",
+        "expires_at"
+      ],
+      "additionalProperties": false
+    },
+    "Runtime": {
+      "type": "object",
+      "properties": {
+        "code_revision": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "lock_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "recipe_version": {
+          "const": "upload-recipe-v2"
+        },
+        "recipe_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "qa_version": {
+          "const": "qa-v3"
+        },
+        "data_contract": {
+          "const": "upload-v2"
+        },
+        "image_digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "nergal_version": {
+          "const": "1.1.2"
+        },
+        "nergal_revision": {
+          "const": "e0caa8b88afe213c52394afe425fb1504070f5ee"
+        },
+        "nergal_snapshot_sha256": {
+          "const": "c9b42824902eec74a112598e5eca53db285427779ad60c782588128166fa4f58"
+        },
+        "tokenizer": {
+          "const": "cl100k_base"
+        },
+        "device": {
+          "type": "string",
+          "enum": [
+            "cpu",
+            "cuda"
+          ]
+        },
+        "libraries": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^[a-zA-Z0-9_.-]{1,64}$"
+              },
+              "version": {
+                "type": "string",
+                "pattern": "^[a-zA-Z0-9_.+!-]{1,128}$"
+              }
+            },
+            "required": [
+              "name",
+              "version"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 32,
+          "minItems": 1
+        }
+      },
+      "required": [
+        "code_revision",
+        "lock_sha256",
+        "recipe_version",
+        "recipe_sha256",
+        "qa_version",
+        "data_contract",
+        "image_digest",
+        "nergal_version",
+        "nergal_revision",
+        "nergal_snapshot_sha256",
+        "tokenizer",
+        "device",
+        "libraries"
+      ],
+      "additionalProperties": false
+    },
+    "Limits": {
+      "type": "object",
+      "properties": {
+        "encoded_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 536870912
+        },
+        "decoded_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483648
+        },
+        "memory_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 6442450944
+        },
+        "scratch_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8589934592
+        },
+        "attempt_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3600
+        },
+        "startup_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 600
+        },
+        "heartbeat_seconds": {
+          "const": 15
+        },
+        "lease_seconds": {
+          "const": 60
+        },
+        "grace_seconds": {
+          "const": 30
+        },
+        "max_attempts": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2
+        },
+        "max_output_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8589934592
+        }
+      },
+      "required": [
+        "encoded_bytes",
+        "decoded_bytes",
+        "memory_bytes",
+        "scratch_bytes",
+        "attempt_seconds",
+        "startup_seconds",
+        "heartbeat_seconds",
+        "lease_seconds",
+        "grace_seconds",
+        "max_attempts",
+        "max_output_bytes"
+      ],
+      "additionalProperties": false
+    },
+    "BootstrapRequest": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "upload-control-v1"
+        },
+        "job_id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "attempt_id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "protocol",
+        "job_id",
+        "attempt_id",
+        "generation"
+      ],
+      "additionalProperties": false
+    },
+    "Assignment": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "upload-control-v1"
+        },
+        "job_id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "attempt_id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "resource_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,128}$"
+        },
+        "input": {
+          "type": "object",
+          "properties": {
+            "object_id": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            },
+            "bytes": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 536870912
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "format": {
+              "type": "string",
+              "enum": [
+                "jsonl",
+                "parquet"
+              ]
+            },
+            "url": {
+              "type": "string",
+              "format": "uri",
+              "pattern": "^https://",
+              "maxLength": 4096
+            },
+            "grant_expires_at": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "Z$"
+            }
+          },
+          "required": [
+            "object_id",
+            "bytes",
+            "sha256",
+            "format",
+            "url",
+            "grant_expires_at"
+          ],
+          "additionalProperties": false
+        },
+        "metadata": {
+          "$ref": "#/$defs/FileMetadata"
+        },
+        "runtime": {
+          "$ref": "#/$defs/Runtime"
+        },
+        "limits": {
+          "$ref": "#/$defs/Limits"
+        },
+        "server_time": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        "lease_expires_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        "attempt_deadline": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        "job_deadline": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        "attempt_token": {
+          "type": "string",
+          "minLength": 43,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "credential_expires_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "Z$"
+        }
+      },
+      "required": [
+        "protocol",
+        "job_id",
+        "attempt_id",
+        "generation",
+        "resource_id",
+        "input",
+        "metadata",
+        "runtime",
+        "limits",
+        "server_time",
+        "lease_expires_at",
+        "attempt_deadline",
+        "job_deadline",
+        "credential_expires_at"
+      ],
+      "additionalProperties": false
+    },
+    "Counters": {
+      "type": "object",
+      "properties": {
+        "elapsed_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "input_bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "decoded_bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "output_bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "rss_bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "vram_bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "scratch_bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "elapsed_ms",
+        "input_bytes",
+        "decoded_bytes",
+        "output_bytes",
+        "rss_bytes",
+        "vram_bytes",
+        "scratch_bytes"
+      ],
+      "additionalProperties": false
+    },
+    "Heartbeat": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "upload-control-v1"
+        },
+        "job_id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "attempt_id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "stage": {
+          "type": "string",
+          "enum": [
+            "bootstrap",
+            "download",
+            "normalize",
+            "quality_labels",
+            "upload_dedup",
+            "pii_mask",
+            "masked_exact_dedup",
+            "write_parquet",
+            "qa",
+            "artifact_upload",
+            "reporting"
+          ]
+        },
+        "counters": {
+          "$ref": "#/$defs/Counters"
+        }
+      },
+      "required": [
+        "protocol",
+        "job_id",
+        "attempt_id",
+        "generation",
+        "sequence",
+        "stage",
+        "counters"
+      ],
+      "additionalProperties": false
+    },
+    "Lease": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "upload-control-v1"
+        },
+        "job_id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "attempt_id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "server_time": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        "lease_expires_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        "cancel_requested": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "protocol",
+        "job_id",
+        "attempt_id",
+        "generation",
+        "sequence",
+        "server_time",
+        "lease_expires_at",
+        "cancel_requested"
+      ],
+      "additionalProperties": false
+    },
+    "ArtifactIntent": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "upload-control-v1"
+        },
+        "job_id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "attempt_id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "result",
+            "report",
+            "manifest"
+          ]
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8589934592
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "protocol",
+        "job_id",
+        "attempt_id",
+        "generation",
+        "kind",
+        "bytes",
+        "sha256"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "enum": [
+                  "report",
+                  "manifest"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "bytes": {
+                "maximum": 1048576
+              }
+            }
+          }
+        }
+      ]
+    },
+    "ArtifactSlot": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "upload-control-v1"
+        },
+        "job_id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "attempt_id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "artifact_id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "result",
+            "report",
+            "manifest"
+          ]
+        },
+        "transfer_state": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "ready"
+          ]
+        },
+        "upload_started_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        "upload_deadline": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        "part_size_bytes": {
+          "const": 8388608
+        }
+      },
+      "required": [
+        "protocol",
+        "job_id",
+        "attempt_id",
+        "generation",
+        "artifact_id",
+        "kind",
+        "transfer_state",
+        "upload_started_at",
+        "upload_deadline",
+        "part_size_bytes"
+      ],
+      "additionalProperties": false
+    },
+    "ConfirmArtifact": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "upload-control-v1"
+        },
+        "job_id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "attempt_id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "parts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "part_number": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 10000
+              },
+              "etag": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              }
+            },
+            "required": [
+              "part_number",
+              "etag"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 10000,
+          "minItems": 1
+        }
+      },
+      "required": [
+        "protocol",
+        "job_id",
+        "attempt_id",
+        "generation",
+        "parts"
+      ],
+      "additionalProperties": false
+    },
+    "ArtifactReceipt": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "upload-control-v1"
+        },
+        "job_id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "attempt_id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "artifact_id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "result",
+            "report",
+            "manifest"
+          ]
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "verified",
+            "rejected"
+          ]
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "first_stored_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "Z$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "expires_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "Z$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "protocol",
+        "job_id",
+        "attempt_id",
+        "generation",
+        "artifact_id",
+        "kind",
+        "state",
+        "bytes",
+        "sha256",
+        "first_stored_at",
+        "expires_at"
+      ],
+      "additionalProperties": false
+    },
+    "Qa": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "const": "qa-v3"
+        },
+        "passed": {
+          "type": "boolean"
+        },
+        "binding_checks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "enum": [
+                  "schema",
+                  "record",
+                  "token_count",
+                  "record_balance",
+                  "rejection_share",
+                  "exact_duplicate",
+                  "near_duplicate",
+                  "residual_pii",
+                  "empty_result",
+                  "metadata_conflict"
+                ]
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "passed",
+                  "failed",
+                  "not_evaluated"
+                ]
+              },
+              "count": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "name",
+              "status",
+              "count"
+            ],
+            "additionalProperties": false,
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "status": {
+                      "const": "passed"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "count": {
+                      "const": 0
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "status": {
+                      "const": "failed"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "count": {
+                      "type": "integer",
+                      "minimum": 1
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "status": {
+                      "const": "not_evaluated"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "count": {
+                      "type": "null"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "minItems": 10,
+          "maxItems": 10,
+          "allOf": [
+            {
+              "contains": {
+                "properties": {
+                  "name": {
+                    "const": "schema"
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              },
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "properties": {
+                  "name": {
+                    "const": "record"
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              },
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "properties": {
+                  "name": {
+                    "const": "token_count"
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              },
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "properties": {
+                  "name": {
+                    "const": "record_balance"
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              },
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "properties": {
+                  "name": {
+                    "const": "rejection_share"
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              },
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "properties": {
+                  "name": {
+                    "const": "exact_duplicate"
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              },
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "properties": {
+                  "name": {
+                    "const": "near_duplicate"
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              },
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "properties": {
+                  "name": {
+                    "const": "residual_pii"
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              },
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "properties": {
+                  "name": {
+                    "const": "empty_result"
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              },
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "properties": {
+                  "name": {
+                    "const": "metadata_conflict"
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              },
+              "minContains": 1,
+              "maxContains": 1
+            }
+          ]
+        },
+        "stats": {
+          "type": "object",
+          "properties": {
+            "rows": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "token_count": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "exact_duplicate_pairs": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "near_duplicate_pairs": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "masking_only_duplicate_pairs": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "residual_pii_records": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "license_review_records": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "rows",
+            "token_count",
+            "exact_duplicate_pairs",
+            "near_duplicate_pairs",
+            "masking_only_duplicate_pairs",
+            "residual_pii_records",
+            "license_review_records"
+          ],
+          "additionalProperties": false
+        },
+        "license_review_sha256": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "maxItems": 128,
+          "minItems": 0
+        },
+        "pii_detected": {
+          "const": [
+            "PESEL",
+            "email",
+            "phone"
+          ]
+        },
+        "pii_unmeasured": {
+          "const": [
+            "PERSON",
+            "street_address"
+          ]
+        },
+        "near_dup_seed": {
+          "const": 2
+        },
+        "build_seed": {
+          "const": 1
+        },
+        "advisory_checks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "enum": [
+                  "masking_only_duplicate",
+                  "license_needs_legal_review"
+                ]
+              },
+              "count": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "name",
+              "count"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 2,
+          "maxItems": 2,
+          "allOf": [
+            {
+              "contains": {
+                "properties": {
+                  "name": {
+                    "const": "masking_only_duplicate"
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              },
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "properties": {
+                  "name": {
+                    "const": "license_needs_legal_review"
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              },
+              "minContains": 1,
+              "maxContains": 1
+            }
+          ]
+        }
+      },
+      "required": [
+        "version",
+        "passed",
+        "binding_checks",
+        "stats",
+        "license_review_sha256",
+        "pii_detected",
+        "pii_unmeasured",
+        "near_dup_seed",
+        "build_seed",
+        "advisory_checks"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "passed": {
+                "const": true
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "binding_checks": {
+                "items": {
+                  "properties": {
+                    "status": {
+                      "const": "passed"
+                    },
+                    "count": {
+                      "const": 0
+                    }
+                  }
+                }
+              },
+              "stats": {
+                "properties": {
+                  "rows": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "token_count": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "exact_duplicate_pairs": {
+                    "const": 0
+                  },
+                  "near_duplicate_pairs": {
+                    "const": 0
+                  },
+                  "residual_pii_records": {
+                    "const": 0
+                  },
+                  "masking_only_duplicate_pairs": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "license_review_records": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                }
+              },
+              "advisory_checks": {
+                "items": {
+                  "properties": {
+                    "count": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "passed": {
+                "const": false
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "binding_checks": {
+                "contains": {
+                  "properties": {
+                    "status": {
+                      "const": "failed"
+                    }
+                  },
+                  "required": [
+                    "status"
+                  ]
+                },
+                "minContains": 1
+              }
+            }
+          }
+        }
+      ]
+    },
+    "JobReport": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "upload-control-v1"
+        },
+        "job_id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "attempt_id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "outcome": {
+          "type": "string",
+          "enum": [
+            "passed",
+            "failed_qa",
+            "failed"
+          ]
+        },
+        "input_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "runtime": {
+          "$ref": "#/$defs/Runtime"
+        },
+        "qa": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Qa"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rows_in": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "rows_out": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "counters": {
+          "$ref": "#/$defs/Counters"
+        },
+        "failure_code": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "empty_result",
+                "qa_failed",
+                "metadata_conflict",
+                "provider_transient",
+                "lease_lost",
+                "transfer_transient",
+                "runtime_unsupported",
+                "input_corrupt",
+                "memory_limit",
+                "scratch_limit",
+                "deadline",
+                "recipe_failed"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "protocol",
+        "job_id",
+        "attempt_id",
+        "generation",
+        "outcome",
+        "input_sha256",
+        "runtime",
+        "qa",
+        "rows_in",
+        "rows_out",
+        "counters",
+        "failure_code"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "const": "passed"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "qa": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/Qa"
+                  },
+                  {
+                    "properties": {
+                      "passed": {
+                        "const": true
+                      }
+                    }
+                  }
+                ]
+              },
+              "rows_out": {
+                "minimum": 1
+              },
+              "failure_code": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "const": "failed_qa"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "qa": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/Qa"
+                  },
+                  {
+                    "properties": {
+                      "passed": {
+                        "const": false
+                      }
+                    }
+                  }
+                ]
+              },
+              "failure_code": {
+                "enum": [
+                  "empty_result",
+                  "qa_failed",
+                  "metadata_conflict"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "failure_code": {
+                "const": "empty_result"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "outcome": {
+                "const": "failed_qa"
+              },
+              "rows_out": {
+                "const": 0
+              }
+            }
+          }
+        }
+      ]
+    },
+    "JobManifest": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "upload-control-v1"
+        },
+        "job_id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "attempt_id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "input_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "input_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "output_sha256": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "output_bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "report_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "runtime": {
+          "$ref": "#/$defs/Runtime"
+        },
+        "outcome": {
+          "type": "string",
+          "enum": [
+            "passed",
+            "failed_qa",
+            "failed"
+          ]
+        },
+        "build_seed": {
+          "const": 1
+        },
+        "qa_seed": {
+          "const": 2
+        }
+      },
+      "required": [
+        "protocol",
+        "job_id",
+        "attempt_id",
+        "generation",
+        "input_sha256",
+        "input_bytes",
+        "output_sha256",
+        "output_bytes",
+        "report_sha256",
+        "runtime",
+        "outcome",
+        "build_seed",
+        "qa_seed"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "const": "passed"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "output_sha256": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "output_bytes": {
+                "minimum": 1
+              }
+            }
+          }
+        }
+      ]
+    },
+    "Outcome": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "upload-control-v1"
+        },
+        "job_id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "attempt_id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "outcome": {
+          "type": "string",
+          "enum": [
+            "passed",
+            "failed_qa",
+            "failed"
+          ]
+        },
+        "input_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "runtime": {
+          "$ref": "#/$defs/Runtime"
+        },
+        "report_artifact_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "manifest_artifact_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "result_artifact_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "failure_code": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "empty_result",
+                "qa_failed",
+                "metadata_conflict",
+                "provider_transient",
+                "lease_lost",
+                "transfer_transient",
+                "runtime_unsupported",
+                "input_corrupt",
+                "memory_limit",
+                "scratch_limit",
+                "deadline",
+                "recipe_failed"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "counters": {
+          "$ref": "#/$defs/Counters"
+        }
+      },
+      "required": [
+        "protocol",
+        "job_id",
+        "attempt_id",
+        "generation",
+        "outcome",
+        "input_sha256",
+        "runtime",
+        "report_artifact_id",
+        "manifest_artifact_id",
+        "result_artifact_id",
+        "failure_code",
+        "counters"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "const": "passed"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "report_artifact_id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+              },
+              "manifest_artifact_id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+              },
+              "result_artifact_id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+              },
+              "failure_code": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "const": "failed_qa"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "report_artifact_id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+              },
+              "manifest_artifact_id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+              },
+              "failure_code": {
+                "type": "string",
+                "enum": [
+                  "empty_result",
+                  "qa_failed",
+                  "metadata_conflict"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "const": "failed"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "result_artifact_id": {
+                "type": "null"
+              },
+              "failure_code": {
+                "type": "string",
+                "enum": [
+                  "empty_result",
+                  "qa_failed",
+                  "metadata_conflict",
+                  "provider_transient",
+                  "lease_lost",
+                  "transfer_transient",
+                  "runtime_unsupported",
+                  "input_corrupt",
+                  "memory_limit",
+                  "scratch_limit",
+                  "deadline",
+                  "recipe_failed"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "failure_code": {
+                "const": "empty_result"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "outcome": {
+                "const": "failed_qa"
+              },
+              "result_artifact_id": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "OutcomeReceipt": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "upload-control-v1"
+        },
+        "job_id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "attempt_id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "callback_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "committed",
+            "rejected"
+          ]
+        },
+        "processing_state": {
+          "type": "string",
+          "enum": [
+            "running",
+            "passed",
+            "failed_qa",
+            "failed",
+            "cancelled"
+          ]
+        },
+        "publication_state": {
+          "type": "string",
+          "enum": [
+            "none",
+            "pending",
+            "published"
+          ]
+        },
+        "error_code": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "stale_attempt",
+                "lease_expired",
+                "integrity_mismatch",
+                "invalid_request"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "protocol",
+        "job_id",
+        "attempt_id",
+        "generation",
+        "callback_sha256",
+        "state",
+        "processing_state",
+        "publication_state",
+        "error_code"
+      ],
+      "additionalProperties": false
+    },
+    "Error": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "upload-control-v1"
+        },
+        "request_id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "code": {
+          "type": "string",
+          "enum": [
+            "invalid_request",
+            "unsupported_version",
+            "idempotency_key_required",
+            "idempotency_conflict",
+            "not_found",
+            "method_not_allowed",
+            "unauthorized",
+            "forbidden_origin",
+            "quota_exceeded",
+            "transfer_not_ready",
+            "expired",
+            "stale_attempt",
+            "lease_expired",
+            "integrity_mismatch",
+            "report_pending",
+            "result_pending",
+            "diagnostic_required",
+            "no_result",
+            "provider_unavailable",
+            "invalid_state",
+            "body_too_large"
+          ]
+        },
+        "message": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "retryable": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "protocol",
+        "request_id",
+        "code",
+        "message",
+        "retryable"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

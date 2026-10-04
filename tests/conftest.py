@@ -53,3 +53,19 @@ def cleanup_database():
     yield
     engine.dispose()
     Path("test-fabryka.db").unlink(missing_ok=True)
+
+
+PIPELINE_TEST_PAIR = ("operator", "local-test-password")
+
+
+@pytest.fixture()
+def private_app():
+    import httpx
+    from pydantic import SecretStr
+
+    from fabryka_track.pipeline import PIPELINE_ORIGIN, PRIVATE_ROOT, PipelineConfig, pipeline_app
+    config = PipelineConfig(username=PIPELINE_TEST_PAIR[0], password=SecretStr(PIPELINE_TEST_PAIR[1]),
+                            controller_url="https://data-pipeline.fabryka.ai", origin=PIPELINE_ORIGIN,
+                            private_root=PRIVATE_ROOT)
+    client = httpx.AsyncClient(transport=httpx.MockTransport(lambda request: httpx.Response(503)))
+    return pipeline_app(config, client)

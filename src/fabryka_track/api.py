@@ -28,9 +28,13 @@ from .agents import router as agents_router
 from .external_training import router as external_training_router, PUBLIC_METRICS
 from .dashboard import router as dashboard_router
 from .white_benchmarks import router as white_router, start_worker as start_white, stop_worker as stop_white
+from .pipeline import config_from_settings, controller_client, install_private_boundary, make_pipeline_router
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    global pipeline_client
+    if pipeline_client.is_closed:
+        pipeline_client = controller_client()
     create_tables()
     settings.artifact_dir.mkdir(parents=True, exist_ok=True)
     start_worker()
@@ -48,6 +52,7 @@ async def lifespan(_app: FastAPI):
         stop_benchmark_queue()
         stop_supervisor()
         stop_worker()
+        await pipeline_client.aclose()
 
 
 app = FastAPI(title="Fabryka Track", version="0.1.0", lifespan=lifespan)
@@ -94,6 +99,13 @@ async def browser_request_guard(request: Request, call_next):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     return response
+
+
+# Installed last so the Basic boundary is the outermost middleware; the router must precede the public catch-all.
+pipeline_config = config_from_settings(settings)
+pipeline_client = controller_client()
+install_private_boundary(app, pipeline_config)
+app.include_router(make_pipeline_router(pipeline_config, lambda: pipeline_client))
 
 
 def db():
