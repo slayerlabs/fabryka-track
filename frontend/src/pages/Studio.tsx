@@ -23,6 +23,8 @@ import {
   type StudioCheckpoint,
   type StudioForkSource,
 } from "./StudioFork";
+import { StudioEntry, StudioAgent } from "./StudioEntry";
+import "../studio-entry.css";
 export { GuidePage } from "./StudioGuide";
 
 interface Capabilities {
@@ -457,6 +459,7 @@ function TrainingStudio({
   );
   const [recipeRequest, setRecipeRequest] = useState<{ source: RecipeSource; nonce: number }>();
   const [stage, setStage] = useState(1);
+  const [mode, setMode] = useState<"beginner" | "advanced" | "agent">(fork ? "advanced" : "beginner");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [profileMessage, setProfileMessage] = useState("");
@@ -714,6 +717,9 @@ function TrainingStudio({
             : "Choose your data, train a model, and follow its progress live."}
         </p>
       </div>
+      <StudioEntry mode={mode} onChange={setMode} disabled={launching} />
+      {mode === "agent" ? <StudioAgent /> : <>
+      {mode === "beginner" && <p className="notice">Start with a profile or choose your text sources below. Then review the model, time limit and cost before starting. Your draft stays intact when you switch modes.</p>}
       {fork && (
         <div className="notice">
           <b>Source checkpoint</b>
@@ -769,7 +775,7 @@ function TrainingStudio({
         <section className="panel" id="workspace">
           {stage === 1 ? (
             <>
-              <StudioMixRecipes
+              {mode === "advanced" && <StudioMixRecipes
                 datasets={datasets}
                 onImport={(source) => setRecipeRequest({ source, nonce: Date.now() })}
                 onApply={(weights) => {
@@ -780,7 +786,7 @@ function TrainingStudio({
                   update({ character: null });
                   onRefresh();
                 }}
-              />
+              />}
               {precise ? (
                 <div className="notice">
                   <b>{fork ? "Inherited dataset mix" : "Exact dataset shares"}</b>
@@ -998,14 +1004,14 @@ function TrainingStudio({
                   }}
                 />
               </div>
-              <StudioHFDatasets
+              {mode === "advanced" && <StudioHFDatasets
                 userId={user.id}
                 recipeRequest={recipeRequest}
                 onImported={() => {
                   update({ character: null });
                   onRefresh();
                 }}
-              />
+              />}
               <small>Real corpus samples for training.</small>
             </>
           ) : stage === 2 ? (
@@ -1168,7 +1174,7 @@ function TrainingStudio({
                     </small>
                   </label>
                 </div>
-                <details>
+                {mode === "advanced" && <details open>
                   <summary>Advanced settings</summary>
                   <div className="fields">
                     <label className="field">
@@ -1305,7 +1311,7 @@ function TrainingStudio({
                       </small>
                     </label>
                   </div>
-                </details>
+                </details>}
                 {gpu && (
                   <label className="field">
                     <span>GPU time limit</span>
@@ -1526,7 +1532,7 @@ function TrainingStudio({
               share of stored text.
             </p>
           </aside>
-          {stage === 1 && (
+          {stage === 1 && mode === "advanced" && (
             <details className="panel">
               <summary>
                 Chinchilla · {fmt(scaleParameters / 1e6, 1)}M →{" "}
@@ -1645,6 +1651,7 @@ function TrainingStudio({
           )}
         </div>
       </div>
+      </>}
       {preview && (
         <StudioDatasetReader
           key={preview.id}

@@ -1,0 +1,13 @@
+.studio-entry { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: 24px 0 28px; }
+.studio-entry-option { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; text-align: left; padding: 22px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper, #fffdf9); color: inherit; font: inherit; cursor: pointer; }
+.studio-entry-option strong { font-size: 24px; line-height: 1.2; }
+.studio-entry-option > span:not(.eyebrow) { line-height: 1.5; }
+.studio-entry-option[aria-pressed="true"] { border-color: #963c20; box-shadow: inset 0 0 0 1px #963c20; background: #fbf1e9; }
+.studio-entry-agent { border-color: #963c20; }
+.studio-entry-action { margin-top: auto; padding-top: 8px; color: #963c20; font-weight: 600; }
+.studio-entry-option:focus-visible { outline: 3px solid #963c20; outline-offset: 3px; }
+#workspace > .recipe-preset { padding: 0 0 28px; margin: 0 0 28px; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; }
+.studio-agent-panel { max-width: 100%; }
+.studio-agent-instructions { box-sizing: border-box; width: 100%; padding: 16px; font: 14px/1.6 monospace; border: 1px solid var(--line); border-radius: 6px; resize: vertical; }
+.studio-agent-paths { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; margin: 28px 0; padding-top: 12px; border-top: 1px solid var(--line); }
+@media (max-width: 800px) { .studio-entry, .studio-agent-paths { grid-template-columns: 1fr; } .studio-entry-option { padding: 18px; } }

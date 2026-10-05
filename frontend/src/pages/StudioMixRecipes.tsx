@@ -41,7 +41,7 @@ export function StudioMixRecipes({ datasets, onImport, onApply, onImported }: {
     setPremixJobId(undefined);
   }, [job]);
   return (
-    <section className="panel recipe-preset" aria-labelledby="ivme-mix-title">
+    <section className="recipe-preset" aria-labelledby="ivme-mix-title">
       <div className="eyebrow">Dataset recipe</div>
       <h2 id="ivme-mix-title">Ivme v3 · English</h2>
       <p className="muted">Educational web, general web, encyclopedic text, math and stories. Import the six sources, then apply their exact shares.</p>
