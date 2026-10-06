@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     api_url: str = "http://localhost:8000"
     spool_dir: Path = Path("~/.fabryka-track/spool").expanduser()
     artifact_dir: Path = Path("./artifacts")
+    dataset_storage_enabled: bool = True
     runner_image: str = "dawidmkrk/dmpod-gpt:1.0"
     runpod_api_key: str | None = None
     runpod_gpu_type: str = "NVIDIA RTX A5000"
