@@ -188,3 +188,39 @@ def test_public_note_is_owner_only_plain_text_and_shown_only_with_public_board_s
         assert 'board/eff' in shown['metrics']
     owner_view = client.get('/api/runs/' + rid).json()
     assert owner_view['note'] == 'private owner note'
+
+
+def test_selected_metrics_require_owner_opt_in_and_can_be_revoked(client):
+    rid = str(uuid4())
+    assert client.post('/api/events', json={'events': [
+        event('run.init', {'run_id': rid, 'project': 'Visibility', 'name': 'SDK', 'config': {'secret': 'hidden'}}),
+        event('run.metrics', {'run_id': rid, 'step': 10, 'metrics': {
+            'system/gpu0/utilization': 99., 'system/gpu0/private': 42., 'private/diagnostic': 1.}}),
+    ]}).status_code == 200
+    path = f'/api/runs/{rid}/attributes/visibility/public_metrics'
+    with TestClient(app, headers={'X-Track-Request': '1'}) as anonymous:
+        assert anonymous.get('/api/runs/' + rid).json()['metrics'] == {}
+        assert anonymous.put(path, json={'value': ['system/gpu0/utilization']}).status_code in (401, 403)
+        with TestClient(app, headers={'X-Track-Request': '1'}) as stranger:
+            sign_in(stranger, 'metrics-stranger')
+            assert stranger.put(path, json={'value': ['private/diagnostic']}).status_code in (403, 404)
+            assert stranger.post('/api/events', json={'events': [event('run.attribute', {
+                'run_id': rid, 'path': 'visibility/public_metrics', 'value': ['private/diagnostic']})]}).status_code in (403, 404)
+        # SDK event writes use the same validation and visibility as HTTP attributes.
+        assert client.post('/api/events', json={'events': [event('run.attribute', {
+            'run_id': rid, 'path': 'visibility/public_metrics', 'value': ['system/gpu0/utilization']})]}).status_code == 200
+        public = anonymous.get('/api/runs/' + rid).json()
+        assert set(public['metrics']) == {'system/gpu0/utilization'}
+        assert 'hidden' not in str(public) and public['logs'] == [] and public['artifacts'] == []
+        assert client.put(path, json={'value': []}).status_code == 200
+        assert anonymous.get('/api/runs/' + rid).json()['metrics'] == {}
+
+
+@pytest.mark.parametrize('value', [True, 'system/gpu0', ['system/*'], [''], ['../secret'], [42],
+                                 ['x'] * 101, {'nested': ['system/gpu0/utilization']}])
+def test_public_metric_selection_rejects_invalid_values_through_parent_attributes(client, value):
+    rid = str(uuid4())
+    assert client.post('/api/events', json={'events': [event('run.init', {
+        'run_id': rid, 'project': 'Visibility', 'name': 'Validation'})]}).status_code == 200
+    assert client.put(f'/api/runs/{rid}/attributes/visibility',
+                      json={'value': {'public_metrics': value}}).status_code == 422

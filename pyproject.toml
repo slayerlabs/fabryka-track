@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "fabryka"
-version = "0.3.0"
+version = "0.3.1.dev1"
 description = "Fabryka SaaS experiment tracking SDK and self-hosted tracking server"
 readme = "README.sdk.md"
 license = {text = "MIT"}
@@ -36,6 +36,6 @@ fabryka-goal-engine = "fabryka_track.goal_engine:main"
 packages = ["src/fabryka"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests", "sdk_tests"]
 addopts = "-q"
 pythonpath = ["src"]

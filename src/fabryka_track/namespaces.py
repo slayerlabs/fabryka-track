@@ -41,6 +41,18 @@ PUBLIC_BOARD_ATTRIBUTE = 'visibility/public_board_metrics'
 # Shown in the public read-only view only while visibility/public_board_metrics is true; plain text, ≤300 chars.
 PUBLIC_NOTE_ATTRIBUTE = 'visibility/public_note'
 PUBLIC_NOTE_MAX_CHARS = 300
+PUBLIC_METRICS_ATTRIBUTE = 'visibility/public_metrics'
+
+
+def public_metric_paths(value):
+    """An exact, bounded owner opt-in; never interpret prefixes or wildcards."""
+    if not isinstance(value, list) or len(value) > 100:
+        raise HTTPException(422, 'visibility/public_metrics must list at most 100 exact series paths.')
+    for path in value:
+        checked_path(path)
+        if '*' in path:
+            raise HTTPException(422, 'Public metric paths must be exact; wildcards are not supported.')
+    return set(value)
 
 
 def set_attribute(session,run,path,value):
@@ -61,6 +73,10 @@ def set_attribute(session,run,path,value):
     flatten(path,value)
     if len(leaves)>2000:raise HTTPException(413,'Assign at most 2000 attribute leaves at once.')
     for key,leaf in leaves:
+        if key==PUBLIC_METRICS_ATTRIBUTE:
+            public_metric_paths(leaf)
+        elif key.startswith(PUBLIC_METRICS_ATTRIBUTE+'/'):
+            raise HTTPException(422, 'visibility/public_metrics must be a list of exact series paths.')
         if (key==PUBLIC_NOTE_ATTRIBUTE or key.startswith(PUBLIC_NOTE_ATTRIBUTE+'/')) and not (
                 key==PUBLIC_NOTE_ATTRIBUTE and isinstance(leaf,str) and len(leaf)<=PUBLIC_NOTE_MAX_CHARS):
             raise HTTPException(422,f'{PUBLIC_NOTE_ATTRIBUTE} must be plain text of at most {PUBLIC_NOTE_MAX_CHARS} characters.')
