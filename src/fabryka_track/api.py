@@ -17,7 +17,7 @@ from .huggingface_auth import router as huggingface_router
 from .gpu_training import router as gpu_router, start_supervisor, stop_supervisor, status as gpu_status
 from .database import create_tables, session_scope
 from .models import AgentGoal, Artifact, BenchmarkEvaluation, Checkpoint, GoalEvent, GPUJob, IngestedEvent, Metric, Project, Run, RunLog, RunArtifactLink, RunAttribute
-from .namespaces import router as namespace_router, set_attribute, append_series, checked_path, PUBLIC_BOARD_ATTRIBUTE, PUBLIC_NOTE_ATTRIBUTE
+from .namespaces import router as namespace_router, set_attribute, append_series, checked_path, PUBLIC_BOARD_ATTRIBUTE, PUBLIC_NOTE_ATTRIBUTE, PUBLIC_METRICS_ATTRIBUTE, public_metric_paths
 from .schemas import EventBatch, LogInput, Notes
 from .settings import settings
 from .training import router as training_router, start_worker, stop_worker
@@ -169,6 +169,11 @@ def run_detail(run_id: str, session: Session = Depends(db), user=Depends(current
                 point['timestamp'] = None
                 point['tokens'] = token_steps.get(point['step'])
     if not owner:
+        public_metrics = session.get(RunAttribute, (run_id, PUBLIC_METRICS_ATTRIBUTE))
+        try:
+            extra_public_metrics = public_metric_paths(public_metrics.value) if public_metrics else set()
+        except HTTPException:
+            extra_public_metrics = set()  # Invalid legacy attributes never broaden visibility.
         # Evaluation series (board/*) stay owner-only unless the run's owner opts in for this run.
         public_board = session.get(RunAttribute, (run_id, PUBLIC_BOARD_ATTRIBUTE))
         public_board = bool(public_board and public_board.value is True)
@@ -195,7 +200,7 @@ def run_detail(run_id: str, session: Session = Depends(db), user=Depends(current
                             'optimizer/gradient_norm', 'optimizer/gradient_norm_after_clip',
                             'optimizer/gradient_clip_threshold', 'optimizer/gradient_clipped',
                             'grad_norm', 'train/grad_norm', 'gradient_norm') or
-                            (public_board and k.startswith('board/')) or
+                            k in extra_public_metrics or (public_board and k.startswith('board/')) or
                             (item.metadata_.get('engine') == 'external-training' and k in PUBLIC_METRICS)}}
     logs = session.scalars(select(RunLog).where(RunLog.run_id == run_id).order_by(RunLog.timestamp)).all()
     artifacts = session.scalars(select(Artifact).where(Artifact.run_id == run_id)).all()

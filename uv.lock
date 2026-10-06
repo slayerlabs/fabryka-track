@@ -827,7 +827,7 @@ wheels = [
 
 [[package]]
 name = "fabryka"
-version = "0.3.0"
+version = "0.3.1.dev1"
 source = { editable = "." }
 dependencies = [
     { name = "httpx" },
@@ -863,8 +863,16 @@ server = [
     { name = "uvicorn" },
 ]
 test = [
+    { name = "datasets" },
+    { name = "fastapi" },
+    { name = "pydantic-settings" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
+    { name = "python-multipart" },
+    { name = "safetensors" },
+    { name = "sqlalchemy" },
+    { name = "tiktoken" },
+    { name = "uvicorn" },
 ]
 
 [package.metadata]
@@ -872,7 +880,9 @@ requires-dist = [
     { name = "argon2-cffi", marker = "extra == 'server'", specifier = ">=23.1" },
     { name = "boto3", marker = "extra == 'r2'", specifier = ">=1.35" },
     { name = "datasets", marker = "extra == 'server'", specifier = ">=4,<5" },
+    { name = "datasets", marker = "extra == 'test'", specifier = ">=4,<5" },
     { name = "fastapi", marker = "extra == 'server'", specifier = ">=0.115" },
+    { name = "fastapi", marker = "extra == 'test'", specifier = ">=0.115" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "huggingface-hub", marker = "extra == 'server'", specifier = ">=1.0,<2" },
     { name = "lm-eval", marker = "extra == 'eval'", specifier = "==0.4.13" },
@@ -880,14 +890,20 @@ requires-dist = [
     { name = "psycopg", extras = ["binary"], marker = "extra == 'postgres'", specifier = ">=3.2" },
     { name = "pyarrow", marker = "extra == 'corpus'", specifier = ">=15" },
     { name = "pydantic-settings", marker = "extra == 'server'", specifier = ">=2.5" },
+    { name = "pydantic-settings", marker = "extra == 'test'", specifier = ">=2.5" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=8" },
     { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=0.24" },
     { name = "python-multipart", marker = "extra == 'server'", specifier = ">=0.0.12" },
+    { name = "python-multipart", marker = "extra == 'test'", specifier = ">=0.0.12" },
     { name = "safetensors", marker = "extra == 'server'", specifier = ">=0.4" },
+    { name = "safetensors", marker = "extra == 'test'", specifier = ">=0.4" },
     { name = "sqlalchemy", marker = "extra == 'server'", specifier = ">=2.0" },
+    { name = "sqlalchemy", marker = "extra == 'test'", specifier = ">=2.0" },
     { name = "tiktoken", marker = "extra == 'server'", specifier = ">=0.9,<1" },
+    { name = "tiktoken", marker = "extra == 'test'", specifier = ">=0.9,<1" },
     { name = "torch", marker = "extra == 'server'", specifier = ">=2.4" },
     { name = "uvicorn", marker = "extra == 'server'", specifier = ">=0.30" },
+    { name = "uvicorn", marker = "extra == 'test'", specifier = ">=0.30" },
 ]
 provides-extras = ["server", "corpus", "postgres", "r2", "test", "eval"]
 
