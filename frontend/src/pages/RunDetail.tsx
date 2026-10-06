@@ -95,7 +95,7 @@ function RunWorkspace({ id }: { id: string }) {
         : latest(r, "val/perplexity"),
     ],
     [
-      external ? "Tokenizer tokens / sec" : "Byte tokens / sec",
+      external ? "Tokenizer tokens / sec" : local ? "Byte tokens / sec" : "Tokens / sec",
       latest(r, "throughput/tokens_sec"),
     ],
   ];
@@ -189,7 +189,7 @@ function RunWorkspace({ id }: { id: string }) {
                   (r.config.compute === "runpod"
                     ? " · RunPod GPU · "
                     : " · Local CPU · ")
-                : ""}
+                : `${r.config.model ? model + ' · ' : ''}${r.config.compute ? r.config.compute + ' · ' : ''}`}
             {new Date(r.started_at).toLocaleString()}
           </p>
           {r.public_note && <p className="muted public-note">{r.public_note}</p>}
@@ -369,7 +369,9 @@ function RunWorkspace({ id }: { id: string }) {
         <p className="muted" style={{ fontSize: 12, marginTop: 15 }}>
           {external
             ? "Loss is measured per tokenizer token. Source events have no timestamps; use tokens or steps to inspect the history. Throughput measures updates and excludes checkpoint overhead."
-            : "Lower loss and perplexity mean better next-byte predictions. Compare runs with the same validation data."}{" "}
+            : local
+              ? "Lower loss and perplexity mean better next-byte predictions. Compare runs with the same validation data."
+              : "Compare loss and perplexity only for runs with the same tokenizer and validation data."}{" "}
           {active && "Refreshes every 2 seconds."}
         </p>
       </div>

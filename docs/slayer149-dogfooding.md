@@ -54,7 +54,8 @@ requires a complete final checkpoint and all three final evaluation files.
 Fixed in this change: startup spool recovery for a stable run ID, waiting for
 in-flight requests, retaining failed artifact uploads, artifact namespace
 forwarding, explicit observer close, source-time/idempotent metric backfills,
-and owner-selected public metric paths.
+owner-selected public metric paths, and removing byte-token/next-byte claims
+from generic SDK runs while displaying their declared model and compute.
 
 Remaining product work, based on this experiment:
 
