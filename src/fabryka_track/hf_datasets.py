@@ -20,7 +20,7 @@ from sqlalchemy import select
 from .accounts import require_user
 from .database import SessionLocal, session_scope
 from .models import Dataset, DatasetImport
-from .dataset_storage import dataset_path
+from .dataset_storage import dataset_path, require_dataset_storage
 from .settings import settings
 
 router = APIRouter(prefix='/api/hf-datasets')
@@ -241,6 +241,7 @@ def imports(user=Depends(require_user), session=Depends(session_scope)):
 
 @router.post('/imports', status_code=202)
 def start_import(body: ImportSpec, user=Depends(require_user), session=Depends(session_scope)):
+    require_dataset_storage()
     if POOL is None: raise HTTPException(503, 'Dataset importer is unavailable.')
     try: body = pin(body)
     except Exception as exc: raise HTTPException(422, public_error(exc)) from exc
@@ -311,6 +312,7 @@ class IvmeMixSpec(BaseModel):
 
 @router.post('/ivme-mix', status_code=202)
 def start_ivme_mix(body: IvmeMixSpec, user=Depends(require_user), session=Depends(session_scope)):
+    require_dataset_storage()
     if POOL is None: raise HTTPException(503, 'Dataset importer is unavailable.')
     from .gpu_training import PRESETS
     # Chinchilla-optimal budget (20 tokens/parameter), same formula as training.py's plan_training().
@@ -403,6 +405,9 @@ def run_ivme_mix(job_id):
 
 def start_importer():
     global POOL
+    if not settings.dataset_storage_enabled:
+        POOL = None
+        return
     STOP.clear()
     with SessionLocal() as db:
         for job in db.scalars(select(DatasetImport).where(DatasetImport.state.in_(ACTIVE))):

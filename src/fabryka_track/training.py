@@ -25,7 +25,7 @@ from .database import SessionLocal, session_scope
 from .models import Account, Artifact, Checkpoint, Dataset, Metric, Project, Run, RunLog, RunAttribute
 from .settings import settings
 from .lr_schedule import learning_rate_at
-from .dataset_storage import content_response, content_bytes, dataset_path
+from .dataset_storage import content_response, content_bytes, dataset_path, require_dataset_storage, require_dataset_content
 
 router = APIRouter(prefix="/api")
 executor = None
@@ -75,6 +75,7 @@ def dataset_content(dataset_id: str, preview: bool = False, session=Depends(sess
     dataset = session.get(Dataset, dataset_id)
     if not dataset or (not dataset.example and dataset.owner_id != user.id):
         raise HTTPException(404, "Dataset not found")
+    require_dataset_content(dataset)
     if preview:
         if (dataset.source or {}).get("storage") == "file":
             with dataset_path(dataset).open("rb") as source: raw = source.read(2000000)
@@ -113,6 +114,7 @@ def datasets(session=Depends(session_scope), user=Depends(require_user)):
 
 @router.post("/datasets", status_code=201)
 async def upload_dataset(file: UploadFile = File(...), session=Depends(session_scope), user=Depends(require_user)):
+    require_dataset_storage()
     raw = await file.read(2_000_001)
     if len(raw) > 2_000_000:
         raise HTTPException(413, "Use a text file smaller than 2 MB for local training.")
@@ -236,6 +238,7 @@ def launch(body: TrainingInput, session=Depends(session_scope), user=Depends(req
             d = session.get(Dataset, item.dataset_id)
             if not d or (not d.example and d.owner_id != user.id):
                 raise HTTPException(422, "A selected dataset no longer exists.")
+            require_dataset_content(d)
             mix.append({**describe(d), "weight": item.weight})
         if body.compute == "cpu" and sum(d["bytes"] for d in mix) > 100000000:
             raise HTTPException(422, "Datasets above 100 MB require GPU compute. Select RunPod GPU or a smaller sample.")
