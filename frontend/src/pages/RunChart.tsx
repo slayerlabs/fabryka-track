@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
+import { request } from "../provider";
 import { fmt, type Point } from "./RunData";
 
 export const palette = [
@@ -19,55 +20,34 @@ export type Series = {
   color?: string;
   points: Point[];
 };
+type Axis = "step" | "tokens" | "elapsed";
+type Scale = "linear" | "log";
+type Bounds = [number, number];
+type Viewport = { xlim?: Bounds; ylim?: Bounds };
 type Trace = {
+  name: string;
+  color: string;
   x: number[];
   y: number[];
-  customdata: number[][];
-  name: string;
-  line: { color: string; width: number };
-  visible: boolean;
-  hoverinfo: string;
-  [key: string]: unknown;
+  points: Point[];
+  alpha: number;
+  raw?: boolean;
 };
-type HoverPoint = { x: number; y: number; customdata?: number[]; data: Trace };
-type HoverEvent = { points: HoverPoint[]; event?: Event };
-type Canvas = HTMLDivElement & {
-  on?: (name: string, callback: (event: HoverEvent) => void) => void;
-  removeListener?: (
-    name: string,
-    callback: (event: HoverEvent) => void,
-  ) => void;
+type ImageFrame = {
+  image: string;
+  axes: [number, number, number, number];
+  xlim: Bounds;
+  ylim: Bounds;
+  traces: Trace[];
+  scale: Scale;
 };
-type PlotlyAPI = {
-  react: (
-    canvas: HTMLElement,
-    traces: Trace[],
-    layout: Record<string, unknown>,
-    config: Record<string, unknown>,
-  ) => Promise<void>;
-  purge: (canvas: HTMLElement) => void;
-  downloadImage: (
-    canvas: HTMLElement,
-    options: Record<string, unknown>,
-  ) => Promise<void>;
-  Plots: { resize: (canvas: HTMLElement) => void };
-  Fx: {
-    hover: (
-      canvas: HTMLElement,
-      point: { xval: number },
-      axes: string[],
-    ) => void;
-    unhover: (canvas: HTMLElement) => void;
-  };
+type Hover = { name: string; color: string; value: number; point: Point };
+type Drag = {
+  start: [number, number];
+  end: [number, number];
+  mode: string;
+  frame: ImageFrame;
 };
-// The application loads the local Plotly bundle before mounting React.
-const plotlyWindow = window as unknown as { Plotly: PlotlyAPI };
-const plotly = () => plotlyWindow.Plotly;
-const chartPeers = new Set<{
-  canvas: Canvas;
-  sync: (x: number) => void;
-  clear: () => void;
-}>();
 const labels: Record<string, string> = {
   "throughput/tokens_sec": "Tokens / sec",
   "training/tokens_seen": "Training tokens",
@@ -79,15 +59,18 @@ const labels: Record<string, string> = {
   "optimizer/gradient_norm_after_clip": "Gradient norm (after clipping)",
   "optimizer/gradient_clip_threshold": "Gradient clipping threshold",
   "optimizer/gradient_clipped": "Gradient clipped (0 / 1)",
-  "grad_norm": "Gradient norm",
+  grad_norm: "Gradient norm",
   "train/grad_norm": "Gradient norm",
-  "gradient_norm": "Gradient norm",
+  gradient_norm: "Gradient norm",
   "checkpoint/tokens": "Checkpoint tokens",
   "checkpoint/step": "Checkpoint step",
 };
 const emptyHidden = new Set<string>();
-// Series with at most this many points draw markers on each measurement.
-const SPARSE_POINTS = 60;
+const transformY = (value: number, scale: Scale) =>
+  scale === "log" ? Math.log10(value) : value;
+const inverseY = (value: number, scale: Scale) =>
+  scale === "log" ? 10 ** value : value;
+
 export function RunChart({
   series,
   range = 0,
@@ -97,264 +80,264 @@ export function RunChart({
   range?: number;
   hidden?: Set<string>;
 }) {
-  const canvas = useRef<Canvas>(null);
   const root = useRef<HTMLDivElement>(null);
+  const canvas = useRef<HTMLDivElement>(null);
   const allPoints = series.flatMap((s) => s.points);
-  const [axis, setAxis] = useState(
+  const [axis, setAxis] = useState<Axis>(
     allPoints.length && allPoints.every((p) => Number.isFinite(p.tokens))
       ? "tokens"
       : "step",
   );
-  const [scale, setScale] = useState(
+  const [scale, setScale] = useState<Scale>(
     series.length === 1 && /perplexity/i.test(series[0].name)
       ? "log"
       : "linear",
   );
   const [smooth, setSmooth] = useState(0);
-  const [drag, setDrag] = useState("zoom");
-  const [reset, setReset] = useState(0);
+  const [mode, setMode] = useState("zoom");
   const [expanded, setExpanded] = useState(false);
   const [settings, setSettings] = useState(false);
   const [muted, setMuted] = useState(new Set<string>());
-  const [hover, setHover] = useState<HoverPoint[]>([]);
+  const [viewport, setViewport] = useState<Viewport>({});
+  const [size, setSize] = useState({ width: 500, height: 285 });
+  const [inView, setInView] = useState(false);
+  const [frame, setFrame] = useState<ImageFrame>();
+  const [hover, setHover] = useState<Hover[]>([]);
+  const [drag, setDrag] = useState<Drag>();
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => setInView(entries.some((e) => e.isIntersecting)),
+      { rootMargin: "300px" },
+    );
+    observer.observe(root.current!);
+    return () => observer.disconnect();
+  }, []);
+  useEffect(() => {
+    const observer = new ResizeObserver((entries) => {
+      const box = entries[0].contentRect;
+      if (box.width && box.height)
+        setSize({
+          width: Math.max(240, Math.min(1600, Math.round(box.width))),
+          height: Math.max(200, Math.min(900, Math.round(box.height))),
+        });
+    });
+    observer.observe(canvas.current!);
+    return () => observer.disconnect();
+  }, []);
+  useEffect(() => {
+    setViewport({});
+    setHover([]);
+  }, [axis, scale, range]);
   const traces = useMemo(() => {
+    const stamps = series
+      .flatMap((s) =>
+        s.points.map((p) => (p.timestamp ? Date.parse(p.timestamp) : NaN)),
+      )
+      .filter(Number.isFinite);
+    const origin = stamps.length ? Math.min(...stamps) : 0;
     const output: Trace[] = [];
-    for (const [index, s] of series.entries()) {
+    series.forEach((s, index) => {
+      if (hidden.has(s.id || s.name) || muted.has(s.id || s.name)) return;
       const points = s.points.filter(
         (p) => Number.isFinite(p.value) && (scale !== "log" || p.value > 0),
       );
-      const origin = s.points.find((p) => p.timestamp)?.timestamp;
       const x = points.map((p) =>
         axis === "tokens"
           ? (p.tokens ?? p.step)
-          : axis === "elapsed" && origin && p.timestamp
-            ? (Date.parse(p.timestamp) - Date.parse(origin)) / 1000
+          : axis === "elapsed" && p.timestamp
+            ? (Date.parse(p.timestamp) - origin) / 1000
             : p.step,
       );
+      const color = s.color || palette[index % palette.length];
       let average: number | undefined;
-      const raw = points.map((p) => p.value);
-      const y = raw.map(
-        (v) =>
+      const y = points.map(
+        (p) =>
           (average =
-            average === undefined ? v : smooth * average + (1 - smooth) * v),
+            average === undefined
+              ? p.value
+              : smooth * average + (1 - smooth) * p.value),
       );
-      const key = s.id || s.name;
-      // Plotly interpolates trace UIDs into CSS selectors during updates/purge.
-      const uid = key.replace(
-        /[^a-zA-Z0-9-]/g,
-        (char) => `_${char.charCodeAt(0).toString(16)}_`,
-      );
-      const base: Trace = {
-        type: "scatter",
-        // Sparse series (e.g. evaluations every 20k steps) show their measured points, so a line
-        // starting at the first evaluation is not read as a value at step 0.
-        mode:
-          points.length === 1
-            ? "markers"
-            : points.length <= SPARSE_POINTS
-              ? "lines+markers"
-              : "lines",
-        x,
-        y,
-        customdata: points.map((p) => [p.step, p.value]),
-        name: labels[s.name] || s.name,
-        legendgroup: key,
-        line: { color: s.color || palette[index % palette.length], width: 1.8 },
-        marker: { color: s.color || palette[index % palette.length], size: 5 },
-        visible: !hidden.has(key) && !muted.has(key),
-        hoverinfo: "none",
-        showlegend: false,
-      };
       if (smooth)
         output.push({
-          ...base,
-          y: raw,
-          uid: `raw-${uid}`,
-          opacity: 0.17,
-          hoverinfo: "skip",
+          name: labels[s.name] || s.name,
+          color,
+          x,
+          y: points.map((p) => p.value),
+          points,
+          alpha: 0.2,
+          raw: true,
         });
-      output.push({ ...base, uid: `series-${uid}` });
-    }
-    return output;
-  }, [series, scale, axis, smooth, hidden, muted]);
-  const latestState = useRef({ axis, traces });
-  latestState.current = { axis, traces };
-  useEffect(() => {
-    const el = canvas.current!;
-    let disposed = false;
-    const peer = {
-      canvas: el,
-      sync: (x: number) => {
-        if (
-          latestState.current.axis !== "step" ||
-          !root.current?.getClientRects().length
-        )
-          return;
-        plotly().Fx.hover(el, { xval: x }, ["xy"]);
-        setHover(
-          latestState.current.traces
-            .filter((t) => t.visible && t.hoverinfo !== "skip" && t.x.length)
-            .map((t) => {
-              const i = t.x.reduce(
-                (best, value, index) =>
-                  Math.abs(value - x) < Math.abs(t.x[best] - x) ? index : best,
-                0,
-              );
-              return {
-                x: t.x[i],
-                y: t.y[i],
-                data: t,
-                customdata: t.customdata[i],
-              };
-            }),
-        );
-      },
-      clear: () => {
-        setHover([]);
-        plotly().Fx.unhover(el);
-      },
-    };
-    chartPeers.add(peer);
-    const onHover = (event: HoverEvent) => {
-      const points = event.points.filter((p) => p.data.hoverinfo !== "skip");
-      setHover(points);
-      if (event.event && latestState.current.axis === "step" && points.length)
-        for (const other of chartPeers)
-          if (other !== peer) other.sync(points[0].x);
-    };
-    const onUnhover = () => setHover([]);
-    // Plotly attaches its event-emitter methods after its first render.
-    const attach = () => {
-      if (disposed) return;
-      if (el.on) {
-        el.on("plotly_hover", onHover);
-        el.on("plotly_unhover", onUnhover);
-      } else frame = requestAnimationFrame(attach);
-    };
-    let frame = requestAnimationFrame(attach);
-    const observer = new ResizeObserver(() => {
-      if (el.on && el.getClientRects().length) plotly().Plots.resize(el);
-    });
-    observer.observe(el);
-    return () => {
-      disposed = true;
-      cancelAnimationFrame(frame);
-      observer.disconnect();
-      chartPeers.delete(peer);
-      el.removeListener?.("plotly_hover", onHover);
-      el.removeListener?.("plotly_unhover", onUnhover);
-      plotly().purge(el);
-    };
-  }, []);
-  useEffect(() => {
-    const el = canvas.current!;
-    let cancelled = false;
-    const xaxis: Record<string, unknown> = {
-      title: {
-        text:
-          axis === "tokens"
-            ? "Training tokens"
-            : axis === "elapsed"
-              ? "Elapsed time · seconds"
-              : "Step",
-      },
-      gridcolor: "#d6dfd4",
-      zeroline: false,
-      // Steps, tokens and elapsed time start at 0; keep the origin visible so the gap before the
-      // first measurement is shown instead of the first point sitting on the left edge.
-      rangemode: "tozero",
-      showline: true,
-      linecolor: "#d6dfd4",
-      nticks: 6,
-      exponentformat: "SI",
-      showspikes: true,
-      spikemode: "across",
-      spikesnap: "cursor",
-      spikethickness: 1,
-      spikedash: "dot",
-      spikecolor: "#78828b",
-    };
-    const yaxis: Record<string, unknown> = {
-      type: scale,
-      gridcolor: "#d6dfd4",
-      zeroline: false,
-      nticks: 5,
-      exponentformat: "SI",
-      automargin: true,
-    };
-    if (range) {
-      let xmax = -Infinity;
-      for (const t of traces)
-        if (t.visible) for (const x of t.x) xmax = Math.max(xmax, x);
-      const xmin = xmax * range;
-      const ys = traces
-        .filter((t) => t.visible)
-        .flatMap((t) => t.y.filter((_, i) => t.x[i] >= xmin))
-        .filter((y) => scale !== "log" || y > 0)
-        .map((y) => (scale === "log" ? Math.log10(y) : y));
-      if (ys.length) {
-        let min = Infinity,
-          max = -Infinity;
-        for (const y of ys) {
-          min = Math.min(min, y);
-          max = Math.max(max, y);
-        }
-        const pad = (max - min || Math.abs(max) * 0.1 || 1) * 0.12;
-        xaxis.range = [xmin, xmax];
-        xaxis.autorange = false;
-        yaxis.range = [min - pad, max + pad];
-        yaxis.autorange = false;
-      }
-    }
-    plotly()
-      .react(
-        el,
-        traces,
-        {
-          height: expanded ? Math.max(300, innerHeight * 0.9 - 170) : 285,
-          margin: { l: 52, r: 20, t: 20, b: 42 },
-          autosize: true,
-          paper_bgcolor: "#f8f9f5",
-          plot_bgcolor: "#f8f9f5",
-          font: {
-            family: getComputedStyle(el).fontFamily,
-            size: 11,
-            color: "#9298a1",
-          },
-          hovermode: "x",
-          dragmode: drag,
-          uirevision: `${axis}:${scale}:${reset}:${range}`,
-          showlegend: false,
-          xaxis,
-          yaxis,
-          annotations: traces.some((t) => t.x.length)
-            ? []
-            : [
-                {
-                  text: "Waiting for measurements",
-                  xref: "paper",
-                  yref: "paper",
-                  x: 0.5,
-                  y: 0.5,
-                  showarrow: false,
-                },
-              ],
-        },
-        {
-          responsive: true,
-          displaylogo: false,
-          scrollZoom: false,
-          displayModeBar: false,
-        },
-      )
-      .catch((e) => {
-        if (!cancelled) setError(String(e));
+      output.push({
+        name: labels[s.name] || s.name,
+        color,
+        x,
+        y,
+        points,
+        alpha: 1,
       });
+    });
+    return output;
+  }, [series, hidden, muted, axis, scale, smooth]);
+  const payload = JSON.stringify({
+    series: traces.map(({ name, color, x, y, alpha }) => ({
+      name,
+      color,
+      x,
+      y,
+      alpha,
+    })),
+    ...size,
+    axis,
+    scale,
+    skip: range,
+    ...viewport,
+  });
+  useEffect(() => {
+    if (!inView) return;
+    const abort = new AbortController();
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      setLoading(true);
+      setError("");
+      try {
+        let result: ImageFrame | undefined;
+        for (let attempt = 0; attempt < 6; attempt++) {
+          try {
+            result = await request<ImageFrame>("/api/charts/render", {
+              method: "POST",
+              body: payload,
+              signal: abort.signal,
+            });
+            break;
+          } catch (e) {
+            if (
+              (e as { statusCode?: number }).statusCode !== 429 ||
+              attempt === 5
+            )
+              throw e;
+            await new Promise((resolve) =>
+              setTimeout(resolve, 400 * (attempt + 1)),
+            );
+            abort.signal.throwIfAborted();
+          }
+        }
+        if (!cancelled && result) setFrame({ ...result, traces, scale });
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }, 180);
     return () => {
       cancelled = true;
+      clearTimeout(timer);
+      abort.abort();
     };
-  }, [traces, axis, scale, reset, range, expanded, drag]);
+    // The serialized payload stays equal between polls with unchanged measurements.
+  }, [payload, inView]);
+  function position(event: PointerEvent<HTMLDivElement>): [number, number] {
+    const box = canvas.current!.getBoundingClientRect();
+    return [
+      (event.clientX - box.left) / box.width,
+      (event.clientY - box.top) / box.height,
+    ];
+  }
+  function within(point: [number, number], image: ImageFrame) {
+    const [x, y, w, h] = image.axes;
+    return (
+      point[0] >= x && point[0] <= x + w && point[1] >= y && point[1] <= y + h
+    );
+  }
+  function coordinates(
+    point: [number, number],
+    image: ImageFrame,
+  ): [number, number] {
+    const [x, y, w, h] = image.axes;
+    const fractionX = Math.max(0, Math.min(1, (point[0] - x) / w));
+    const fractionY = Math.max(0, Math.min(1, (point[1] - y) / h));
+    const low = transformY(image.ylim[0], image.scale),
+      high = transformY(image.ylim[1], image.scale);
+    return [
+      image.xlim[0] + fractionX * (image.xlim[1] - image.xlim[0]),
+      inverseY(high - fractionY * (high - low), image.scale),
+    ];
+  }
+  function move(event: PointerEvent<HTMLDivElement>) {
+    const point = position(event);
+    if (drag) {
+      setDrag({ ...drag, end: point });
+      return;
+    }
+    if (!frame || !within(point, frame)) {
+      setHover([]);
+      return;
+    }
+    const [left, top, width, height] = frame.axes;
+    const low = transformY(frame.ylim[0], frame.scale),
+      high = transformY(frame.ylim[1], frame.scale);
+    const matches: Hover[] = [];
+    for (const t of frame.traces.filter((t) => !t.raw)) {
+      let best = -1,
+        distance = 40 ** 2;
+      t.x.forEach((x, i) => {
+        const px =
+          left +
+          ((x - frame.xlim[0]) / (frame.xlim[1] - frame.xlim[0])) * width;
+        const py =
+          top +
+          ((high - transformY(t.y[i], frame.scale)) / (high - low)) * height;
+        const d =
+          ((px - point[0]) * size.width) ** 2 +
+          ((py - point[1]) * size.height) ** 2;
+        if (d < distance) {
+          best = i;
+          distance = d;
+        }
+      });
+      if (best >= 0)
+        matches.push({
+          name: t.name,
+          color: t.color,
+          value: t.y[best],
+          point: t.points[best],
+        });
+    }
+    setHover(matches);
+  }
+  function end(event: PointerEvent<HTMLDivElement>) {
+    if (!drag) return;
+    const finish = position(event),
+      image = drag.frame;
+    const a = coordinates(drag.start, image),
+      b = coordinates(finish, image);
+    const horizontal = Math.abs(finish[0] - drag.start[0]) * size.width;
+    const vertical = Math.abs(finish[1] - drag.start[1]) * size.height;
+    if (
+      drag.mode === "pan"
+        ? Math.max(horizontal, vertical) > 4
+        : horizontal > 4 && vertical > 4
+    ) {
+      if (drag.mode === "zoom")
+        setViewport({
+          xlim: [Math.min(a[0], b[0]), Math.max(a[0], b[0])],
+          ylim: [Math.min(a[1], b[1]), Math.max(a[1], b[1])],
+        });
+      else {
+        const dx = a[0] - b[0],
+          dy = transformY(a[1], image.scale) - transformY(b[1], image.scale);
+        setViewport({
+          xlim: [image.xlim[0] + dx, image.xlim[1] + dx],
+          ylim: image.ylim.map((v) =>
+            inverseY(transformY(v, image.scale) + dy, image.scale),
+          ) as Bounds,
+        });
+      }
+    }
+    setDrag(undefined);
+    event.currentTarget.releasePointerCapture(event.pointerId);
+  }
   return (
     <div
       ref={root}
@@ -363,10 +346,8 @@ export function RunChart({
         if (e.key === "Escape") {
           setSettings(false);
           setExpanded(false);
+          setDrag(undefined);
         }
-      }}
-      onMouseLeave={() => {
-        for (const peer of chartPeers) peer.clear();
       }}
     >
       <div className="plot-toolbar">
@@ -378,23 +359,23 @@ export function RunChart({
           <button
             aria-label="Reset zoom"
             title="Reset zoom"
-            onClick={() => setReset((n) => n + 1)}
+            onClick={() => {
+              setViewport({});
+              setHover([]);
+            }}
           >
             ↺
           </button>
           <button
             aria-label="Download chart as PNG"
             title="Download PNG"
+            disabled={!frame}
             onClick={() => {
-              void plotly()
-                .downloadImage(canvas.current!, {
-                  format: "png",
-                  filename: "fabryka-metrics",
-                  width: 1400,
-                  height: 700,
-                  scale: 2,
-                })
-                .catch((e) => setError(String(e)));
+              if (!frame) return;
+              const link = document.createElement("a");
+              link.href = frame.image;
+              link.download = "fabryka-metrics.png";
+              link.click();
             }}
           >
             ↓
@@ -428,11 +409,11 @@ export function RunChart({
           </button>
         </div>
         <label>
-          X axis
+          X axis{" "}
           <select
             aria-label="X axis"
             value={axis}
-            onChange={(e) => setAxis(e.target.value)}
+            onChange={(e) => setAxis(e.target.value as Axis)}
           >
             <option value="step">Step</option>
             <option
@@ -448,22 +429,22 @@ export function RunChart({
           </select>
         </label>
         <label>
-          Y axis
+          Y axis{" "}
           <select
             aria-label="Y axis scale"
             value={scale}
-            onChange={(e) => setScale(e.target.value)}
+            onChange={(e) => setScale(e.target.value as Scale)}
           >
             <option value="linear">Linear</option>
             <option value="log">Logarithmic</option>
           </select>
         </label>
         <label>
-          Interaction
+          Interaction{" "}
           <select
             aria-label="Chart interaction"
-            value={drag}
-            onChange={(e) => setDrag(e.target.value)}
+            value={mode}
+            onChange={(e) => setMode(e.target.value)}
           >
             <option value="zoom">Box zoom</option>
             <option value="pan">Pan</option>
@@ -481,9 +462,6 @@ export function RunChart({
             onChange={(e) => setSmooth(Number(e.target.value))}
           />
         </label>
-        <small>
-          Exponential moving average. Raw measurements remain visible.
-        </small>
       </div>
       {error && (
         <p role="alert" className="error">
@@ -492,28 +470,67 @@ export function RunChart({
       )}
       <div
         ref={canvas}
-        className="plot-canvas"
+        className="plot-canvas matplotlib-canvas"
         role="img"
-        aria-label="Interactive training metrics"
-      />
+        aria-label="Training metrics rendered with Matplotlib"
+        style={{ cursor: mode === "pan" ? "grab" : "crosshair" }}
+        onPointerMove={move}
+        onPointerLeave={() => {
+          if (!drag) setHover([]);
+        }}
+        onPointerDown={(e) => {
+          if (e.button === 0 && frame && within(position(e), frame)) {
+            setDrag({ start: position(e), end: position(e), mode, frame });
+            setHover([]);
+            e.currentTarget.setPointerCapture(e.pointerId);
+          }
+        }}
+        onPointerUp={end}
+        onPointerCancel={() => setDrag(undefined)}
+        onDoubleClick={() => setViewport({})}
+      >
+        {frame && (
+          <img
+            src={frame.image}
+            alt="Recorded metric measurements"
+            draggable={false}
+          />
+        )}
+        {!frame && (
+          <span className="matplotlib-status">
+            {loading ? "Rendering chart…" : "Waiting for chart…"}
+          </span>
+        )}
+        {drag?.mode === "zoom" && (
+          <div
+            className="matplotlib-selection"
+            style={{
+              left: `${Math.min(drag.start[0], drag.end[0]) * 100}%`,
+              top: `${Math.min(drag.start[1], drag.end[1]) * 100}%`,
+              width: `${Math.abs(drag.start[0] - drag.end[0]) * 100}%`,
+              height: `${Math.abs(drag.start[1] - drag.end[1]) * 100}%`,
+            }}
+          />
+        )}
+      </div>
       <div className="plot-tooltip" hidden={!hover.length}>
         <div className="plot-tooltip-head">
-          STEP <b>{fmt(hover[0]?.customdata?.[0] ?? hover[0]?.x, 4)}</b>
+          STEP <b>{fmt(hover[0]?.point.step, 4)}</b>
           {smooth > 0 && <span>EMA · raw</span>}
         </div>
         {hover.map((p, i) => (
           <div key={i} className="plot-tooltip-row">
-            <i style={{ background: p.data.line.color }} />
-            <span>{p.data.name}</span>
-            <b>{fmt(p.y, 4)}</b>
-            {smooth > 0 && <small>{fmt(p.customdata?.[1], 4)}</small>}
+            <i style={{ background: p.color }} />
+            <span>{p.name}</span>
+            <b>{fmt(p.value, 4)}</b>
+            {smooth > 0 && <small>{fmt(p.point.value, 4)}</small>}
           </div>
         ))}
       </div>
       <div className="plot-legend">
         {series.map((s, i) => {
-          const key = s.id || s.name;
-          const off = hidden.has(key) || muted.has(key);
+          const key = s.id || s.name,
+            off = hidden.has(key) || muted.has(key);
           return (
             <button
               key={key}

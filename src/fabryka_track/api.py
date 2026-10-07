@@ -75,6 +75,8 @@ from .published_benchmarks import router as published_benchmarks_router
 app.include_router(published_benchmarks_router)
 from .model_board import router as model_board_router
 app.include_router(model_board_router)
+from .metric_charts import router as metric_charts_router
+app.include_router(metric_charts_router)
 
 
 @app.middleware("http")

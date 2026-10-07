@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useCustom } from "@refinedev/core";
 import { Link, useNavigate } from "react-router";
-import { MetricHelp } from "./BenchmarkHelp";
 import {
   colors,
   compact,
@@ -584,7 +583,6 @@ export function LeaderboardPage() {
               </details>
             ))
           )}
-          <MetricHelp />
           <p className="lb-footnote">
             Studio validation results are smoke tests. Benchmark labels identify
             separate evaluation suites; their scores should not be ranked
