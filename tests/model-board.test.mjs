@@ -2,12 +2,14 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   checkpointDetails,
+  enOverall,
   filterRows,
   hfLink,
   measuredByUs,
   rankRows,
   sizeBucket,
   sortRows,
+  wikiScore,
 } from "../frontend/src/pages/model-board-data.ts";
 const row = (run_id, { en = {}, pl = {}, ...extras } = {}) => ({
   run_id,
@@ -96,6 +98,43 @@ test("EN ranks by eff; PL ranks by eff-PL, rows without it follow unranked by Mu
     ["a", 2],
   ]);
   assert.deepEqual(ids(sortRows(rows, "pl_eff", "desc")), ["b", "a", "d", "c"]);
+});
+
+test("EN Overall follows the Glint formula and is null when any input is missing", () => {
+  const reference = row("gollem", {
+    en: { blimp: 79.09, arc_easy: 53.24, wiki_byte_ppl: 2.2538 },
+  });
+  assert.ok(Math.abs(enOverall(reference) - 76.3) < 0.01);
+  assert.equal(enOverall(row("x", { en: { blimp: 79, arc_easy: 53 } })), null);
+  assert.equal(enOverall(row("y", { en: { blimp: 79, wiki_byte_ppl: 2 } })), null);
+  assert.equal(enOverall(row("z", { en: { arc_easy: 53, wiki_byte_ppl: 2 } })), null);
+  assert.equal(wikiScore(500), 0);
+  assert.equal(wikiScore(5000), 0);
+  assert.equal(wikiScore(1.86), 100);
+  assert.equal(wikiScore(1.2), 100);
+});
+
+test("EN can rank by Overall instead of eff, with competition ranks; other categories ignore the axis", () => {
+  const wiki_byte_ppl = 2.2538;
+  const rows = [
+    row("a", { en: { eff: 70, blimp: 60, arc_easy: 40, wiki_byte_ppl }, pl: { eff: 5 } }),
+    row("b", { en: { eff: 60, blimp: 70, arc_easy: 50, wiki_byte_ppl }, pl: { eff: 9 } }),
+    row("c", { en: { eff: 50, blimp: 50, arc_easy: 70, wiki_byte_ppl } }),
+    row("d", { en: { eff: 40, blimp: 90 } }),
+  ];
+  assert.deepEqual([...rankRows(rows, "en")], [
+    ["a", 1],
+    ["b", 2],
+    ["c", 3],
+    ["d", 4],
+  ]);
+  assert.deepEqual([...rankRows(rows, "en", "overall")], [
+    ["b", 1],
+    ["c", 1],
+    ["a", 3],
+  ]);
+  assert.deepEqual(ids(sortRows(rows, "en_overall", "desc")), ["b", "c", "a", "d"]);
+  assert.deepEqual([...rankRows(rows, "pl", "overall")], [...rankRows(rows, "pl")]);
 });
 
 test("PL+EN ranks by combined and lists only rows the server put in plen", () => {

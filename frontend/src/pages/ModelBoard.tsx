@@ -4,13 +4,13 @@ import { Link, useNavigate } from "react-router";
 import { compact, format } from "./leaderboard-data";
 import {
   NATURAL_DIRECTION,
-  RANK_KEY,
   SIZE_BUCKETS,
   TRUST_LABELS,
   checkpointDetails,
   filterRows,
   hfLink,
   measuredByUs,
+  rankKey,
   rankRows,
   sizeBucket,
   sortRows,
@@ -20,6 +20,7 @@ import type {
   BoardRow,
   Category,
   Direction,
+  RankAxis,
   SizeKey,
   SortKey,
 } from "./model-board-data";
@@ -43,6 +44,12 @@ type Column = {
 const SCORE_COLUMNS: Record<Category, Column[]> = {
   en: [
     { key: "en_eff", label: "eff", note: "per scale revision", digits: 2 },
+    {
+      key: "en_overall",
+      label: "Overall",
+      note: "Glint, no size bonus",
+      digits: 2,
+    },
     { key: "arc_easy", label: "ARC-Easy", digits: 2 },
     { key: "blimp", label: "BLiMP", digits: 2 },
     {
@@ -86,6 +93,8 @@ const CATEGORY_NOTES: Record<Category, string> = {
   pl: "Ranked by eff-PL = (G + K + WS) / 3 × the same size multiplier as EN; our protocol, not official. G = MultiBLiMP-pl accuracy (length baseline ≈ 60 %: always picking the shorter sentence scores about 60 %), K = ARC-Easy-PL accuracy, WS = score from byte-PPL on a private held-out Polish text. Rows without eff-PL are listed below, unranked, by MultiBLiMP-pl.",
   plen: "Average of eff EN and eff-PL; favours bilingual models. Shown only for models with both.",
 };
+const EN_OVERALL_NOTE =
+  "Ranked by Overall = (BLiMP + ARC-Easy + WikiText score) / 3, the Glint Tiny-ML overall score without the size bonus, computed in the browser from the row's published values.";
 /** A cell carries the dagger when it is our measurement of an external model. */
 const daggered = (row: BoardRow, column: Column) =>
   !!column.dagger && measuredByUs(row) && sortValue(row, column.key) !== null;
@@ -93,6 +102,7 @@ const daggered = (row: BoardRow, column: Column) =>
 function BoardTable({
   rows,
   category,
+  rankedKey,
   columns,
   ranks,
   sort,
@@ -102,6 +112,7 @@ function BoardTable({
 }: {
   rows: BoardRow[];
   category: Category;
+  rankedKey: SortKey;
   columns: Column[];
   ranks: Map<string, number>;
   sort: { key: SortKey; direction: Direction };
@@ -214,7 +225,7 @@ function BoardTable({
                     (daggered(row, column) ? "†" : "");
                   return (
                     <td className="lb-number" key={column.key}>
-                      {column.key === RANK_KEY[category] ? (
+                      {column.key === rankedKey ? (
                         <strong>{text}</strong>
                       ) : (
                         text
@@ -256,9 +267,10 @@ export function ModelBoardPage() {
   const [category, setCategory] = useState<Category>("en");
   const [size, setSize] = useState<SizeKey>("all");
   const [hideReported, setHideReported] = useState(false);
+  const [axis, setAxis] = useState<RankAxis>("eff");
   const [sort, setSort] = useState<{ key: SortKey; direction: Direction }>({
-    key: RANK_KEY.en,
-    direction: NATURAL_DIRECTION[RANK_KEY.en],
+    key: rankKey("en"),
+    direction: NATURAL_DIRECTION[rankKey("en")],
   });
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const models = query.data?.data.models || [];
@@ -269,7 +281,8 @@ export function ModelBoardPage() {
   });
   const visible = filterRows(models, { category, size, hideReported });
   const rows = sortRows(visible, sort.key, sort.direction);
-  const ranks = rankRows(visible, category);
+  const ranks = rankRows(visible, category, axis);
+  const rankedKey = rankKey(category, axis);
   const columns = SCORE_COLUMNS[category];
   const showDagger = visible.some((row) =>
     columns.some((column) => daggered(row, column)),
@@ -277,8 +290,16 @@ export function ModelBoardPage() {
   const chooseCategory = (next: Category) => {
     setCategory(next);
     setSort({
-      key: RANK_KEY[next],
-      direction: NATURAL_DIRECTION[RANK_KEY[next]],
+      key: rankKey(next, axis),
+      direction: NATURAL_DIRECTION[rankKey(next, axis)],
+    });
+    setSelected(new Set());
+  };
+  const chooseAxis = (next: RankAxis) => {
+    setAxis(next);
+    setSort({
+      key: rankKey(category, next),
+      direction: NATURAL_DIRECTION[rankKey(category, next)],
     });
     setSelected(new Set());
   };
@@ -342,7 +363,7 @@ export function ModelBoardPage() {
             ))}
           </div>
           <p className="lb-group-note">
-            {CATEGORY_NOTES[category]}
+            {category === "en" && axis === "overall" ? EN_OVERALL_NOTE : CATEGORY_NOTES[category]}
           </p>
           <div className="mb-controls">
             <div className="mb-sizes" role="group" aria-label="Model size">
@@ -378,6 +399,23 @@ export function ModelBoardPage() {
               />
               Hide self-reported
             </label>
+            {category === "en" && (
+              <div className="mb-sizes" role="group" aria-label="Ranking">
+                Ranking:
+                <button
+                  aria-pressed={axis === "eff"}
+                  onClick={() => chooseAxis("eff")}
+                >
+                  eff
+                </button>
+                <button
+                  aria-pressed={axis === "overall"}
+                  onClick={() => chooseAxis("overall")}
+                >
+                  Overall
+                </button>
+              </div>
+            )}
           </div>
           <div className="lb-results-heading">
             <div>
@@ -424,6 +462,7 @@ export function ModelBoardPage() {
             <BoardTable
               rows={rows}
               category={category}
+              rankedKey={rankedKey}
               columns={columns}
               ranks={ranks}
               sort={sort}
