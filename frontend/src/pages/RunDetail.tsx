@@ -31,9 +31,9 @@ const metricNames: Record<string, string> = {
   "optimizer/gradient_norm_after_clip": "Gradient norm (after clipping)",
   "optimizer/gradient_clip_threshold": "Gradient clipping threshold",
   "optimizer/gradient_clipped": "Gradient clipped (0 / 1)",
-  "grad_norm": "Gradient norm",
+  grad_norm: "Gradient norm",
   "train/grad_norm": "Gradient norm",
-  "gradient_norm": "Gradient norm",
+  gradient_norm: "Gradient norm",
   "checkpoint/tokens": "Saved checkpoint · tokens",
   "checkpoint/step": "Saved checkpoint · step",
   "validation/bpb": "Validation bits per byte",
@@ -94,7 +94,11 @@ function RunWorkspace({ id }: { id: string }) {
         : latest(r, "val/perplexity"),
     ],
     [
-      external ? "Tokenizer tokens / sec" : local ? "Byte tokens / sec" : "Tokens / sec",
+      external
+        ? "Tokenizer tokens / sec"
+        : local
+          ? "Byte tokens / sec"
+          : "Tokens / sec",
       latest(r, "throughput/tokens_sec"),
     ],
   ];
@@ -188,10 +192,27 @@ function RunWorkspace({ id }: { id: string }) {
                   (r.config.compute === "runpod"
                     ? " · RunPod GPU · "
                     : " · Local CPU · ")
-                : `${r.config.model ? model + ' · ' : ''}${r.config.compute ? r.config.compute + ' · ' : ''}`}
+                : `${r.config.model ? model + " · " : ""}${r.config.compute ? r.config.compute + " · " : ""}`}
             {new Date(r.started_at).toLocaleString()}
           </p>
-          {r.public_note && <p className="muted public-note">{r.public_note}</p>}
+          {r.public_note && (
+            <p className="muted public-note">{r.public_note}</p>
+          )}
+          {r.history_import && (
+            <p className="muted">
+              <a
+                href={`https://huggingface.co/${r.history_import.repo_id}/tree/${r.history_import.revision}/reports/run`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Original training logs
+              </a>
+              {` · ${r.history_import.original_world_size} GPUs · through step ${r.history_import.resume_step.toLocaleString()} · continuation after that checkpoint.`}
+              {r.history_import.complete
+                ? " Historical measurement dates are unavailable."
+                : " Historical import in progress."}
+            </p>
+          )}
         </div>
         <span className={"badge " + r.state}>{r.state}</span>
       </div>
@@ -307,9 +328,7 @@ function RunWorkspace({ id }: { id: string }) {
         <div className="metric-explorer">
           <div>
             <h2>Metric explorer</h2>
-            <small>
-              Hover to inspect · drag to zoom
-            </small>
+            <small>Hover to inspect · drag to zoom</small>
           </div>
           <div className="explorer-controls">
             <input
@@ -340,7 +359,11 @@ function RunWorkspace({ id }: { id: string }) {
               hidden={!chart.title.toLowerCase().includes(filter.toLowerCase())}
             >
               <h3>{chart.title}</h3>
-              <RunChart series={chart.series} range={range} />
+              <RunChart
+                series={chart.series}
+                range={range}
+                resumeStep={r.history_import?.resume_step}
+              />
             </div>
           ))}
         </div>
@@ -384,7 +407,9 @@ function RunWorkspace({ id }: { id: string }) {
               className="secondary"
               disabled={action.pending || r.state === "stopping"}
               onClick={async () => {
-                if (await action.execute("/api/external-training/" + id + "/stop"))
+                if (
+                  await action.execute("/api/external-training/" + id + "/stop")
+                )
                   await query.refetch();
               }}
             >
@@ -434,7 +459,9 @@ function RunWorkspace({ id }: { id: string }) {
               onClick={async () => {
                 if (
                   await action.execute(
-                    "/api/runs/" + id + (r.archived ? "/unarchive" : "/archive"),
+                    "/api/runs/" +
+                      id +
+                      (r.archived ? "/unarchive" : "/archive"),
                   )
                 )
                   await query.refetch();
