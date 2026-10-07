@@ -89,6 +89,7 @@ export function RunChart({
   zeroLine = false,
   ylabel = "",
   precision = 4,
+  defaultHalfLife = 100e6,
 }: {
   series: Series[];
   range?: number;
@@ -98,6 +99,7 @@ export function RunChart({
   zeroLine?: boolean;
   ylabel?: string;
   precision?: number;
+  defaultHalfLife?: number;
 }) {
   const root = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLDivElement>(null);
@@ -129,7 +131,7 @@ export function RunChart({
   const smoothingLocked = series.every((s) => s.kind === "trend");
   const [smooth, setSmooth] = useState(rawDefault ? 0 : 0.9);
   const [halfLife, setHalfLife] = useState(
-    !rawDefault && tokensAvailable ? 100e6 : 0,
+    !rawDefault && tokensAvailable ? defaultHalfLife : 0,
   );
   const [mode, setMode] = useState("zoom");
   const [expanded, setExpanded] = useState(false);
