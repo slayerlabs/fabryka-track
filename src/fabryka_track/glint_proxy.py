@@ -36,19 +36,25 @@ def require_compatible(session, run_id, user):
 def checkpoint_rows(session, run_id):
     rows = session.scalars(select(RunAttribute).where(
         RunAttribute.run_id == run_id, RunAttribute.path.startswith(CHECKPOINT_PREFIX)))
-    found = []
+    # SDK attributes are stored as flattened leaves (for example
+    # checkpoints/29615/sha256), not as the original object assigned by the
+    # client. Reassemble each receipt from its path components.
+    receipts = {}
     for row in rows:
-        item = row.value
-        if not isinstance(item, dict) or item.get("storage") != "White":
+        parts = row.path.split("/")
+        if len(parts) != 3 or parts[0] != "checkpoints":
             continue
         try:
-            step = int(item.get("step"))
+            step = int(parts[1])
         except (TypeError, ValueError):
             continue
+        receipts.setdefault(step, {"step": step, "updated_at": row.updated_at})[parts[2]] = row.value
+    found = []
+    for item in receipts.values():
         sha = item.get("sha256")
-        if step >= 0 and isinstance(sha, str) and SHA256.fullmatch(sha):
-            found.append({"step": step, "sha256": sha, "tokens": item.get("tokens"),
-                          "bytes": item.get("bytes"), "updated_at": row.updated_at})
+        if (item.get("storage") == "White" and isinstance(sha, str)
+                and SHA256.fullmatch(sha)):
+            found.append({k: item.get(k) for k in ("step", "sha256", "tokens", "bytes", "updated_at")})
     return sorted(found, key=lambda item: item["step"])
 
 
