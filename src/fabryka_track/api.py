@@ -16,7 +16,7 @@ from .hf_publish import router as hf_publish_router, recover_uploads
 from .huggingface_auth import router as huggingface_router
 from .gpu_training import router as gpu_router, start_supervisor, stop_supervisor, status as gpu_status
 from .database import create_tables, session_scope
-from .models import AgentGoal, Artifact, BenchmarkEvaluation, Checkpoint, GoalEvent, GPUJob, IngestedEvent, Metric, Project, Run, RunLog, RunArtifactLink, RunAttribute, RunSDKToken
+from .models import AgentGoal, Artifact, BenchmarkEvaluation, Checkpoint, GlintProxyEvaluation, GoalEvent, GPUJob, IngestedEvent, Metric, Project, Run, RunLog, RunArtifactLink, RunAttribute, RunSDKToken
 from .namespaces import router as namespace_router, set_attribute, append_series, checked_path, PUBLIC_BOARD_ATTRIBUTE, PUBLIC_NOTE_ATTRIBUTE, PUBLIC_METRICS_ATTRIBUTE, public_metric_paths
 from .schemas import EventBatch, LogInput, Notes
 from .settings import settings
@@ -28,6 +28,7 @@ from .agents import router as agents_router
 from .external_training import router as external_training_router, PUBLIC_METRICS
 from .dashboard import router as dashboard_router
 from .white_benchmarks import router as white_router, start_worker as start_white, stop_worker as stop_white
+from .glint_proxy import router as glint_proxy_router
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
@@ -67,6 +68,7 @@ app.include_router(agents_router)
 app.include_router(external_training_router)
 app.include_router(dashboard_router)
 app.include_router(white_router)
+app.include_router(glint_proxy_router)
 from .generation import router as generation_router
 app.include_router(generation_router)
 from .benchmark_remote import router as benchmark_remote_router
@@ -272,7 +274,7 @@ def delete_run(run_id: str, session: Session = Depends(db), user=Depends(require
         session.execute(delete(GoalEvent).where(GoalEvent.goal_id.in_(goal_ids)))
         session.execute(delete(AgentGoal).where(AgentGoal.run_id == run_id))
     # RunArtifactLink and Checkpoint reference artifacts.id -> drop them before Artifact.
-    for model in (Metric, RunLog, RunAttribute, RunArtifactLink, Checkpoint, BenchmarkEvaluation, GPUJob, RunSDKToken):
+    for model in (Metric, RunLog, RunAttribute, RunArtifactLink, Checkpoint, BenchmarkEvaluation, GlintProxyEvaluation, GPUJob, RunSDKToken):
         session.execute(delete(model).where(model.run_id == run_id))
     session.execute(delete(Artifact).where(Artifact.run_id == run_id))
     session.execute(delete(Run).where(Run.id == run_id))
