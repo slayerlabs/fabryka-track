@@ -76,6 +76,7 @@ app.include_router(published_benchmarks_router)
 from .model_board import router as model_board_router
 app.include_router(model_board_router)
 from .metric_charts import router as metric_charts_router
+from .run_history import read_history
 app.include_router(metric_charts_router)
 
 
@@ -161,6 +162,9 @@ def run_detail(run_id: str, session: Session = Depends(db), user=Depends(current
     series: dict[str, list] = {}
     for key, step, timestamp, value in metrics:
         series.setdefault(key, []).append({"step": step, "timestamp": timestamp, "value": value})
+    history = read_history(session, run_id)
+    if history:
+        history.clear_unknown_timestamps(series)
     if item.metadata_.get('engine') == 'external-training':
         token_steps = {p['step']: p['value'] for p in series.get('training/tokens_seen', [])}
         token_steps.update({p['step']: p['value'] for p in series.get('checkpoint/tokens', [])})
@@ -190,7 +194,10 @@ def run_detail(run_id: str, session: Session = Depends(db), user=Depends(current
                       for d in item.config.get('mix', [])]
         result = item.metadata_.get('training_result', {})
         result = {k: result.get(k) for k in ('best_step', 'best_val_loss', 'best_val_perplexity', 'completed_steps', 'tokens_seen', 'stop_reason')}
+        history_visible = session.get(RunAttribute, (run_id, 'visibility/public_history'))
+        public_history = history.public_info() if history and history_visible and history_visible.value is True else None
         return {'id': item.id, 'name': item.name, 'state': item.state, 'is_public': True, 'read_only': True,
+                'history_import': public_history,
                 'started_at': item.started_at, 'ended_at': item.ended_at, 'config': cfg,
                 'metadata': {'engine': item.metadata_.get('engine'), 'training_result': result,
                              **({'tracking': item.metadata_.get('tracking', {})} if item.metadata_.get('engine') == 'external-training' else {})},
@@ -208,7 +215,8 @@ def run_detail(run_id: str, session: Session = Depends(db), user=Depends(current
     artifacts = session.scalars(select(Artifact).where(Artifact.run_id == run_id)).all()
     data = serialize_run(item)
     data["gpu_status"] = gpu_status(session,item)
-    data.update(metrics=series, logs=[{"timestamp": x.timestamp, "level": x.level, "message": x.message} for x in logs],
+    data.update(history_import=history.public_info() if history else None,
+                metrics=series, logs=[{"timestamp": x.timestamp, "level": x.level, "message": x.message} for x in logs],
                 artifacts=[{"id": x.id, "name": x.name, "size": x.size} for x in artifacts],
                 parent_run_id=item.parent_run_id, forked_from_checkpoint_id=item.forked_from_checkpoint_id,
                 inherited_from=item.metadata_.get('inherited_from'))

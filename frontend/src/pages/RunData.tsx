@@ -56,6 +56,16 @@ export type GPUStatus = {
   };
 };
 export type Run = {
+  history_import?: {
+    repo_id: string;
+    revision: string;
+    resume_step: number;
+    training_rows: number;
+    validation_rows: number;
+    original_world_size: number;
+    excluded_training_rows: number;
+    complete: boolean;
+  } | null;
   id: string;
   name: string;
   project: string;

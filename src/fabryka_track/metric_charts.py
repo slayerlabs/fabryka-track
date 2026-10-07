@@ -44,6 +44,7 @@ class ChartInput(BaseModel):
     skip: float = Field(default=0., ge=0., le=.99)
     xlim: tuple[Number, Number] | None = None
     ylim: tuple[Number, Number] | None = None
+    boundary: Number | None = None
 
     @model_validator(mode='after')
     def bounded(self):
@@ -83,7 +84,16 @@ def build_figure(spec):
     ax.set_xlim(xlim)
     for s in spec.series:
         if s.kind == 'trend':
-            ax.plot(s.x, s.y, color=s.color, alpha=s.alpha, linewidth=1.4)
+            pairs = list(zip(s.x, s.y))
+            parts = [pairs]
+            if spec.boundary is not None:
+                parts = [[p for p in pairs if p[0] <= spec.boundary],
+                         [p for p in pairs if p[0] > spec.boundary]]
+            for part in parts:
+                if part:
+                    x, y = zip(*part)
+                    ax.plot(x, y, color=s.color, alpha=s.alpha, linewidth=1.4,
+                            marker='o' if len(part) == 1 else None, markersize=2.5)
         else:
             # Raw measurements are never connected.
             ax.scatter(s.x, s.y, s=13, color=s.color, alpha=s.alpha, linewidths=0)
@@ -128,6 +138,10 @@ def build_figure(spec):
         ax.yaxis.set_minor_formatter(formatter)
         ax.tick_params(which='minor', labelsize=8, colors='#81776e', length=0)
     ax.grid(True, color='#ded8d0', linewidth=.6)
+    if spec.boundary is not None and xlim[0] <= spec.boundary <= xlim[1]:
+        ax.axvline(spec.boundary, color='#81776e', linestyle='--', linewidth=.8)
+        ax.text(spec.boundary, .98, 'continuation  ', transform=ax.get_xaxis_transform(),
+                fontsize=7, color='#81776e', va='top', ha='right', clip_on=True)
     ax.set_axisbelow(True)
     for spine in ax.spines.values():
         spine.set_color('#ded8d0')

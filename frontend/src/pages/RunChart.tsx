@@ -82,14 +82,21 @@ export function RunChart({
   series,
   range = 0,
   hidden = emptyHidden,
+  resumeStep,
 }: {
   series: Series[];
   range?: number;
   hidden?: Set<string>;
+  resumeStep?: number;
 }) {
   const root = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLDivElement>(null);
   const allPoints = series.flatMap((s) => s.points);
+  const elapsedAvailable =
+    allPoints.length > 0 &&
+    allPoints.every(
+      (p) => p.timestamp && Number.isFinite(Date.parse(p.timestamp)),
+    );
   const [axis, setAxis] = useState<Axis>(
     allPoints.length && allPoints.every((p) => Number.isFinite(p.tokens))
       ? "tokens"
@@ -137,6 +144,9 @@ export function RunChart({
     setViewport({});
     setHover([]);
   }, [axis, scale, range]);
+  useEffect(() => {
+    if (axis === "elapsed" && !elapsedAvailable) setAxis("step");
+  }, [axis, elapsedAvailable]);
   const traces = useMemo(() => {
     const stamps = series
       .flatMap((s) =>
@@ -164,7 +174,16 @@ export function RunChart({
       const smoothing = smooth > 0 && points.length >= 5;
       let total = 0,
         weight = 0;
-      const y = points.map((p) => {
+      const y = points.map((p, i) => {
+        if (
+          resumeStep !== undefined &&
+          i > 0 &&
+          points[i - 1].step <= resumeStep &&
+          p.step > resumeStep
+        ) {
+          total = 0;
+          weight = 0;
+        }
         total = smooth * total + (1 - smooth) * p.value;
         weight = smooth * weight + (1 - smooth);
         return smoothing ? total / weight : p.value;
@@ -191,7 +210,7 @@ export function RunChart({
       });
     });
     return output;
-  }, [series, hidden, muted, axis, scale, smooth]);
+  }, [series, hidden, muted, axis, scale, smooth, resumeStep]);
   const payload = JSON.stringify({
     series: traces.map(({ name, color, x, y, alpha, kind }) => ({
       name,
@@ -206,6 +225,9 @@ export function RunChart({
     scale,
     skip: range,
     ...viewport,
+    ...(axis === "step" && resumeStep !== undefined
+      ? { boundary: resumeStep }
+      : {}),
   });
   useEffect(() => {
     if (!inView) return;
@@ -459,10 +481,7 @@ export function RunChart({
             onChange={(e) => setAxis(e.target.value as Axis)}
           >
             <option value="step">Step</option>
-            <option
-              value="elapsed"
-              disabled={!allPoints.some((p) => p.timestamp)}
-            >
+            <option value="elapsed" disabled={!elapsedAvailable}>
               Elapsed time
             </option>
             {allPoints.length > 0 &&
