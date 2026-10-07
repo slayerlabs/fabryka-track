@@ -31,6 +31,7 @@ type Trace = {
   y: number[];
   points: Point[];
   alpha: number;
+  kind: "points" | "trend";
   raw?: boolean;
 };
 type ImageFrame = {
@@ -41,7 +42,13 @@ type ImageFrame = {
   traces: Trace[];
   scale: Scale;
 };
-type Hover = { name: string; color: string; value: number; point: Point };
+type Hover = {
+  name: string;
+  color: string;
+  value: number;
+  point: Point;
+  smoothed: boolean;
+};
 type Drag = {
   start: [number, number];
   end: [number, number];
@@ -93,7 +100,7 @@ export function RunChart({
       ? "log"
       : "linear",
   );
-  const [smooth, setSmooth] = useState(0);
+  const [smooth, setSmooth] = useState(0.9);
   const [mode, setMode] = useState("zoom");
   const [expanded, setExpanded] = useState(false);
   const [settings, setSettings] = useState(false);
@@ -151,22 +158,26 @@ export function RunChart({
             : p.step,
       );
       const color = s.color || palette[index % palette.length];
-      let average: number | undefined;
-      const y = points.map(
-        (p) =>
-          (average =
-            average === undefined
-              ? p.value
-              : smooth * average + (1 - smooth) * p.value),
-      );
-      if (smooth)
+      // Normalize the accumulated weights to avoid an initial-value bias.
+      // Sparse series remain raw points, so three validation checks do not
+      // acquire a misleading smooth trend.
+      const smoothing = smooth > 0 && points.length >= 5;
+      let total = 0,
+        weight = 0;
+      const y = points.map((p) => {
+        total = smooth * total + (1 - smooth) * p.value;
+        weight = smooth * weight + (1 - smooth);
+        return smoothing ? total / weight : p.value;
+      });
+      if (smoothing)
         output.push({
           name: labels[s.name] || s.name,
           color,
           x,
           y: points.map((p) => p.value),
           points,
-          alpha: 0.2,
+          alpha: 0.3,
+          kind: "points",
           raw: true,
         });
       output.push({
@@ -176,17 +187,19 @@ export function RunChart({
         y,
         points,
         alpha: 1,
+        kind: smoothing ? "trend" : "points",
       });
     });
     return output;
   }, [series, hidden, muted, axis, scale, smooth]);
   const payload = JSON.stringify({
-    series: traces.map(({ name, color, x, y, alpha }) => ({
+    series: traces.map(({ name, color, x, y, alpha, kind }) => ({
       name,
       color,
       x,
       y,
       alpha,
+      kind,
     })),
     ...size,
     axis,
@@ -288,9 +301,16 @@ export function RunChart({
         const py =
           top +
           ((high - transformY(t.y[i], frame.scale)) / (high - low)) * height;
+        const rawPy =
+          top +
+          ((high - transformY(t.points[i].value, frame.scale)) / (high - low)) *
+            height;
         const d =
           ((px - point[0]) * size.width) ** 2 +
-          ((py - point[1]) * size.height) ** 2;
+          Math.min(
+            ((py - point[1]) * size.height) ** 2,
+            ((rawPy - point[1]) * size.height) ** 2,
+          );
         if (d < distance) {
           best = i;
           distance = d;
@@ -302,6 +322,7 @@ export function RunChart({
           color: t.color,
           value: t.y[best],
           point: t.points[best],
+          smoothed: t.kind === "trend",
         });
     }
     setHover(matches);
@@ -353,8 +374,30 @@ export function RunChart({
       <div className="plot-toolbar">
         <span className="plot-count">
           {Math.max(0, ...series.map((s) => s.points.length)).toLocaleString()}{" "}
-          measurements{smooth ? ` · EMA ${smooth}` : ""}
+          measurements
+          {traces.some((t) => t.kind === "trend") ? ` · EMA ${smooth}` : ""}
         </span>
+        <label
+          className="plot-ema-control"
+          title="EMA averages recent measurements; raw points stay visible. Fewer than five measurements stay unsmoothed."
+        >
+          EMA
+          <select
+            aria-label="EMA smoothing"
+            value={smooth}
+            onChange={(e) => setSmooth(Number(e.target.value))}
+          >
+            <option value="0">Off</option>
+            <option value="0.5">0.5</option>
+            <option value="0.8">0.8</option>
+            <option value="0.9">0.9</option>
+            <option value="0.95">0.95</option>
+            <option value="0.99">0.99</option>
+            {![0, 0.5, 0.8, 0.9, 0.95, 0.99].includes(smooth) && (
+              <option value={smooth}>{smooth}</option>
+            )}
+          </select>
+        </label>
         <div className="plot-actions">
           <button
             aria-label="Reset zoom"
@@ -516,14 +559,16 @@ export function RunChart({
       <div className="plot-tooltip" hidden={!hover.length}>
         <div className="plot-tooltip-head">
           STEP <b>{fmt(hover[0]?.point.step, 4)}</b>
-          {smooth > 0 && <span>EMA · raw</span>}
+          {frame?.traces.some((t) => t.kind === "trend") && (
+            <span>EMA · raw</span>
+          )}
         </div>
         {hover.map((p, i) => (
           <div key={i} className="plot-tooltip-row">
             <i style={{ background: p.color }} />
             <span>{p.name}</span>
             <b>{fmt(p.value, 4)}</b>
-            {smooth > 0 && <small>{fmt(p.point.value, 4)}</small>}
+            {p.smoothed && <small>{fmt(p.point.value, 4)}</small>}
           </div>
         ))}
       </div>

@@ -2471,3 +2471,5 @@ footer {
 .recipe-preset td:nth-child(2) { white-space: nowrap; font-variant-numeric: tabular-nums; }
 .recipe-preset small { color: var(--muted); overflow-wrap: anywhere; }
 .dataset-controls input[type="number"] { min-width: 0; width: 100%; padding: 7px; border: 1px solid var(--line); border-radius: 5px; background: var(--paper); color: var(--ink); }
+.plot-ema-control { display: flex; align-items: center; gap: 5px; margin-left: auto; color: #81776e; font-size: 11px; }
+.plot-ema-control select { width: auto; min-width: 56px; padding: 3px 5px; font-size: 11px; }
