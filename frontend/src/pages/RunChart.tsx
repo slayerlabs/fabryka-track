@@ -19,6 +19,8 @@ export type Series = {
   name: string;
   color?: string;
   points: Point[];
+  kind?: "points" | "trend";
+  smoothing?: "off";
 };
 type Axis = "step" | "tokens" | "elapsed";
 type Scale = "linear" | "log";
@@ -83,11 +85,19 @@ export function RunChart({
   range = 0,
   hidden = emptyHidden,
   resumeStep,
+  resumeTokens,
+  zeroLine = false,
+  ylabel = "",
+  precision = 4,
 }: {
   series: Series[];
   range?: number;
   hidden?: Set<string>;
   resumeStep?: number;
+  resumeTokens?: number;
+  zeroLine?: boolean;
+  ylabel?: string;
+  precision?: number;
 }) {
   const root = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLDivElement>(null);
@@ -98,16 +108,29 @@ export function RunChart({
       (p) => p.timestamp && Number.isFinite(Date.parse(p.timestamp)),
     );
   const [axis, setAxis] = useState<Axis>(
-    allPoints.length && allPoints.every((p) => Number.isFinite(p.tokens))
-      ? "tokens"
-      : "step",
+    series.every((s) => /system\/gpu/i.test(s.name)) && elapsedAvailable
+      ? "elapsed"
+      : allPoints.length && allPoints.every((p) => Number.isFinite(p.tokens))
+        ? "tokens"
+        : "step",
   );
   const [scale, setScale] = useState<Scale>(
     series.length === 1 && /perplexity/i.test(series[0].name)
       ? "log"
       : "linear",
   );
-  const [smooth, setSmooth] = useState(0.9);
+  const tokensAvailable =
+    allPoints.length > 0 && allPoints.every((p) => Number.isFinite(p.tokens));
+  const rawDefault = series.every(
+    (s) =>
+      s.smoothing === "off" ||
+      /validation|perplexity|val\/|system\/gpu|learning_rate/i.test(s.name),
+  );
+  const smoothingLocked = series.every((s) => s.kind === "trend");
+  const [smooth, setSmooth] = useState(rawDefault ? 0 : 0.9);
+  const [halfLife, setHalfLife] = useState(
+    !rawDefault && tokensAvailable ? 100e6 : 0,
+  );
   const [mode, setMode] = useState("zoom");
   const [expanded, setExpanded] = useState(false);
   const [settings, setSettings] = useState(false);
@@ -146,7 +169,8 @@ export function RunChart({
   }, [axis, scale, range]);
   useEffect(() => {
     if (axis === "elapsed" && !elapsedAvailable) setAxis("step");
-  }, [axis, elapsedAvailable]);
+    if (axis === "tokens" && !tokensAvailable) setAxis("step");
+  }, [axis, elapsedAvailable, tokensAvailable]);
   const traces = useMemo(() => {
     const stamps = series
       .flatMap((s) =>
@@ -160,39 +184,48 @@ export function RunChart({
       const points = s.points.filter(
         (p) => Number.isFinite(p.value) && (scale !== "log" || p.value > 0),
       );
-      const x = points.map((p) =>
+      const coordinate = (p: Point) =>
         axis === "tokens"
-          ? (p.tokens ?? p.step)
+          ? p.tokens!
           : axis === "elapsed" && p.timestamp
             ? (Date.parse(p.timestamp) - origin) / 1000
-            : p.step,
-      );
+            : p.step;
       const color = s.color || palette[index % palette.length];
-      // Normalize the accumulated weights to avoid an initial-value bias.
-      // Sparse series remain raw points, so three validation checks do not
-      // acquire a misleading smooth trend.
-      const smoothing = smooth > 0 && points.length >= 5;
+      const tokenEMA = halfLife > 0 && tokensAvailable;
+      const smoothing =
+        !s.kind && (tokenEMA || smooth > 0) && points.length >= 5;
+      // A repeated evaluation at one token position has no additional token
+      // distance. Keep every raw dot, but use its latest value for the EMA.
+      const trendPoints = tokenEMA
+        ? [...new Map(points.map((p) => [p.tokens, p])).values()]
+        : points;
       let total = 0,
         weight = 0;
-      const y = points.map((p, i) => {
-        if (
+      const y = trendPoints.map((p, i) => {
+        const restart =
           resumeStep !== undefined &&
           i > 0 &&
-          points[i - 1].step <= resumeStep &&
-          p.step > resumeStep
-        ) {
+          trendPoints[i - 1].step <= resumeStep &&
+          p.step > resumeStep;
+        if (restart) {
           total = 0;
           weight = 0;
         }
-        total = smooth * total + (1 - smooth) * p.value;
-        weight = smooth * weight + (1 - smooth);
+        const retention = tokenEMA
+          ? i === 0 || restart
+            ? 0
+            : 2 **
+              (-Math.max(0, p.tokens! - trendPoints[i - 1].tokens!) / halfLife)
+          : smooth;
+        total = retention * total + (1 - retention) * p.value;
+        weight = retention * weight + (1 - retention);
         return smoothing ? total / weight : p.value;
       });
       if (smoothing)
         output.push({
           name: labels[s.name] || s.name,
           color,
-          x,
+          x: points.map(coordinate),
           y: points.map((p) => p.value),
           points,
           alpha: 0.3,
@@ -202,15 +235,25 @@ export function RunChart({
       output.push({
         name: labels[s.name] || s.name,
         color,
-        x,
-        y,
-        points,
+        x: (smoothing ? trendPoints : points).map(coordinate),
+        y: smoothing ? y : points.map((p) => p.value),
+        points: smoothing ? trendPoints : points,
         alpha: 1,
-        kind: smoothing ? "trend" : "points",
+        kind: smoothing ? "trend" : s.kind || "points",
       });
     });
     return output;
-  }, [series, hidden, muted, axis, scale, smooth, resumeStep]);
+  }, [
+    series,
+    hidden,
+    muted,
+    axis,
+    scale,
+    smooth,
+    halfLife,
+    tokensAvailable,
+    resumeStep,
+  ]);
   const payload = JSON.stringify({
     series: traces.map(({ name, color, x, y, alpha, kind }) => ({
       name,
@@ -225,6 +268,11 @@ export function RunChart({
     scale,
     skip: range,
     ...viewport,
+    zero_line: zeroLine,
+    ylabel,
+    ...(axis === "tokens" && resumeTokens !== undefined
+      ? { boundary: resumeTokens }
+      : {}),
     ...(axis === "step" && resumeStep !== undefined
       ? { boundary: resumeStep }
       : {}),
@@ -344,7 +392,7 @@ export function RunChart({
           color: t.color,
           value: t.y[best],
           point: t.points[best],
-          smoothed: t.kind === "trend",
+          smoothed: frame.traces.some((raw) => raw.raw && raw.name === t.name),
         });
     }
     setHover(matches);
@@ -397,29 +445,48 @@ export function RunChart({
         <span className="plot-count">
           {Math.max(0, ...series.map((s) => s.points.length)).toLocaleString()}{" "}
           measurements
-          {traces.some((t) => t.kind === "trend") ? ` · EMA ${smooth}` : ""}
         </span>
-        <label
-          className="plot-ema-control"
-          title="EMA averages recent measurements; raw points stay visible. Fewer than five measurements stay unsmoothed."
-        >
-          EMA
-          <select
-            aria-label="EMA smoothing"
-            value={smooth}
-            onChange={(e) => setSmooth(Number(e.target.value))}
+        {!smoothingLocked && (
+          <label
+            className="plot-ema-control"
+            title="Raw measurements remain visible. Token half-life makes smoothing independent of logging frequency."
           >
-            <option value="0">Off</option>
-            <option value="0.5">0.5</option>
-            <option value="0.8">0.8</option>
-            <option value="0.9">0.9</option>
-            <option value="0.95">0.95</option>
-            <option value="0.99">0.99</option>
-            {![0, 0.5, 0.8, 0.9, 0.95, 0.99].includes(smooth) && (
-              <option value={smooth}>{smooth}</option>
+            {tokensAvailable ? "Half-life" : "EMA"}
+            {tokensAvailable ? (
+              <select
+                aria-label="Smoothing half-life"
+                value={halfLife}
+                onChange={(e) => {
+                  setHalfLife(Number(e.target.value));
+                  setSmooth(0);
+                }}
+              >
+                <option value="0">Off</option>
+                {[25, 50, 100, 250, 500, 1000].map((m) => (
+                  <option key={m} value={m * 1e6}>
+                    {m < 1000 ? `${m}M` : "1B"} tokens
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <select
+                aria-label="EMA smoothing"
+                value={smooth}
+                onChange={(e) => setSmooth(Number(e.target.value))}
+              >
+                <option value="0">Off</option>
+                {[0.5, 0.8, 0.9, 0.95, 0.99].map((v) => (
+                  <option key={v} value={v}>
+                    {v}
+                  </option>
+                ))}
+                {![0, 0.5, 0.8, 0.9, 0.95, 0.99].includes(smooth) && (
+                  <option value={smooth}>{smooth}</option>
+                )}
+              </select>
             )}
-          </select>
-        </label>
+          </label>
+        )}
         <div className="plot-actions">
           <button
             aria-label="Reset zoom"
@@ -498,7 +565,9 @@ export function RunChart({
             onChange={(e) => setScale(e.target.value as Scale)}
           >
             <option value="linear">Linear</option>
-            <option value="log">Logarithmic</option>
+            <option value="log" disabled={zeroLine}>
+              Logarithmic
+            </option>
           </select>
         </label>
         <label>
@@ -512,18 +581,20 @@ export function RunChart({
             <option value="pan">Pan</option>
           </select>
         </label>
-        <label className="plot-smoothing">
-          Smoothing <output>{smooth}</output>
-          <input
-            aria-label="Exponential smoothing"
-            type="range"
-            min="0"
-            max="0.99"
-            step="0.01"
-            value={smooth}
-            onChange={(e) => setSmooth(Number(e.target.value))}
-          />
-        </label>
+        {!tokensAvailable && !smoothingLocked && (
+          <label className="plot-smoothing">
+            Smoothing <output>{smooth}</output>
+            <input
+              aria-label="Exponential smoothing"
+              type="range"
+              min="0"
+              max="0.99"
+              step="0.01"
+              value={smooth}
+              onChange={(e) => setSmooth(Number(e.target.value))}
+            />
+          </label>
+        )}
       </div>
       {error && (
         <p role="alert" className="error">
@@ -578,16 +649,14 @@ export function RunChart({
       <div className="plot-tooltip" hidden={!hover.length}>
         <div className="plot-tooltip-head">
           STEP <b>{fmt(hover[0]?.point.step, 4)}</b>
-          {frame?.traces.some((t) => t.kind === "trend") && (
-            <span>EMA · raw</span>
-          )}
+          {hover.some((p) => p.smoothed) && <span>EMA · raw</span>}
         </div>
         {hover.map((p, i) => (
           <div key={i} className="plot-tooltip-row">
             <i style={{ background: p.color }} />
             <span>{p.name}</span>
-            <b>{fmt(p.value, 4)}</b>
-            {p.smoothed && <small>{fmt(p.point.value, 4)}</small>}
+            <b>{fmt(p.value, precision)}</b>
+            {p.smoothed && <small>{fmt(p.point.value, precision)}</small>}
           </div>
         ))}
       </div>
@@ -614,7 +683,7 @@ export function RunChart({
                 style={{ background: s.color || palette[i % palette.length] }}
               />
               <span>{labels[s.name] || s.name}</span>
-              <b>{fmt(s.points.at(-1)?.value, 4)}</b>
+              <b>{fmt(s.points.at(-1)?.value, precision)}</b>
             </button>
           );
         })}

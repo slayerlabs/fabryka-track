@@ -24,18 +24,19 @@ The educational loss/validation/test/perplexity panels have been removed from
 the run, leaderboard and benchmark screens. The run's gradient tutorial and
 chart-reading link are also removed; actual metrics and chart controls remain.
 
-## EMA trends
+## Loss views and smoothing
 
-An always-visible EMA control defaults to 0.9 and can be turned off or adjusted.
-Raw values remain unconnected, faint scatter points. A separate Matplotlib line
-shows the EMA trend for series with at least five measurements; sparse validation
-series remain raw points. Hovering either raw points or the trend shows the raw
-measurement and, where applicable, the EMA value. Legend values remain raw.
+Training loss and validation loss have separate panels. Validation and perplexity default to raw dots, avoiding the lag of a long EMA over infrequent evaluations. Training loss retains faint raw points and an adjustable EMA. For points with actual token coordinates, the visible control sets a half-life of 25M–1B tokens (100M by default), or Off. The retention between observations is `2**(-delta_tokens / half_life)`; the first observation and each continuation phase start with their raw value. Repeated observations at one token position keep all raw dots and use the latest value for the trend. Without token coordinates, the coefficient-based normalized EMA remains available. Fewer than five observations remain raw.
 
-Each series is smoothed independently across its full logged history before
-viewport filtering. With coefficient `b`, accumulate `sum = b*sum + (1-b)*y`
-and `weight = b*weight + (1-b)` from zero; plot `sum/weight`. Normalizing weights
-corrects initialization bias. This is the EMA variant documented by
-[Weights & Biases](https://docs.wandb.ai/guides/app/features/panels/line-plot/smoothing/),
-with one observation per logged measurement rather than a time-weighted window.
-The overlay changes display only, never stored metrics or training weights.
+Token coordinates come from the point itself or token metrics logged at the exact same step. The dashboard never extrapolates from planned budgets or assumes an unlogged batch size. Token axes use billions when the range is large. Core GPU telemetry defaults to elapsed time and raw dots; learning-rate plots also default to raw values. Raw hover and legend values remain available and PNG exports match the displayed plot.
+
+## Optional improvement views
+
+Use **Show improvement views** on a run to reveal two additional panels:
+
+- **Recent improvement** subtracts each validation loss from a selectable reference evaluation. Positive values mean lower loss than that reference. This uses cross-entropy, not perplexity differences.
+- **Learning speed** fits a trailing ordinary least-squares line to 3, 5, 7 (default), or 9 distinct validation positions. X values are actual tokens divided by one billion; the displayed rate is the negative fitted slope. Positive means falling loss, zero means a flat fitted trend, and negative means rising loss.
+
+Windows require their full number of distinct observations. Duplicate evaluations at a token position use the latest observation and do not gain extra weight. Fits stop at missing token positions, non-increasing token counts and the declared continuation boundary. Original and continued phases are never fit together. When a continuation lacks enough evaluations, its count and required window are displayed; historical estimates remain visible. The fitted series gets no second EMA. Both diagnostics include a zero reference line and keep signed values on a linear scale.
+
+These are display diagnostics, not statistical confidence intervals or evidence that a tiny gain is real. Compare checkpoints on the same fixed validation examples to assess real progress. The plots never modify stored metrics, weights or optimizer settings.
