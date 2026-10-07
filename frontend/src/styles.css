@@ -2473,3 +2473,8 @@ footer {
 .dataset-controls input[type="number"] { min-width: 0; width: 100%; padding: 7px; border: 1px solid var(--line); border-radius: 5px; background: var(--paper); color: var(--ink); }
 .plot-ema-control { display: flex; align-items: center; gap: 5px; margin-left: auto; color: #81776e; font-size: 11px; }
 .plot-ema-control select { width: auto; min-width: 56px; padding: 3px 5px; font-size: 11px; }
+
+.diagnostic-control { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); margin: 8px 0; }
+.diagnostic-control select { width: auto; max-width: 100%; font-size: 12px; padding: 5px 8px; }
+.diagnostic-note { color: var(--muted); font-size: 12px; line-height: 1.5; margin: 8px 0; }
+.plot-toolbar { min-height: 27px; height: auto; flex-wrap: wrap; }

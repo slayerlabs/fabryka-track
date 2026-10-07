@@ -11,7 +11,7 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, HTTPException
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.figure import Figure
-from matplotlib.ticker import MaxNLocator, NullLocator, ScalarFormatter
+from matplotlib.ticker import FuncFormatter, MaxNLocator, NullLocator, ScalarFormatter
 from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, model_validator
 
 router = APIRouter(prefix='/api/charts')
@@ -45,6 +45,8 @@ class ChartInput(BaseModel):
     xlim: tuple[Number, Number] | None = None
     ylim: tuple[Number, Number] | None = None
     boundary: Number | None = None
+    zero_line: bool = False
+    ylabel: str = Field(default='', max_length=100)
 
     @model_validator(mode='after')
     def bounded(self):
@@ -98,6 +100,9 @@ def build_figure(spec):
             # Raw measurements are never connected.
             ax.scatter(s.x, s.y, s=13, color=s.color, alpha=s.alpha, linewidths=0)
     ys = [y for s in spec.series for x, y in zip(s.x, s.y) if xlim[0] <= x <= xlim[1]]
+    if spec.zero_line and spec.scale == 'linear':
+        ax.axhline(0, color='#81776e', linewidth=.9, linestyle='--')
+        ys.append(0.)
     if spec.scale == 'log':
         ax.set_yscale('log')
     if spec.ylim:
@@ -117,13 +122,16 @@ def build_figure(spec):
     if not xs:
         ax.text(.5, .5, 'Waiting for measurements', transform=ax.transAxes,
                 ha='center', va='center', color='#81776e', fontsize=9)
-    ax.set_xlabel({'step': 'Step', 'tokens': 'Training tokens', 'elapsed': 'Elapsed time · seconds'}[spec.axis],
+    billions = spec.axis == 'tokens' and max(abs(xlim[0]), abs(xlim[1])) >= 1e9
+    ax.set_xlabel({'step': 'Step', 'tokens': 'Training tokens · billions' if billions else 'Training tokens', 'elapsed': 'Elapsed time · seconds'}[spec.axis],
                   fontsize=9, color='#6f675f', labelpad=8)
+    if spec.ylabel:
+        ax.set_ylabel(spec.ylabel, fontsize=8, color='#6f675f', labelpad=7)
     ax.tick_params(axis='both', labelsize=8, colors='#81776e', length=0, pad=5)
     ax.xaxis.set_major_locator(MaxNLocator(nbins=5, integer=spec.axis == 'step'))
     formatter = ScalarFormatter(useOffset=False)
     formatter.set_powerlimits((-4, 6))
-    ax.xaxis.set_major_formatter(formatter)
+    ax.xaxis.set_major_formatter(FuncFormatter(lambda value, position: f'{value / 1e9:g}') if billions else formatter)
     if spec.scale == 'linear':
         ax.yaxis.set_major_locator(MaxNLocator(nbins=5))
         formatter = ScalarFormatter(useOffset=False)

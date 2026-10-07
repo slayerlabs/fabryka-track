@@ -1,6 +1,8 @@
 import { useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { RunChart, type Series } from "./RunChart";
+import { tokenLookup, withTokens } from "./lossAnalysis";
+import { ValidationProgress } from "./ValidationProgress";
 import {
   activeRun,
   fmt,
@@ -58,6 +60,7 @@ function RunWorkspace({ id }: { id: string }) {
   const [tab, setTab] = useState("charts");
   const [namespaceVisited, setNamespaceVisited] = useState(false);
   const [filter, setFilter] = useState("");
+  const [showProgress, setShowProgress] = useState(false);
   const [range, setRange] = useState(0);
   const [layout, setLayout] = useState("grid");
   const [sample, setSample] = useState<Sample>();
@@ -102,16 +105,35 @@ function RunWorkspace({ id }: { id: string }) {
       latest(r, "throughput/tokens_sec"),
     ],
   ];
+  const tokenPositions = tokenLookup(r.metrics);
+  const resumeTokens = r.history_import
+    ? tokenPositions.get(r.history_import.resume_step)
+    : undefined;
+  const validation = withTokens(r.metrics["val/loss"] || [], tokenPositions);
   const charts: { key: string; title: string; series: Series[] }[] = [
     {
-      key: "learning",
-      title: "Learning progress",
+      key: "training-loss",
+      title: "Training loss",
       series: [
         {
           name: "Training loss",
-          points: r.metrics["train/loss"] || r.metrics.loss || [],
+          points: withTokens(
+            r.metrics["train/loss"] || r.metrics.loss || [],
+            tokenPositions,
+          ),
         },
-        { name: "Validation loss", points: r.metrics["val/loss"] || [] },
+      ],
+    },
+    {
+      key: "validation-loss",
+      title: "Validation loss",
+      series: [
+        {
+          name: "Validation loss",
+          color: "#477f72",
+          points: validation,
+          smoothing: "off",
+        },
       ],
     },
   ];
@@ -120,7 +142,11 @@ function RunWorkspace({ id }: { id: string }) {
       key: "val/perplexity",
       title: "Validation perplexity",
       series: [
-        { name: "Perplexity", points: r.metrics["val/perplexity"] || [] },
+        {
+          name: "Perplexity",
+          points: withTokens(r.metrics["val/perplexity"] || [], tokenPositions),
+          smoothing: "off",
+        },
       ],
     });
   const additional = Object.entries(r.metrics).filter(
@@ -143,7 +169,17 @@ function RunWorkspace({ id }: { id: string }) {
     charts.push({
       key,
       title: metricNames[key] || key,
-      series: [{ name: key, points }],
+      series: [
+        {
+          name: key,
+          points: key.startsWith("system/gpu")
+            ? points
+            : withTokens(points, tokenPositions),
+          ...(key === "optimizer/learning_rate"
+            ? { smoothing: "off" as const }
+            : {}),
+        },
+      ],
     });
   const status =
     r.metadata.gpu_cleanup === "pending"
@@ -338,6 +374,17 @@ function RunWorkspace({ id }: { id: string }) {
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
             />
+            {validation.length > 0 && (
+              <button
+                className="runs-button runs-button-secondary"
+                aria-expanded={showProgress}
+                onClick={() => setShowProgress((v) => !v)}
+              >
+                {showProgress
+                  ? "Hide improvement views"
+                  : "Show improvement views"}
+              </button>
+            )}
             <RangeControls
               range={range}
               setRange={setRange}
@@ -352,7 +399,7 @@ function RunWorkspace({ id }: { id: string }) {
             gridTemplateColumns: layout === "column" ? "1fr" : undefined,
           }}
         >
-          {charts.map((chart) => (
+          {charts.slice(0, 2).map((chart) => (
             <div
               className="chart"
               key={chart.key}
@@ -363,6 +410,32 @@ function RunWorkspace({ id }: { id: string }) {
                 series={chart.series}
                 range={range}
                 resumeStep={r.history_import?.resume_step}
+                resumeTokens={resumeTokens}
+                precision={chart.key === "validation-loss" ? 6 : 4}
+              />
+            </div>
+          ))}
+          {showProgress && (
+            <ValidationProgress
+              points={validation}
+              resumeStep={r.history_import?.resume_step}
+              resumeTokens={resumeTokens}
+              range={range}
+              filter={filter}
+            />
+          )}
+          {charts.slice(2).map((chart) => (
+            <div
+              className="chart"
+              key={chart.key}
+              hidden={!chart.title.toLowerCase().includes(filter.toLowerCase())}
+            >
+              <h3>{chart.title}</h3>
+              <RunChart
+                series={chart.series}
+                range={range}
+                resumeStep={r.history_import?.resume_step}
+                resumeTokens={resumeTokens}
               />
             </div>
           ))}
