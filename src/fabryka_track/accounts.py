@@ -108,6 +108,27 @@ def me(user=Depends(current_user), session=Depends(session_scope)):
     return {"user": data}
 
 
+FORWARD_USER_HEADER = "X-Gollem-User"
+
+
+@router.get("/forward-user")
+def forward_user(request: Request, session=Depends(session_scope)):
+    """Caddy `forward_auth` for same-host apps (ChatGoLLeM at /gollem/): always 204, never a body or a cookie.
+
+    Only a browser cookie session counts (API keys and SDK tokens are ignored), and only the Hugging Face username of
+    that account is exposed, as the `X-Gollem-User` response header. Caddy copies it to the app and strips the Cookie,
+    so the app never sees the Track session. Anonymous visitors get 204 without the header.
+    """
+    headers = {"Cache-Control": "no-store"}
+    token = request.cookies.get(COOKIE)
+    stored = session.get(AccountSession, digest(token)) if token else None
+    if stored and stored.expires_at.replace(tzinfo=timezone.utc) > datetime.now(timezone.utc):
+        identity = session.scalar(select(HuggingFaceIdentity).where(HuggingFaceIdentity.account_id == stored.account_id))
+        if identity and identity.username:
+            headers[FORWARD_USER_HEADER] = identity.username
+    return Response(status_code=204, headers=headers)
+
+
 @router.post("/logout")
 def logout(request: Request, response: Response, session=Depends(session_scope)):
     token = request.cookies.get(COOKIE)

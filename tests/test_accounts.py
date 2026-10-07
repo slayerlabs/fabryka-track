@@ -119,3 +119,22 @@ def test_additive_migration_preserves_legacy_data_and_is_idempotent(tmp_path, mo
         assert db.execute(text('SELECT content, owner_id FROM datasets')).one() == ('Keep this data', None)
         assert 'accounts' in inspect(db).get_table_names()
     legacy.dispose()
+
+
+def test_forward_user_exposes_only_hf_name_of_a_cookie_session(client):
+    signed = client.get('/api/auth/forward-user')
+    assert signed.status_code == 204 and signed.content == b''
+    assert signed.headers['x-gollem-user'] == 'tester'
+    assert signed.headers['cache-control'] == 'no-store'
+    assert 'set-cookie' not in signed.headers
+    key = client.post('/api/auth/api-key', json={'password': 'testing-password-123'}).json()['api_key']
+    with TestClient(app) as anonymous:
+        assert 'x-gollem-user' not in anonymous.get('/api/auth/forward-user').headers
+        bearer = anonymous.get('/api/auth/forward-user', headers={'Authorization': 'Bearer ' + key})
+        assert bearer.status_code == 204 and 'x-gollem-user' not in bearer.headers
+        anonymous.cookies.set(COOKIE, 'not-a-session', domain='testserver.local', path='/')
+        assert 'x-gollem-user' not in anonymous.get('/api/auth/forward-user').headers
+    with SessionLocal() as db:
+        db.query(AccountSession).update({AccountSession.expires_at: datetime.now(timezone.utc) - timedelta(seconds=1)})
+        db.commit()
+    assert 'x-gollem-user' not in client.get('/api/auth/forward-user').headers
