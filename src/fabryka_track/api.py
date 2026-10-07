@@ -3,7 +3,7 @@ import mimetypes
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from fastapi import Depends, FastAPI, File, HTTPException, Query, UploadFile, Request, Form
 from fastapi.responses import RedirectResponse, FileResponse, HTMLResponse, JSONResponse
@@ -16,7 +16,7 @@ from .hf_publish import router as hf_publish_router, recover_uploads
 from .huggingface_auth import router as huggingface_router
 from .gpu_training import router as gpu_router, start_supervisor, stop_supervisor, status as gpu_status
 from .database import create_tables, session_scope
-from .models import AgentGoal, Artifact, BenchmarkEvaluation, Checkpoint, GoalEvent, GPUJob, IngestedEvent, Metric, Project, Run, RunLog, RunArtifactLink, RunAttribute
+from .models import AgentGoal, Artifact, BenchmarkEvaluation, Checkpoint, GoalEvent, GPUJob, IngestedEvent, Metric, Project, Run, RunLog, RunArtifactLink, RunAttribute, RunSDKToken
 from .namespaces import router as namespace_router, set_attribute, append_series, checked_path, PUBLIC_BOARD_ATTRIBUTE, PUBLIC_NOTE_ATTRIBUTE, PUBLIC_METRICS_ATTRIBUTE, public_metric_paths
 from .schemas import EventBatch, LogInput, Notes
 from .settings import settings
@@ -264,7 +264,7 @@ def delete_run(run_id: str, session: Session = Depends(db), user=Depends(require
         session.execute(delete(GoalEvent).where(GoalEvent.goal_id.in_(goal_ids)))
         session.execute(delete(AgentGoal).where(AgentGoal.run_id == run_id))
     # RunArtifactLink and Checkpoint reference artifacts.id -> drop them before Artifact.
-    for model in (Metric, RunLog, RunAttribute, RunArtifactLink, Checkpoint, BenchmarkEvaluation, GPUJob):
+    for model in (Metric, RunLog, RunAttribute, RunArtifactLink, Checkpoint, BenchmarkEvaluation, GPUJob, RunSDKToken):
         session.execute(delete(model).where(model.run_id == run_id))
     session.execute(delete(Artifact).where(Artifact.run_id == run_id))
     session.execute(delete(Run).where(Run.id == run_id))
@@ -273,7 +273,16 @@ def delete_run(run_id: str, session: Session = Depends(db), user=Depends(require
 
 
 @app.post("/api/events")
-def ingest(batch: EventBatch, session: Session = Depends(db), user=Depends(require_user)):
+def ingest(batch: EventBatch, request: Request, session: Session = Depends(db), user=Depends(require_user)):
+    scope = getattr(request.state, 'sdk_run_id', None)
+    if scope:
+        for event in batch.events:
+            try:
+                matches = str(UUID(event.payload.get('run_id', ''))) == scope
+            except (ValueError, TypeError, AttributeError):
+                matches = False
+            if not matches:
+                raise HTTPException(403, 'This SDK credential is limited to one run.')
     accepted = []
     for event in batch.events:
         existing = session.get(Run, event.payload.get("run_id"))

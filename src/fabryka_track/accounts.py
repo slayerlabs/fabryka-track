@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy import delete, select
 
 from .database import session_scope
-from .models import Account, AccountSession, HuggingFaceIdentity, Run
+from .models import Account, AccountSession, HuggingFaceIdentity, Run, RunSDKToken
 
 router = APIRouter(prefix="/api/auth")
 COOKIE = "track_session"
@@ -47,7 +47,21 @@ def public_account(user):
 def current_user(request: Request, session=Depends(session_scope)):
     bearer = request.headers.get("authorization", "")
     if bearer.startswith("Bearer "):
-        return session.scalar(select(Account).where(Account.api_key_hash == digest(bearer[7:])))
+        key_hash = digest(bearer[7:])
+        account = session.scalar(select(Account).where(Account.api_key_hash == key_hash))
+        if account:
+            return account
+        token = session.get(RunSDKToken, key_hash)
+        if not token or token.expires_at.replace(tzinfo=timezone.utc) <= datetime.now(timezone.utc):
+            return None
+        run = session.get(Run, token.run_id)
+        if not run or run.owner_id != token.account_id:
+            return None
+        allowed = {"/api/events", f"/api/runs/{token.run_id}", f"/api/runs/{token.run_id}/artifacts"}
+        if request.url.path not in allowed:
+            return None
+        request.state.sdk_run_id = token.run_id
+        return session.get(Account, token.account_id)
     token = request.cookies.get(COOKIE)
     if not token:
         return None

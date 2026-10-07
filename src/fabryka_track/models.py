@@ -60,6 +60,15 @@ class Run(Base):
     metrics: Mapped[list["Metric"]] = relationship(cascade="all, delete-orphan")
 
 
+class RunSDKToken(Base):
+    """Expiring SDK credentials limited to one run, independent of account keys."""
+    __tablename__ = "run_sdk_tokens"
+    key_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    account_id: Mapped[str] = mapped_column(String(36), ForeignKey("accounts.id"), index=True)
+    run_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), ForeignKey("runs.id"), index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
 class Metric(Base):
     __tablename__ = "metrics"
     id: Mapped[int] = mapped_column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True)
