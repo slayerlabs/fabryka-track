@@ -85,6 +85,7 @@ function RunWorkspace({ id }: { id: string }) {
   const model = r.config.model || "Tiny transformer · 134,912 parameters";
   const glintProxyCompatible = r.config.model === "SlayerLab/Slayer149-balanced" &&
     typeof r.config.compute === "string" && r.config.compute.startsWith("White:");
+  const trackedSlayer149 = glintProxyCompatible;
   const cards: [string, number | undefined][] = [
     ["Training loss", latest(r, "train/loss") ?? latest(r, "loss")],
     [
@@ -409,11 +410,17 @@ function RunWorkspace({ id }: { id: string }) {
               hidden={!chart.title.toLowerCase().includes(filter.toLowerCase())}
             >
               <h3>{chart.title}</h3>
+              {trackedSlayer149 && chart.key === "training-loss" && (
+                <small className="muted">
+                  Each point is one global optimizer update, averaging 524,288 tokens across both GPUs. Raw loss varies with batch difficulty; the EMA helps reveal the trend.
+                </small>
+              )}
               <RunChart
                 series={chart.series}
                 range={range}
                 resumeStep={r.history_import?.resume_step}
                 resumeTokens={resumeTokens}
+                defaultHalfLife={chart.key === "training-loss" && trackedSlayer149 ? 25e6 : undefined}
                 precision={chart.key === "validation-loss" ? 6 : 4}
               />
             </div>
