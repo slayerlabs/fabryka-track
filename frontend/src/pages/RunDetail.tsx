@@ -24,6 +24,7 @@ import {
 import { RunExport } from "./RunExport";
 import { RunBenchmarks } from "./RunBenchmarks";
 import { WhiteBenchmark } from "./WhiteBenchmark";
+import { GlintProxyBenchmark } from "./GlintProxyBenchmark";
 
 const metricNames: Record<string, string> = {
   "throughput/tokens_sec": "Training throughput",
@@ -82,6 +83,8 @@ function RunWorkspace({ id }: { id: string }) {
     active = activeRun(r),
     result = r.metadata.training_result;
   const model = r.config.model || "Tiny transformer · 134,912 parameters";
+  const glintProxyCompatible = r.config.model === "SlayerLab/Slayer149-balanced" &&
+    typeof r.config.compute === "string" && r.config.compute.startsWith("White:");
   const cards: [string, number | undefined][] = [
     ["Training loss", latest(r, "train/loss") ?? latest(r, "loss")],
     [
@@ -460,6 +463,7 @@ function RunWorkspace({ id }: { id: string }) {
         </div>
       )}
       <WhiteBenchmark id={id} />
+      {!readOnly && glintProxyCompatible && <GlintProxyBenchmark id={id} />}
       {finished && <RunBenchmarks id={id} canEvaluate={!readOnly && local} />}
       <div className="actions">
         <div>
