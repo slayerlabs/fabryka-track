@@ -2,6 +2,8 @@
 
 `/models` ranks one checkpoint per model, separately for English and Polish: the checkpoint its owner marked as the result, or else the latest checkpoint the track evaluated itself. It reads the public, anonymous endpoint `GET /api/leaderboard/models`; the page is `frontend/src/pages/ModelBoard.tsx` with pure helpers in `frontend/src/pages/model-board-data.ts` (tested by `tests/model-board.test.mjs`). The separate `/leaderboard` (Training results) and `/benchmark-results` pages are unchanged.
 
+EN also shows **Overall** = (BLiMP + ARC-Easy + wiki_score) / 3, where wiki_score = 100 × clamp(1 − ln(min(Wiki byte-PPL, 500) / 1.86) / ln(500 / 1.86), 0, 1): the Glint Tiny-ML formula without the size bonus, computed in the browser from the row's published values (`null` when any of the three is missing). A "Ranking: eff | Overall" toggle, shown only for EN, chooses which of the two drives the `#` rank and the default sort; it starts on eff. PL and PL+EN are unaffected.
+
 ## Putting a run on the board
 
 Every public, finished run with a server evaluation is on the board without any action from its owner (see [Rows measured by the track](#rows-measured-by-the-track)). An owner can instead put a specific checkpoint and their own board series on it. An owner-marked row appears when all of these hold:

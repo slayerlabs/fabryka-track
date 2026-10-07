@@ -40,6 +40,7 @@ export interface BoardRow {
 }
 export type SortKey =
   | "en_eff"
+  | "en_overall"
   | "arc_easy"
   | "blimp"
   | "wiki_byte_ppl"
@@ -77,6 +78,7 @@ export const SIZE_BUCKETS: {
 // Column direction when first chosen; byte-perplexities are lower-is-better.
 export const NATURAL_DIRECTION: Record<SortKey, Direction> = {
   en_eff: "desc",
+  en_overall: "desc",
   arc_easy: "desc",
   blimp: "desc",
   wiki_byte_ppl: "asc",
@@ -95,9 +97,30 @@ export const RANK_KEY: Record<Category, SortKey> = {
   pl: "pl_eff",
   plen: "combined",
 };
+/** EN can be ranked by eff (default) or by Overall; other categories ignore the axis. */
+export type RankAxis = "eff" | "overall";
+export const rankKey = (category: Category, axis: RankAxis = "eff"): SortKey =>
+  category === "en" && axis === "overall" ? "en_overall" : RANK_KEY[category];
 
 const finite = (value: unknown): value is number =>
   typeof value === "number" && Number.isFinite(value);
+
+const WIKI_PPL_FLOOR = 1.86,
+  WIKI_PPL_CEIL = 500;
+/** Glint wiki_score (0–100) from Wiki byte-PPL; lower perplexity scores higher. */
+export function wikiScore(ppl: number) {
+  const ratio =
+    Math.log(Math.min(ppl, WIKI_PPL_CEIL) / WIKI_PPL_FLOOR) /
+    Math.log(WIKI_PPL_CEIL / WIKI_PPL_FLOOR);
+  return 100 * Math.min(1, Math.max(0, 1 - ratio));
+}
+
+/** Glint Tiny-ML Overall = (BLiMP + ARC-Easy + wiki_score) / 3, no size bonus; null if any input is missing. */
+export function enOverall(row: BoardRow): number | null {
+  const { blimp, arc_easy, wiki_byte_ppl } = row.en;
+  if (!finite(blimp) || !finite(arc_easy) || !finite(wiki_byte_ppl)) return null;
+  return (blimp + arc_easy + wikiScore(wiki_byte_ppl)) / 3;
+}
 
 export function sizeBucket(nParams: number): Exclude<SizeKey, "all"> {
   return SIZE_BUCKETS.find((bucket) => nParams <= bucket.max)!.key;
@@ -106,6 +129,7 @@ export function sizeBucket(nParams: number): Exclude<SizeKey, "all"> {
 export function sortValue(row: BoardRow, key: SortKey): number | null {
   const value = {
     en_eff: row.en.eff,
+    en_overall: enOverall(row),
     arc_easy: row.en.arc_easy,
     blimp: row.en.blimp,
     wiki_byte_ppl: row.en.wiki_byte_ppl,
@@ -157,8 +181,12 @@ export function filterRows(
 }
 
 /** Competition ranks (1, 2, 2, 4) by the category's ranked axis; independent of display sort. */
-export function rankRows(rows: BoardRow[], category: Category) {
-  const key = RANK_KEY[category];
+export function rankRows(
+  rows: BoardRow[],
+  category: Category,
+  axis: RankAxis = "eff",
+) {
+  const key = rankKey(category, axis);
   const ranks = new Map<string, number>();
   let previous: number | null = null,
     rank = 0;
