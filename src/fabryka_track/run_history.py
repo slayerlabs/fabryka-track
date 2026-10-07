@@ -1,5 +1,6 @@
 """Validated provenance for historical metric imports without source timestamps."""
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+from sqlalchemy import select
 from .models import RunAttribute
 
 
@@ -33,10 +34,27 @@ class HistoryImport(BaseModel):
 
 
 def read_history(session, run_id):
-    row = session.get(RunAttribute, (run_id, 'tracking/history_import'))
-    if row:
-        try:
-            return HistoryImport.model_validate(row.value)
-        except ValidationError:
-            pass
+    prefix = 'tracking/history_import'
+    rows = session.scalars(select(RunAttribute).where(
+        RunAttribute.run_id == run_id,
+        (RunAttribute.path == prefix) | RunAttribute.path.startswith(prefix + '/', autoescape=True),
+    ).limit(32)).all()
+    value = {}
+    bounds = {}
+    for row in rows:
+        if row.path == prefix:
+            value = row.value
+            break
+        key = row.path[len(prefix) + 1:]
+        if key.startswith('metric_bounds/'):
+            # Metric paths themselves contain slashes; preserve the full key.
+            bounds[key[len('metric_bounds/'):]] = row.value
+        else:
+            value[key] = row.value
+    if isinstance(value, dict) and bounds:
+        value['metric_bounds'] = bounds
+    try:
+        return HistoryImport.model_validate(value)
+    except ValidationError:
+        pass
     return None
