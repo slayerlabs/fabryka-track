@@ -23,3 +23,19 @@ poll results do not cause redraws. Downloads use the displayed PNG.
 The educational loss/validation/test/perplexity panels have been removed from
 the run, leaderboard and benchmark screens. The run's gradient tutorial and
 chart-reading link are also removed; actual metrics and chart controls remain.
+
+## EMA trends
+
+An always-visible EMA control defaults to 0.9 and can be turned off or adjusted.
+Raw values remain unconnected, faint scatter points. A separate Matplotlib line
+shows the EMA trend for series with at least five measurements; sparse validation
+series remain raw points. Hovering either raw points or the trend shows the raw
+measurement and, where applicable, the EMA value. Legend values remain raw.
+
+Each series is smoothed independently across its full logged history before
+viewport filtering. With coefficient `b`, accumulate `sum = b*sum + (1-b)*y`
+and `weight = b*weight + (1-b)` from zero; plot `sum/weight`. Normalizing weights
+corrects initialization bias. This is the EMA variant documented by
+[Weights & Biases](https://docs.wandb.ai/guides/app/features/panels/line-plot/smoothing/),
+with one observation per logged measurement rather than a time-weighted window.
+The overlay changes display only, never stored metrics or training weights.

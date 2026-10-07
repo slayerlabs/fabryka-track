@@ -25,6 +25,7 @@ class ChartSeries(BaseModel):
     x: list[Number] = Field(max_length=20_000)
     y: list[Number] = Field(max_length=20_000)
     alpha: float = Field(default=1., ge=.05, le=1.)
+    kind: Literal['points', 'trend'] = 'points'
 
     @model_validator(mode='after')
     def paired(self):
@@ -81,8 +82,11 @@ def build_figure(spec):
         xlim = (0., 1.)
     ax.set_xlim(xlim)
     for s in spec.series:
-        # No interpolation, connecting lines, or invented measurements.
-        ax.scatter(s.x, s.y, s=13, color=s.color, alpha=s.alpha, linewidths=0)
+        if s.kind == 'trend':
+            ax.plot(s.x, s.y, color=s.color, alpha=s.alpha, linewidth=1.4)
+        else:
+            # Raw measurements are never connected.
+            ax.scatter(s.x, s.y, s=13, color=s.color, alpha=s.alpha, linewidths=0)
     ys = [y for s in spec.series for x, y in zip(s.x, s.y) if xlim[0] <= x <= xlim[1]]
     if spec.scale == 'log':
         ax.set_yscale('log')
