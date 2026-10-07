@@ -110,7 +110,7 @@ def me(user=Depends(current_user), session=Depends(session_scope)):
 
 
 FORWARD_USER_HEADER = "X-Gollem-User"
-FORWARD_USER_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,95}$")
+FORWARD_USER_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,95}")
 
 
 @router.get("/forward-user")
@@ -126,7 +126,7 @@ def forward_user(request: Request, session=Depends(session_scope)):
     stored = session.get(AccountSession, digest(token)) if token else None
     if stored and stored.expires_at.replace(tzinfo=timezone.utc) > datetime.now(timezone.utc):
         identity = session.scalar(select(HuggingFaceIdentity).where(HuggingFaceIdentity.account_id == stored.account_id))
-        if identity and identity.username and FORWARD_USER_NAME.match(identity.username):
+        if identity and identity.username and FORWARD_USER_NAME.fullmatch(identity.username):
             headers[FORWARD_USER_HEADER] = identity.username
     return Response(status_code=204, headers=headers)
 
