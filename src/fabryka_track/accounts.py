@@ -109,6 +109,7 @@ def me(user=Depends(current_user), session=Depends(session_scope)):
 
 
 FORWARD_USER_HEADER = "X-Gollem-User"
+FORWARD_USER_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,95}$")
 
 
 @router.get("/forward-user")
