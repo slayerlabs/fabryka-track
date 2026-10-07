@@ -1,6 +1,5 @@
 import { useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
-import { MetricHelp } from "./BenchmarkHelp";
 import { RunChart, type Series } from "./RunChart";
 import {
   activeRun,
@@ -269,28 +268,8 @@ function RunWorkspace({ id }: { id: string }) {
           {namespaceVisited && <RunNamespace id={id} />}
         </section>
       )}
-      <MetricHelp />
       <div hidden={tab !== "charts"}>
         <RunStatus run={r} />
-        <section className="panel" style={{ padding: 20, marginBottom: 16 }} aria-label="Gradient tracking">
-          <h3>Gradient tracking</h3>
-          <p className="muted">Gradient norm measures the size of the loss gradients used by the optimizer.
-            Compare spikes with loss and learning rate; there is no universal healthy range.</p>
-          {["optimizer/gradient_norm", "grad_norm", "train/grad_norm", "gradient_norm"].some(key => r.metrics[key]?.length) ? (
-            <p>Latest gradient norm: <strong>{fmt(latest(r, "optimizer/gradient_norm") ?? latest(r, "grad_norm") ?? latest(r, "train/grad_norm") ?? latest(r, "gradient_norm"), 4)}</strong>.
-              See the gradient charts below. Clipped = 1 means the recorded step exceeded the clipping threshold;
-              sampled points do not measure clipping frequency across all updates.</p>
-          ) : (
-            <p>No gradient measurements were recorded. Send <code>optimizer/gradient_norm</code> from the trainer
-              after backward and before clipping. Loss alone cannot reconstruct past gradients.</p>
-          )}
-          <details><summary>How to record gradients</summary>
-            <p>Record the global L2 norm at optimizer-update boundaries, after gradient accumulation.
-              With mixed-precision loss scaling, unscale gradients before measuring or clipping.
-              PyTorch <code>clip_grad_norm_</code> returns the norm before clipping; log that existing result
-              at your normal reporting interval. For sharded training, use your framework’s global norm.</p>
-          </details>
-        </section>
         {local && (
           <>
             <div className="row">
@@ -329,8 +308,7 @@ function RunWorkspace({ id }: { id: string }) {
           <div>
             <h2>Metric explorer</h2>
             <small>
-              Hover to inspect · drag to zoom ·{" "}
-              <Link to="/guide">How to read these charts? →</Link>
+              Hover to inspect · drag to zoom
             </small>
           </div>
           <div className="explorer-controls">
@@ -367,11 +345,6 @@ function RunWorkspace({ id }: { id: string }) {
           ))}
         </div>
         <p className="muted" style={{ fontSize: 12, marginTop: 15 }}>
-          {external
-            ? "Loss is measured per tokenizer token. Source events have no timestamps; use tokens or steps to inspect the history. Throughput measures updates and excludes checkpoint overhead."
-            : local
-              ? "Lower loss and perplexity mean better next-byte predictions. Compare runs with the same validation data."
-              : "Compare loss and perplexity only for runs with the same tokenizer and validation data."}{" "}
           {active && "Refreshes every 2 seconds."}
         </p>
       </div>

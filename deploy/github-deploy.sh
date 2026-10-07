@@ -40,7 +40,7 @@ previous=''
 if [[ -L "$base/current" ]]; then previous=$(readlink -f "$base/current"); fi
 venv_source="${previous:-$base}/.venv"
 cp -a --reflink=auto "$venv_source" "$release/.venv"
-"$release/.venv/bin/python" -m pip install --disable-pip-version-check "$release"
+"$release/.venv/bin/python" -m pip install --disable-pip-version-check "$release[server]"
 "$release/.venv/bin/python" -m pip check
 (cd "$release" && PYTHONPATH= "$release/.venv/bin/python" -c 'import fabryka_track.api, pathlib, sys; assert pathlib.Path(fabryka_track.api.__file__).is_relative_to(pathlib.Path(sys.prefix)); print("Release import passed")')
 cat > "$release/start" <<EOF

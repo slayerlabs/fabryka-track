@@ -10,6 +10,8 @@ The dedicated GitHub SSH key is restricted to `/usr/local/sbin/fabryka-track-git
 
 Each release lives at `/opt/fabryka-track/releases/<SHA>` with an isolated copy of the previous Python environment and the newly installed application. Dependencies are installed before cutover. `/opt/fabryka-track/current` points to the live release. The service continues using `/opt/fabryka-track` as its working directory, so `.env`, the database, artifact directories, corpus packs and the fast-ladder pack remain outside releases. GPU pods are not terminated by deployment. External benchmark-worker machines are not updated by this workflow.
 
+The release installer installs the `[server]` extra, including Matplotlib for metric charts. Existing installed dependencies are kept when they satisfy the requirements; no upgrade flag is used. The root-owned forced-command script must be refreshed from `deploy/github-deploy.sh` when changing the installer; replacing application code alone does not update that script.
+
 The server takes a consistent SQLite backup, switches the release symlink, restarts the API, and verifies `/health` reports the expected commit. If startup/health verification fails, it switches back and restarts the previous application. The workflow separately verifies the public HTTPS health response. A public/network verification failure is reported without discarding a locally healthy release.
 
 Five releases and database snapshots are retained, plus the previous release when needed for rollback. Migrations must remain backward-compatible for application rollback. Database snapshots are never restored automatically over newer user writes.

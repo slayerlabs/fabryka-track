@@ -2,7 +2,6 @@ import { TinyMLBoard } from "./TinyMLBoard";
 import { Fragment, useState } from "react";
 import { useCustom, useCustomMutation } from "@refinedev/core";
 import { request } from "../provider";
-import { MetricHelp } from "./BenchmarkHelp";
 import guide from "./BenchmarkGuide.html?raw";
 import { compareBenchmarkValues, type BenchmarkSort } from "./BenchmarkSort";
 import { TinyMLDetails, tinyMLMetrics, tinyMLValue, formatTinyML, isTinyML, type TinyMLMeasurement } from "./TinyMLMetrics";
@@ -303,7 +302,6 @@ export function BenchmarksPage() {
         </a>
       </div>
       <TinyMLBoard />
-      <MetricHelp />
       <div dangerouslySetInnerHTML={{ __html: guide }} />
       {failure && (
         <p role="alert">
