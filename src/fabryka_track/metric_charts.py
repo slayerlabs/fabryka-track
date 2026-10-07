@@ -126,7 +126,7 @@ def build_figure(spec):
     ax.set_xlabel({'step': 'Step', 'tokens': 'Training tokens · billions' if billions else 'Training tokens', 'elapsed': 'Elapsed time · seconds'}[spec.axis],
                   fontsize=9, color='#6f675f', labelpad=8)
     if spec.ylabel:
-        ax.set_ylabel(spec.ylabel, fontsize=8, color='#6f675f', labelpad=7)
+        ax.set_ylabel(spec.ylabel, fontsize=8, color='#6f675f', labelpad=7, parse_math=False)
     ax.tick_params(axis='both', labelsize=8, colors='#81776e', length=0, pad=5)
     ax.xaxis.set_major_locator(MaxNLocator(nbins=5, integer=spec.axis == 'step'))
     formatter = ScalarFormatter(useOffset=False)

@@ -169,7 +169,8 @@ export function RunChart({
   }, [axis, scale, range]);
   useEffect(() => {
     if (axis === "elapsed" && !elapsedAvailable) setAxis("step");
-  }, [axis, elapsedAvailable]);
+    if (axis === "tokens" && !tokensAvailable) setAxis("step");
+  }, [axis, elapsedAvailable, tokensAvailable]);
   const traces = useMemo(() => {
     const stamps = series
       .flatMap((s) =>
