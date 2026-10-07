@@ -412,7 +412,7 @@ function RunWorkspace({ id }: { id: string }) {
               <h3>{chart.title}</h3>
               {trackedSlayer149 && chart.key === "training-loss" && (
                 <small className="muted">
-                  Each point is one global optimizer update, averaging 524,288 tokens across both GPUs. Raw loss varies with batch difficulty; the EMA helps reveal the trend.
+                  Each update covers 524,288 tokens across both GPUs. The original run and logging after step 30,063 average 20 updates per point. The earlier continuation segment logged single updates, so its raw dots are noisier and not directly comparable; use the EMA and validation trend across that interval.
                 </small>
               )}
               <RunChart
@@ -420,7 +420,7 @@ function RunWorkspace({ id }: { id: string }) {
                 range={range}
                 resumeStep={r.history_import?.resume_step}
                 resumeTokens={resumeTokens}
-                defaultHalfLife={chart.key === "training-loss" && trackedSlayer149 ? 25e6 : undefined}
+                defaultHalfLife={chart.key === "training-loss" && trackedSlayer149 ? 50e6 : undefined}
                 precision={chart.key === "validation-loss" ? 6 : 4}
               />
             </div>
