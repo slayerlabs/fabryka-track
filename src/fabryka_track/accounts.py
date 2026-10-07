@@ -58,7 +58,8 @@ def current_user(request: Request, session=Depends(session_scope)):
         if not run or run.owner_id != token.account_id:
             return None
         allowed = {"/api/events", f"/api/runs/{token.run_id}", f"/api/runs/{token.run_id}/artifacts"}
-        if request.url.path not in allowed:
+        proxy_prefix = f"/api/runs/{token.run_id}/glint-proxy"
+        if request.url.path not in allowed and not request.url.path.startswith(proxy_prefix + "/"):
             return None
         request.state.sdk_run_id = token.run_id
         return session.get(Account, token.account_id)
