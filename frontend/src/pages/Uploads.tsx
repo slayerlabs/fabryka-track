@@ -7,6 +7,9 @@ import {
   type UploadFormState,
 } from "../uploads/form";
 import { uploadFile, type UploadProgress } from "../uploads/uploader";
+import { bindingLabel, humanize, stoppedMessage } from "../uploads/display";
+import { request } from "../provider";
+import { HuggingFaceButton } from "./Account";
 import {
   browserUploaderDeps,
   cancelUpload,
@@ -42,8 +45,8 @@ function phase(job: UploadJob) {
 }
 
 function outcome(job: UploadJob) {
-  if (job.failure_code) return job.failure_code.replaceAll("_", " ");
-  if (job.client_phase === "complete") return job.publication_state?.replaceAll("_", " ") ?? "Done";
+  if (job.failure_code) return humanize(job.failure_code);
+  if (job.client_phase === "complete") return job.publication_state ? humanize(job.publication_state) : "Done";
   return "—";
 }
 
@@ -88,6 +91,7 @@ function NewUploadForm() {
   const [errors, setErrors] = useState<UploadErrors>({});
   const [error, setError] = useState("");
   const [progress, setProgress] = useState<UploadProgress | null>(null);
+  const lastPhase = useRef<UploadProgress["phase"]>("hashing");
   const abort = useRef<AbortController | null>(null);
   const busy = progress !== null;
 
@@ -110,15 +114,19 @@ function NewUploadForm() {
     if (!result.form || !file) return;
     const controller = new AbortController();
     abort.current = controller;
+    lastPhase.current = "hashing";
     setProgress({ phase: "hashing", loaded: 0, total: file.size });
     try {
       const jobId = await uploadFile(file, result.form, browserUploaderDeps(), {
         signal: controller.signal,
-        onProgress: setProgress,
+        onProgress: (next) => {
+          lastPhase.current = next.phase;
+          setProgress(next);
+        },
       });
       navigate(`/uploads/${encodeURIComponent(jobId)}`);
     } catch (e) {
-      setError(controller.signal.aborted ? "Upload stopped. The job was cancelled." : message(e));
+      setError(controller.signal.aborted ? stoppedMessage(lastPhase.current) : message(e));
       setProgress(null);
     }
   }
@@ -207,7 +215,13 @@ function NewUploadForm() {
             </label>
           </div>
         </div>
-        <fieldset className="field" disabled={busy} role="radiogroup" aria-labelledby="mask-names-label">
+        <fieldset
+          className="field"
+          style={{ border: 0, padding: 0, minWidth: 0 }}
+          disabled={busy}
+          role="radiogroup"
+          aria-labelledby="mask-names-label"
+        >
           <span id="mask-names-label">Mask personal names?</span>
           <label>
             <input
@@ -269,6 +283,26 @@ function NewUploadForm() {
 }
 
 export function UploadsPage() {
+  const [linked, setLinked] = useState<boolean | null>(null);
+  useEffect(() => {
+    request<{ user: { huggingface_username?: string | null } | null }>("/api/auth/me").then(
+      ({ user }) => setLinked(Boolean(user?.huggingface_username)),
+      () => setLinked(true),
+    );
+  }, []);
+  if (linked === false)
+    return (
+      <section className="panel">
+        <div className="eyebrow">Data pipeline</div>
+        <h1>Data uploads</h1>
+        <p className="notice">Sign in with Hugging Face to upload data.</p>
+        <HuggingFaceButton link />
+      </section>
+    );
+  return <UploadsWorkspace />;
+}
+
+function UploadsWorkspace() {
   const [jobs, setJobs] = useState<UploadJob[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -380,8 +414,8 @@ function ReportSummary({ id }: { id: string }) {
   return (
     <>
       <p>
-        <strong>Verdict:</strong> {report.verdict === "passed" ? "Passed" : report.verdict === "failed_qa" ? "Failed quality checks" : report.verdict ?? "—"}
-        {report.failure_code && <> · {report.failure_code.replaceAll("_", " ")}</>}
+        <strong>Verdict:</strong> {report.verdict === "failed_qa" ? "Failed quality checks" : humanize(report.verdict)}
+        {report.failure_code && <> · {humanize(report.failure_code)}</>}
       </p>
       <p>
         Rows in: {report.report?.rows_in ?? "—"} · Rows out: {report.report?.rows_out ?? "—"}
@@ -401,8 +435,8 @@ function ReportSummary({ id }: { id: string }) {
               {checks.map((check, index) => (
                 <tr key={`${check.name}-${index}`}>
                   <td>{check.name ?? "—"}</td>
-                  <td>{check.binding ?? "—"}</td>
-                  <td>{check.status ?? "—"}</td>
+                  <td>{bindingLabel(check.binding)}</td>
+                  <td>{humanize(check.status)}</td>
                   <td>{check.count ?? "—"}</td>
                 </tr>
               ))}

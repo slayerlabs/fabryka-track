@@ -8,7 +8,7 @@ export interface StudioUser {
   huggingface_username?: string | null;
 }
 
-function HuggingFaceButton({ link = false }: { link?: boolean }) {
+export function HuggingFaceButton({ link = false }: { link?: boolean }) {
   const { mutateAsync } = useCustomMutation<{ url: string }>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");

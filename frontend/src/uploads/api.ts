@@ -29,7 +29,7 @@ export interface UploadJob {
 
 export interface UploadCheck {
   name?: string;
-  binding?: string;
+  binding?: boolean;
   status?: string;
   count?: number | null;
 }
