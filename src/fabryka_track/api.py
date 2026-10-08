@@ -78,8 +78,10 @@ app.include_router(published_benchmarks_router)
 from .model_board import router as model_board_router
 app.include_router(model_board_router)
 from .metric_charts import router as metric_charts_router
+from .data_uploads import router as data_uploads_router
 from .run_history import read_history
 app.include_router(metric_charts_router)
+app.include_router(data_uploads_router)
 
 
 @app.middleware("http")

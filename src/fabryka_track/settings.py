@@ -47,6 +47,9 @@ class Settings(BaseSettings):
     r2_bucket: str | None = None
     r2_access_key: str | None = None
     r2_secret_key: str | None = None
+    pipeline_url: str = "https://data-pipeline.fabryka.ai"
+    pipeline_username: str | None = None
+    pipeline_password: str | None = None
 
 
 settings = Settings()
