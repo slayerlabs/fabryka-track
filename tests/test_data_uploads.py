@@ -55,7 +55,7 @@ def controller(monkeypatch):
     fake = FakeController()
     real_client = httpx.Client
     monkeypatch.setattr(data_uploads.httpx, "Client", lambda **kw: real_client(transport=httpx.MockTransport(fake), **kw))
-    monkeypatch.setattr(data_uploads.settings, "pipeline_url", "http://pipeline.test")
+    monkeypatch.setattr(data_uploads.settings, "pipeline_url", "https://pipeline.test")
     monkeypatch.setattr(data_uploads.settings, "pipeline_username", "track")
     monkeypatch.setattr(data_uploads.settings, "pipeline_password", "track-secret")
     return fake
@@ -214,3 +214,49 @@ def test_client_supplied_identity_headers_are_never_forwarded(client, controller
         assert sent.headers.get_list("x-pipeline-user-name") == ["tester"]
     assert controller.requests[0].headers["idempotency-key"] == ACTION_KEY
     assert "idempotency-key" not in controller.requests[1].headers
+
+
+def test_unconfigured_is_reported_before_the_identity_check(client, controller, monkeypatch):
+    drop_hf_identity()
+    monkeypatch.setattr(data_uploads.settings, "pipeline_username", None)
+    assert client.get("/api/uploads").status_code == 503
+
+
+def test_pipeline_url_must_use_https():
+    from pydantic import ValidationError
+    from fabryka_track.settings import Settings
+    with pytest.raises(ValidationError):
+        Settings(pipeline_url="http://data-pipeline.fabryka.ai")
+    assert Settings(pipeline_url="https://data-pipeline.fabryka.ai").pipeline_url == "https://data-pipeline.fabryka.ai"
+
+
+@pytest.mark.parametrize("field", ["license", "author", "source_ref"])
+def test_optional_metadata_accepts_the_controller_maximum(client, controller, field):
+    body = create_body()
+    body["parameters"] = {**body["parameters"], field: "x" * 4096}
+    assert client.post("/api/uploads", json=body).status_code == 201
+    body["parameters"][field] = "x" * 4097
+    assert client.post("/api/uploads", json=body).status_code == 422
+
+
+def test_concurrent_creates_with_one_key_both_return_the_job(client, controller):
+    import threading
+    barrier = threading.Barrier(2, timeout=10)
+    default = FakeController.__call__
+
+    def together(request):
+        barrier.wait()
+        controller.reply = None
+        return default(controller, request)
+    controller.reply = together
+    results = []
+    threads = [threading.Thread(target=lambda: results.append(client.post("/api/uploads", json=create_body())))
+               for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert sorted(r.status_code for r in results) == [201, 201]
+    assert {r.json()["job_id"] for r in results} == {JOB_ID}
+    with SessionLocal() as session:
+        assert len(session.scalars(select(DataUploadDeclaration)).all()) == 1

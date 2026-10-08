@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, StrictBool
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from .accounts import require_user
 from .database import session_scope
@@ -53,9 +54,9 @@ class UploadInput(Body):
 class UploadParameters(Body):
     source: str = Field(pattern=r"^[a-z0-9][a-z0-9_]*$", max_length=128)
     added: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
-    license: str | None = Field(default=None, max_length=200)
-    author: str | None = Field(default=None, max_length=200)
-    source_ref: str | None = Field(default=None, max_length=2000)
+    license: str | None = Field(default=None, max_length=4096)
+    author: str | None = Field(default=None, max_length=4096)
+    source_ref: str | None = Field(default=None, max_length=4096)
     per_record_provenance: StrictBool | None = None
     mask_names: StrictBool
 
@@ -98,11 +99,11 @@ class ControllerError(Exception):
 
 
 def uploader(user=Depends(require_user), session=Depends(session_scope)):
+    if not settings.pipeline_username or not settings.pipeline_password:
+        raise HTTPException(503, "Data uploads are not configured.")
     identity = session.scalar(select(HuggingFaceIdentity).where(HuggingFaceIdentity.account_id == user.id))
     if not identity or not SUBJECT.fullmatch(identity.subject) or not USERNAME.fullmatch(identity.username):
         raise HTTPException(403, "Sign in with Hugging Face to upload data.")
-    if not settings.pipeline_username or not settings.pipeline_password:
-        raise HTTPException(503, "Data uploads are not configured.")
     return user, identity
 
 
@@ -155,7 +156,11 @@ def create_upload(body: CreateUpload, caller=Depends(uploader), session=Depends(
         return JSONResponse({"detail": error.message, "code": error.code}, status_code=error.status)
     if not session.get(DataUploadDeclaration, job["job_id"]):
         session.add(DataUploadDeclaration(job_id=job["job_id"], account_id=user.id, version=body.declaration.version))
-        session.commit()
+        try:
+            session.commit()
+        except IntegrityError:
+            # A concurrent create with the same action key already recorded this job's declaration.
+            session.rollback()
     return JSONResponse(job, status_code=status)
 
 
