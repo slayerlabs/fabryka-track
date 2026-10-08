@@ -9,6 +9,7 @@ from fabryka_track import data_uploads
 from fabryka_track.database import SessionLocal
 from fabryka_track.models import DataUploadDeclaration, HuggingFaceIdentity
 
+REQUEST_ID = "0f0e0d0c-0b0a-4999-8888-777766665555"
 JOB_ID = "6f1c1f3e-2b7a-4d5e-9c3b-1a2b3c4d5e6f"
 ACTION_KEY = "0b0c7d9e-1f2a-4b3c-8d4e-5f6a7b8c9d0e"
 
@@ -53,8 +54,14 @@ class FakeController:
 @pytest.fixture()
 def controller(monkeypatch):
     fake = FakeController()
+    fake.clients = 0
     real_client = httpx.Client
-    monkeypatch.setattr(data_uploads.httpx, "Client", lambda **kw: real_client(transport=httpx.MockTransport(fake), **kw))
+
+    def build(**kw):
+        fake.clients += 1
+        return real_client(transport=httpx.MockTransport(fake), **kw)
+    monkeypatch.setattr(data_uploads.httpx, "Client", build)
+    monkeypatch.setattr(data_uploads, "_client", None)
     monkeypatch.setattr(data_uploads.settings, "pipeline_url", "https://pipeline.test")
     monkeypatch.setattr(data_uploads.settings, "pipeline_username", "track")
     monkeypatch.setattr(data_uploads.settings, "pipeline_password", "track-secret")
@@ -134,7 +141,7 @@ def test_repeated_create_returns_same_job_and_records_one_declaration(client, co
 
 
 def controller_error(status, code):
-    return lambda request: httpx.Response(status, json={"protocol": "job-v1", "request_id": "r", "code": code,
+    return lambda request: httpx.Response(status, json={"protocol": "job-v1", "request_id": REQUEST_ID, "code": code,
                                                         "message": "internal controller wording", "retryable": True})
 
 
@@ -147,7 +154,7 @@ def test_limit_errors_map_to_stable_messages(client, controller, code, message):
     controller.reply = controller_error(429, code)
     response = client.post("/api/uploads", json=create_body())
     assert response.status_code == 429
-    assert response.json() == {"detail": message, "code": code}
+    assert response.json() == {"detail": message, "code": code, "request_id": REQUEST_ID}
     with SessionLocal() as session:
         assert session.scalars(select(DataUploadDeclaration)).all() == []
 
@@ -156,7 +163,7 @@ def test_rejected_track_credentials_are_not_reported_as_a_browser_sign_in_proble
     controller.reply = controller_error(401, "unauthorized")
     response = client.get("/api/uploads")
     assert response.status_code == 502
-    assert response.json() == {"detail": data_uploads.UNAVAILABLE, "code": "unauthorized"}
+    assert response.json() == {"detail": data_uploads.UNAVAILABLE, "code": "unauthorized", "request_id": REQUEST_ID}
 
 
 def test_unreachable_controller_is_a_502(client, controller):
@@ -260,3 +267,87 @@ def test_concurrent_creates_with_one_key_both_return_the_job(client, controller)
     assert {r.json()["job_id"] for r in results} == {JOB_ID}
     with SessionLocal() as session:
         assert len(session.scalars(select(DataUploadDeclaration)).all()) == 1
+
+
+def test_no_database_connection_is_held_during_the_controller_call(client, controller):
+    from fabryka_track.database import engine
+    held = []
+    default = FakeController.__call__
+
+    def observe(request):
+        held.append(engine.pool.checkedout())
+        controller.reply = None
+        result = default(controller, request)
+        controller.reply = observe
+        return result
+    controller.reply = observe
+    assert client.post("/api/uploads", json=create_body()).status_code == 201
+    assert client.get("/api/uploads").status_code == 200
+    assert held == [0, 0]
+    with SessionLocal() as session:
+        assert session.get(DataUploadDeclaration, JOB_ID) is not None
+
+
+def test_one_controller_client_is_reused_across_requests(client, controller):
+    client.get("/api/uploads")
+    client.get(f"/api/uploads/{JOB_ID}")
+    assert controller.clients == 1
+    assert len(controller.requests) == 2
+
+
+def test_controller_failures_are_logged_without_secrets(client, controller, caplog):
+    controller.reply = controller_error(409, "invalid_state")
+    with caplog.at_level("WARNING", logger="fabryka_track.data_uploads"):
+        response = client.post(f"/api/uploads/{JOB_ID}/cancel", json={"action_key": ACTION_KEY})
+    assert response.json()["request_id"] == REQUEST_ID
+    text = caplog.text
+    for expected in ("POST", "/cancel", "409", "invalid_state", REQUEST_ID):
+        assert expected in text
+    assert "track-secret" not in text and "dHJhY2s6" not in text
+
+
+@pytest.mark.parametrize("code", ["integrity_mismatch", "body_too_large", "unsupported_version",
+                                  "idempotency_key_required", "method_not_allowed", "stale_attempt", "lease_expired"])
+def test_every_job_v1_error_code_has_its_own_message(client, controller, code):
+    controller.reply = controller_error(409, code)
+    detail = client.get("/api/uploads").json()["detail"]
+    assert detail not in (data_uploads.UNAVAILABLE, data_uploads.REFUSED)
+    if code == "integrity_mismatch":
+        assert detail == "The uploaded file does not match what was declared. Start a new upload."
+
+
+def test_forbidden_origin_is_treated_as_tracks_own_fault(client, controller):
+    controller.reply = controller_error(403, "forbidden_origin")
+    response = client.get("/api/uploads")
+    assert (response.status_code, response.json()["detail"]) == (502, data_uploads.UNAVAILABLE)
+
+
+@pytest.mark.parametrize("reply,status,detail", [
+    (lambda r: httpx.Response(418, json={"code": "something_new"}), 418, "The data pipeline refused this request."),
+    (lambda r: httpx.Response(409, json={}), 409, "The data pipeline refused this request."),
+    (lambda r: httpx.Response(500, json={"code": "something_new"}), 500, "Data uploads are temporarily unavailable. Try again shortly."),
+    (lambda r: httpx.Response(503, text="<html>bad gateway</html>"), 502, "Data uploads are temporarily unavailable. Try again shortly."),
+    (lambda r: httpx.Response(409, json=["not", "an", "object"]), 502, "Data uploads are temporarily unavailable. Try again shortly."),
+    (lambda r: httpx.Response(200, text="not json"), 502, "Data uploads are temporarily unavailable. Try again shortly."),
+    (lambda r: httpx.Response(200, json=[1, 2]), 502, "Data uploads are temporarily unavailable. Try again shortly."),
+])
+def test_unexpected_controller_replies_fall_back_by_status(client, controller, reply, status, detail):
+    controller.reply = reply
+    response = client.get(f"/api/uploads/{JOB_ID}")
+    assert (response.status_code, response.json()["detail"]) == (status, detail)
+
+
+def test_unusable_hugging_face_username_has_its_own_message(client, controller):
+    with SessionLocal() as session:
+        session.scalar(select(HuggingFaceIdentity)).username = "Display Name"
+        session.commit()
+    response = client.get("/api/uploads")
+    assert response.status_code == 403
+    assert response.json()["detail"] == ("Your Hugging Face account has no username Track can use. "
+                                         "Sign out and sign in with Hugging Face again.")
+    assert controller.requests == []
+
+
+def test_action_key_rejects_a_trailing_newline(client, controller):
+    assert client.post("/api/uploads", json=create_body(action_key=ACTION_KEY + "\n")).status_code == 422
+    assert controller.requests == []

@@ -1,4 +1,7 @@
+import logging
 import re
+import threading
+from dataclasses import dataclass
 from typing import Literal
 from uuid import UUID
 
@@ -10,16 +13,20 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from .accounts import require_user
-from .database import session_scope
+from .database import SessionLocal, session_scope
 from .models import DataUploadDeclaration, HuggingFaceIdentity
 from .settings import settings
 
 router = APIRouter(prefix="/api/uploads")
+logger = logging.getLogger(__name__)
+_client = None
+_client_lock = threading.Lock()
 DECLARATION_VERSION = "upload-declaration-v0-placeholder"
 PROTOCOL = "job-v1"
 SUBJECT = re.compile(r"[A-Za-z0-9_-]{1,64}")
 USERNAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,95}")
 UNAVAILABLE = "Data uploads are temporarily unavailable. Try again shortly."
+REFUSED = "The data pipeline refused this request."
 MAX_BYTES = 512 * 1024 * 1024
 ACTION_KEY = r"^[!-~]{16,128}$"
 MESSAGES = {
@@ -37,6 +44,13 @@ MESSAGES = {
     "idempotency_conflict": "This action was already submitted with different details. Reload the page and try again.",
     "invalid_request": "The data pipeline rejected the request. Check the file and form, then try again.",
     "provider_unavailable": "Storage is temporarily unavailable. Try again shortly.",
+    "integrity_mismatch": "The uploaded file does not match what was declared. Start a new upload.",
+    "body_too_large": "The request was too large for the data pipeline.",
+    "unsupported_version": "Track and the data pipeline disagree on the protocol version. Try again later.",
+    "idempotency_key_required": "The request was missing its action key. Reload the page and try again.",
+    "method_not_allowed": "The data pipeline does not support this action.",
+    "stale_attempt": "This upload attempt is no longer current. Reload the page.",
+    "lease_expired": "The processing slot for this upload expired. Start a new upload.",
 }
 
 
@@ -94,102 +108,148 @@ class CancelUpload(Body):
 
 
 class ControllerError(Exception):
-    def __init__(self, status, code, message):
-        self.status, self.code, self.message = status, code, message
+    def __init__(self, status, code, message, request_id=None):
+        self.status, self.code, self.message, self.request_id = status or 502, code, message, request_id
+
+    def with_status(self, status):
+        self.status = status
+        return self
+
+
+@dataclass(frozen=True)
+class Caller:
+    account_id: str
+    subject: str
+    username: str
 
 
 def uploader(user=Depends(require_user), session=Depends(session_scope)):
     if not settings.pipeline_username or not settings.pipeline_password:
         raise HTTPException(503, "Data uploads are not configured.")
     identity = session.scalar(select(HuggingFaceIdentity).where(HuggingFaceIdentity.account_id == user.id))
-    if not identity or not SUBJECT.fullmatch(identity.subject) or not USERNAME.fullmatch(identity.username):
+    if not identity or not SUBJECT.fullmatch(identity.subject):
         raise HTTPException(403, "Sign in with Hugging Face to upload data.")
-    return user, identity
+    if not USERNAME.fullmatch(identity.username):
+        raise HTTPException(403, "Your Hugging Face account has no username Track can use. "
+                                 "Sign out and sign in with Hugging Face again.")
+    caller = Caller(user.id, identity.subject, identity.username)
+    # Release the pooled connection; the controller round-trip can take up to the read timeout.
+    session.close()
+    return caller
 
 
-def call(identity, method, path, *, json=None, params=None, action_key=None):
-    headers = {"X-Pipeline-User": identity.subject, "X-Pipeline-User-Name": identity.username}
+def controller_client():
+    global _client
+    with _client_lock:
+        if _client is None:
+            _client = httpx.Client(base_url=settings.pipeline_url.rstrip("/"),
+                                   auth=(settings.pipeline_username, settings.pipeline_password),
+                                   timeout=httpx.Timeout(20, connect=5),
+                                   limits=httpx.Limits(max_connections=20, max_keepalive_connections=10))
+        return _client
+
+
+def object_body(response):
+    try:
+        body = response.json()
+    except ValueError:
+        return None
+    return body if isinstance(body, dict) else None
+
+
+def failure(method, path, status, code, message, request_id=None):
+    logger.warning("controller %s %s failed: status=%s code=%s request_id=%s", method, path, status, code, request_id)
+    return ControllerError(status, code, message, request_id)
+
+
+def call(caller, method, path, *, json=None, params=None, action_key=None):
+    headers = {"X-Pipeline-User": caller.subject, "X-Pipeline-User-Name": caller.username}
     if method != "GET":
         headers["X-Pipeline-Request"] = "1"
     if action_key:
         headers["Idempotency-Key"] = action_key
     try:
-        with httpx.Client(base_url=settings.pipeline_url.rstrip("/"), timeout=30,
-                          auth=(settings.pipeline_username, settings.pipeline_password)) as client:
-            response = client.request(method, "/jobs/v1" + path, json=json, params=params, headers=headers)
-    except httpx.HTTPError:
-        raise ControllerError(502, "provider_unavailable", UNAVAILABLE)
+        response = controller_client().request(method, "/jobs/v1" + path, json=json, params=params, headers=headers)
+    except httpx.HTTPError as error:
+        raise failure(method, path, None, type(error).__name__, UNAVAILABLE)
+    body = object_body(response)
+    if body is None:
+        raise failure(method, path, response.status_code, "provider_unavailable", UNAVAILABLE).with_status(502)
     if response.is_success:
-        return response.status_code, response.json()
-    try:
-        code = response.json().get("code")
-    except ValueError:
-        code = None
-    # A 401 here means Track's own controller credentials were refused, not the browser session.
-    if response.status_code == 401:
-        raise ControllerError(502, code, UNAVAILABLE)
-    raise ControllerError(response.status_code, code, MESSAGES.get(code, UNAVAILABLE))
+        return response.status_code, body
+    status, code, request_id = response.status_code, body.get("code"), body.get("request_id")
+    # 401 and forbidden_origin mean Track's own controller credentials or setup were refused, not the browser.
+    if status == 401 or code == "forbidden_origin":
+        raise failure(method, path, status, code, UNAVAILABLE, request_id).with_status(502)
+    message = MESSAGES.get(code) or (UNAVAILABLE if status >= 500 else REFUSED)
+    raise failure(method, path, status, code, message, request_id)
 
 
-def forward(identity, method, path, **kwargs):
+def error_response(error):
+    return JSONResponse({"detail": error.message, "code": error.code, "request_id": error.request_id},
+                        status_code=error.status)
+
+
+def forward(caller, method, path, **kwargs):
     try:
-        status, body = call(identity, method, path, **kwargs)
+        status, body = call(caller, method, path, **kwargs)
         return JSONResponse(body, status_code=status)
     except ControllerError as error:
-        return JSONResponse({"detail": error.message, "code": error.code}, status_code=error.status)
+        return error_response(error)
 
 
 @router.get("")
 def list_uploads(cursor: str | None = None, caller=Depends(uploader)):
     params = {"limit": 20, **({"cursor": cursor} if cursor else {})}
-    return forward(caller[1], "GET", "/jobs", params=params)
+    return forward(caller, "GET", "/jobs", params=params)
 
 
 @router.post("")
-def create_upload(body: CreateUpload, caller=Depends(uploader), session=Depends(session_scope)):
-    user, identity = caller
+def create_upload(body: CreateUpload, caller=Depends(uploader)):
     payload = {"protocol": PROTOCOL, "pipeline": "dynaword-upload", "input": body.input.model_dump(),
                "parameters": body.parameters.model_dump(exclude_none=True)}
     try:
-        status, job = call(identity, "POST", "/jobs", json=payload, action_key=body.action_key)
+        status, job = call(caller, "POST", "/jobs", json=payload, action_key=body.action_key)
     except ControllerError as error:
-        return JSONResponse({"detail": error.message, "code": error.code}, status_code=error.status)
-    if not session.get(DataUploadDeclaration, job["job_id"]):
-        session.add(DataUploadDeclaration(job_id=job["job_id"], account_id=user.id, version=body.declaration.version))
-        try:
-            session.commit()
-        except IntegrityError:
-            # A concurrent create with the same action key already recorded this job's declaration.
-            session.rollback()
+        return error_response(error)
+    with SessionLocal() as session:
+        if not session.get(DataUploadDeclaration, job["job_id"]):
+            session.add(DataUploadDeclaration(job_id=job["job_id"], account_id=caller.account_id,
+                                              version=body.declaration.version))
+            try:
+                session.commit()
+            except IntegrityError:
+                # A concurrent create with the same action key already recorded this job's declaration.
+                session.rollback()
     return JSONResponse(job, status_code=status)
 
 
 @router.post("/{job_id}/parts")
 def part_grant(job_id: UUID, body: PartRequest, caller=Depends(uploader)):
-    return forward(caller[1], "POST", f"/jobs/{job_id}/parts", json={"protocol": PROTOCOL, **body.model_dump()})
+    return forward(caller, "POST", f"/jobs/{job_id}/parts", json={"protocol": PROTOCOL, **body.model_dump()})
 
 
 @router.post("/{job_id}/confirm")
 def confirm_upload(job_id: UUID, body: ConfirmUpload, caller=Depends(uploader)):
     payload = {"protocol": PROTOCOL, **body.model_dump(exclude={"action_key"})}
-    return forward(caller[1], "POST", f"/jobs/{job_id}/confirm", json=payload, action_key=body.action_key)
+    return forward(caller, "POST", f"/jobs/{job_id}/confirm", json=payload, action_key=body.action_key)
 
 
 @router.post("/{job_id}/cancel")
 def cancel_upload(job_id: UUID, body: CancelUpload, caller=Depends(uploader)):
-    return forward(caller[1], "POST", f"/jobs/{job_id}/cancel", json={"protocol": PROTOCOL}, action_key=body.action_key)
+    return forward(caller, "POST", f"/jobs/{job_id}/cancel", json={"protocol": PROTOCOL}, action_key=body.action_key)
 
 
 @router.get("/{job_id}")
 def upload_status(job_id: UUID, caller=Depends(uploader)):
-    return forward(caller[1], "GET", f"/jobs/{job_id}")
+    return forward(caller, "GET", f"/jobs/{job_id}")
 
 
 @router.get("/{job_id}/report")
 def upload_report(job_id: UUID, caller=Depends(uploader)):
-    return forward(caller[1], "GET", f"/jobs/{job_id}/report")
+    return forward(caller, "GET", f"/jobs/{job_id}/report")
 
 
 @router.get("/{job_id}/result")
 def upload_result(job_id: UUID, diagnostic: bool = False, caller=Depends(uploader)):
-    return forward(caller[1], "GET", f"/jobs/{job_id}/result", params={"diagnostic": "true"} if diagnostic else None)
+    return forward(caller, "GET", f"/jobs/{job_id}/result", params={"diagnostic": "true"} if diagnostic else None)
