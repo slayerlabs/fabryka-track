@@ -22,6 +22,7 @@ import {
   PublishedBenchmarksPage,
 } from "./pages/Public";
 import { BenchmarksPage } from "./pages/Benchmarks";
+import { UploadDetailPage, UploadsPage } from "./pages/Uploads";
 import { LeaderboardPage } from "./pages/Leaderboard";
 import { ModelBoardPage } from "./pages/ModelBoard";
 import { CheckpointsPage } from "./pages/Checkpoints";
@@ -39,6 +40,7 @@ const navigation: { label: string; links: [string, string, IconName][] }[] = [
       ["/runs", "Focused runs", "play"],
       ["/checkpoints", "Checkpoints", "layers"],
       ["/benchmarks", "Evaluation queue", "chart"],
+      ["/uploads", "Data uploads", "database"],
       ["/leaderboard", "Fabryka leaderboard", "trophy"],
     ],
   },
@@ -231,6 +233,22 @@ function ApplicationShell() {
               element={
                 <Authenticated key="benchmarks" fallback={<LoginPage />}>
                   <BenchmarksPage />
+                </Authenticated>
+              }
+            />
+            <Route
+              path="/uploads"
+              element={
+                <Authenticated key="uploads" fallback={<LoginPage />}>
+                  <UploadsPage />
+                </Authenticated>
+              }
+            />
+            <Route
+              path="/uploads/:id"
+              element={
+                <Authenticated key="upload" fallback={<LoginPage />}>
+                  <UploadDetailPage />
                 </Authenticated>
               }
             />

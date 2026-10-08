@@ -59,6 +59,7 @@ export async function request<T = unknown>(
           : `Request failed (${response.status})`;
     throw Object.assign(new Error(message), {
       statusCode: response.status,
+      code: record(body) && typeof body.code === "string" ? body.code : undefined,
     }) satisfies HttpError;
   }
   // Callers supply the response contract of the same-version FastAPI endpoint.

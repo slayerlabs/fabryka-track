@@ -425,23 +425,23 @@ def web(path: str = ""):
              "benchmarks": "Evaluation queue", "leaderboard": "Training results", "models": "Model leaderboard", "guide": "Learning guide",
              "login": "Sign in", "register": "Sign in", "account": "Account", "checkpoints": "Checkpoints",
              "status": "Goal status", "agents": "Agent sign up",
-             "benchmark-results": "Published benchmarks",
+             "benchmark-results": "Published benchmarks", "uploads": "Data uploads",
              "goals/250m-english-base-model": "250M English base model"}
     path = path.rstrip("/")
     title = pages.get(path)
     if title is None:
         kind, _, identifiers = path.partition("/")
         try:
-            if kind not in {"run", "compare"} or not identifiers:
+            if kind not in {"run", "compare", "uploads"} or not identifiers:
                 raise ValueError()
             from uuid import UUID
             for identifier in identifiers.split(","):
                 UUID(identifier)
-            if kind == "run" and "," in identifiers:
+            if kind in {"run", "uploads"} and "," in identifiers:
                 raise ValueError()
         except ValueError:
             raise HTTPException(404, "Page not found")
-        title = "Run dashboard" if kind == "run" else "Compare runs"
+        title = {"run": "Run dashboard", "compare": "Compare runs", "uploads": "Data upload"}[kind]
     entry = Path(__file__).parent / "web" / "index.html"
     if not entry.is_file():
         raise HTTPException(503, "Frontend build missing. Run npm ci && npm run build in frontend/.")

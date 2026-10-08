@@ -1,6 +1,6 @@
+import type { UploadForm } from "./form";
 import type { Hasher } from "./sha256";
 
-export const MAX_UPLOAD_BYTES = 512 * 1024 * 1024;
 const CHUNK_BYTES = 8 * 1024 * 1024;
 const PART_RETRIES = 3;
 const READY_POLLS = 40;
@@ -11,11 +11,6 @@ export interface SliceableFile {
   slice(start: number, end: number): Blob;
 }
 
-export interface UploadForm {
-  format: "jsonl" | "parquet";
-  parameters: Record<string, unknown>;
-  declaration: { accepted: true; version: string };
-}
 
 export interface UploadProgress {
   phase: "hashing" | "preparing" | "uploading" | "confirming";
@@ -69,7 +64,6 @@ export async function uploadFile(
 ) {
   const { signal, onProgress } = options;
   if (file.size === 0) throw new Error("The file is empty.");
-  if (file.size > MAX_UPLOAD_BYTES) throw new Error("The file is larger than 512 MiB.");
   const sha256 = await hashFile(file, deps.createHash(), options);
   onProgress?.({ phase: "preparing", loaded: 0, total: file.size });
   const session = (await deps.call(
