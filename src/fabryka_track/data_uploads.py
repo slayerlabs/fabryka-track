@@ -6,14 +6,14 @@ from typing import Literal
 from uuid import UUID
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, StrictBool
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
-from .accounts import require_user
-from .database import SessionLocal, session_scope
+from .accounts import current_user, require_user
+from .database import SessionLocal
 from .models import DataUploadDeclaration, HuggingFaceIdentity
 from .settings import settings
 
@@ -109,11 +109,7 @@ class CancelUpload(Body):
 
 class ControllerError(Exception):
     def __init__(self, status, code, message, request_id=None):
-        self.status, self.code, self.message, self.request_id = status or 502, code, message, request_id
-
-    def with_status(self, status):
-        self.status = status
-        return self
+        self.status, self.code, self.message, self.request_id = status, code, message, request_id
 
 
 @dataclass(frozen=True)
@@ -123,19 +119,19 @@ class Caller:
     username: str
 
 
-def uploader(user=Depends(require_user), session=Depends(session_scope)):
-    if not settings.pipeline_username or not settings.pipeline_password:
-        raise HTTPException(503, "Data uploads are not configured.")
-    identity = session.scalar(select(HuggingFaceIdentity).where(HuggingFaceIdentity.account_id == user.id))
-    if not identity or not SUBJECT.fullmatch(identity.subject):
-        raise HTTPException(403, "Sign in with Hugging Face to upload data.")
-    if not USERNAME.fullmatch(identity.username):
-        raise HTTPException(403, "Your Hugging Face account has no username Track can use. "
-                                 "Sign out and sign in with Hugging Face again.")
-    caller = Caller(user.id, identity.subject, identity.username)
-    # Release the pooled connection; the controller round-trip can take up to the read timeout.
-    session.close()
-    return caller
+def uploader(request: Request):
+    # Own short session instead of Depends(session_scope), which would hold a connection for the controller call.
+    with SessionLocal() as session:
+        user = require_user(current_user(request, session))
+        if not settings.pipeline_username or not settings.pipeline_password:
+            raise HTTPException(503, "Data uploads are not configured.")
+        identity = session.scalar(select(HuggingFaceIdentity).where(HuggingFaceIdentity.account_id == user.id))
+        if not identity or not SUBJECT.fullmatch(identity.subject):
+            raise HTTPException(403, "Sign in with Hugging Face to upload data.")
+        if not USERNAME.fullmatch(identity.username):
+            raise HTTPException(403, "Your Hugging Face account has no username Track can use. "
+                                     "Sign out and sign in with Hugging Face again.")
+        return Caller(user.id, identity.subject, identity.username)
 
 
 def controller_client():
@@ -157,9 +153,9 @@ def object_body(response):
     return body if isinstance(body, dict) else None
 
 
-def failure(method, path, status, code, message, request_id=None):
+def failure(method, path, status, code, message, request_id=None, *, reply_status=None):
     logger.warning("controller %s %s failed: status=%s code=%s request_id=%s", method, path, status, code, request_id)
-    return ControllerError(status, code, message, request_id)
+    return ControllerError(reply_status or status or 502, code, message, request_id)
 
 
 def call(caller, method, path, *, json=None, params=None, action_key=None):
@@ -174,28 +170,25 @@ def call(caller, method, path, *, json=None, params=None, action_key=None):
         raise failure(method, path, None, type(error).__name__, UNAVAILABLE)
     body = object_body(response)
     if body is None:
-        raise failure(method, path, response.status_code, "provider_unavailable", UNAVAILABLE).with_status(502)
+        raise failure(method, path, response.status_code, "provider_unavailable", UNAVAILABLE, reply_status=502)
     if response.is_success:
         return response.status_code, body
     status, code, request_id = response.status_code, body.get("code"), body.get("request_id")
     # 401 and forbidden_origin mean Track's own controller credentials or setup were refused, not the browser.
     if status == 401 or code == "forbidden_origin":
-        raise failure(method, path, status, code, UNAVAILABLE, request_id).with_status(502)
+        raise failure(method, path, status, code, UNAVAILABLE, request_id, reply_status=502)
     message = MESSAGES.get(code) or (UNAVAILABLE if status >= 500 else REFUSED)
     raise failure(method, path, status, code, message, request_id)
 
 
-def error_response(error):
+def controller_error_response(_request, error):
     return JSONResponse({"detail": error.message, "code": error.code, "request_id": error.request_id},
                         status_code=error.status)
 
 
 def forward(caller, method, path, **kwargs):
-    try:
-        status, body = call(caller, method, path, **kwargs)
-        return JSONResponse(body, status_code=status)
-    except ControllerError as error:
-        return error_response(error)
+    status, body = call(caller, method, path, **kwargs)
+    return JSONResponse(body, status_code=status)
 
 
 @router.get("")
@@ -208,10 +201,7 @@ def list_uploads(cursor: str | None = None, caller=Depends(uploader)):
 def create_upload(body: CreateUpload, caller=Depends(uploader)):
     payload = {"protocol": PROTOCOL, "pipeline": "dynaword-upload", "input": body.input.model_dump(),
                "parameters": body.parameters.model_dump(exclude_none=True)}
-    try:
-        status, job = call(caller, "POST", "/jobs", json=payload, action_key=body.action_key)
-    except ControllerError as error:
-        return error_response(error)
+    status, job = call(caller, "POST", "/jobs", json=payload, action_key=body.action_key)
     with SessionLocal() as session:
         if not session.get(DataUploadDeclaration, job["job_id"]):
             session.add(DataUploadDeclaration(job_id=job["job_id"], account_id=caller.account_id,
