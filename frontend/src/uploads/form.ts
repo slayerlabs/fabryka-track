@@ -1,4 +1,5 @@
 export const MAX_UPLOAD_BYTES = 512 * 1024 * 1024;
+export const MAX_UPLOAD_LABEL = `${MAX_UPLOAD_BYTES / 1024 / 1024} MiB`;
 export const DECLARATION_VERSION = "upload-declaration-v0-placeholder";
 export const DECLARATION_TEXT =
   "I confirm that I have the right to share this data for processing and publication, and that the license I give is truthful.";
@@ -10,7 +11,7 @@ export interface UploadForm {
 }
 
 export interface UploadFormState {
-  file: { name: string; size: number } | null;
+  file: File | null;
   source: string;
   added: string;
   license: string;
@@ -42,7 +43,7 @@ export function validateUpload(state: UploadFormState): { errors: UploadErrors; 
   if (!state.file) errors.file = "Choose a file to upload.";
   else if (!format) errors.file = "Choose a .jsonl or .parquet file.";
   else if (state.file.size === 0) errors.file = "The file is empty.";
-  else if (state.file.size > MAX_UPLOAD_BYTES) errors.file = "The file is larger than 512 MiB.";
+  else if (state.file.size > MAX_UPLOAD_BYTES) errors.file = `The file is larger than ${MAX_UPLOAD_LABEL}.`;
   if (!/^[a-z0-9][a-z0-9_]*$/.test(state.source) || state.source.length > 128)
     errors.source =
       "Use up to 128 lowercase letters, digits and underscores, starting with a letter or digit.";

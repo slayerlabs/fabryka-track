@@ -1,5 +1,7 @@
-import type { UploadForm } from "./form";
-import type { Hasher } from "./sha256";
+import { apiError } from "../provider.ts";
+import { CLOSED_PHASES, PROCESSING_UPLOADING, TRANSFER_CLOSED, TRANSFER_READY } from "./display.ts";
+import type { UploadForm } from "./form.ts";
+import type { Hasher } from "./sha256.ts";
 
 const CHUNK_BYTES = 8 * 1024 * 1024;
 const PART_RETRIES = 3;
@@ -75,7 +77,7 @@ export async function uploadFile(
   });
   const session = (await withRetries(deps, () => deps.call("/api/uploads", create))) as { job_id: string; part_size_bytes?: number };
   const job = `/api/uploads/${encodeURIComponent(session.job_id)}`;
-  let confirmError: unknown = null;
+  let confirm: RequestInit;
   try {
     signal?.throwIfAborted();
     await waitUntilReady(job, deps, signal);
@@ -88,37 +90,43 @@ export async function uploadFile(
       signal?.throwIfAborted();
       onProgress?.({ phase: "uploading", loaded: end, total: file.size });
     }
-    onProgress?.({ phase: "confirming", loaded: file.size, total: file.size });
-    const confirm = post({ action_key: deps.newKey(), parts, encoded_bytes: file.size, input_sha256: sha256 });
-    await withRetries(deps, () => deps.call(`${job}/confirm`, confirm)).catch((error) => {
-      confirmError = error;
-      throw error;
-    });
+    confirm = post({ action_key: deps.newKey(), parts, encoded_bytes: file.size, input_sha256: sha256 });
   } catch (error) {
     // Without resume, an abandoned job would only hold the user's upload slot until its deadline.
-    if (confirmError === null || isDefiniteRefusal(confirmError) || (await stillUploading(job, deps))) {
-      await deps.call(`${job}/cancel`, post({ action_key: deps.newKey() })).catch(() => undefined);
-    }
+    await cancelJob(job, deps);
+    throw error;
+  }
+  onProgress?.({ phase: "confirming", loaded: file.size, total: file.size });
+  try {
+    await withRetries(deps, () => deps.call(`${job}/confirm`, confirm));
+  } catch (error) {
+    // The controller may have accepted a confirm whose response was lost; cancel only when that is ruled out.
+    if (isDefiniteRefusal(error) || (await stillUploading(job, deps))) await cancelJob(job, deps);
     throw error;
   }
   return session.job_id;
 }
 
-const statusOf = (error: unknown) => (error as { statusCode?: number } | null)?.statusCode;
+function cancelJob(job: string, deps: UploaderDeps) {
+  return deps.call(`${job}/cancel`, post({ action_key: deps.newKey() })).then(
+    () => undefined,
+    () => undefined,
+  );
+}
 
 function isTransient(error: unknown) {
-  const status = statusOf(error);
+  const { status } = apiError(error);
   return status === undefined || status >= 500;
 }
 
 function isDefiniteRefusal(error: unknown) {
-  const status = statusOf(error);
+  const { status } = apiError(error);
   return status !== undefined && status >= 400 && status < 500;
 }
 
 async function stillUploading(job: string, deps: UploaderDeps) {
   try {
-    return ((await deps.call(job)) as { processing_state?: string }).processing_state === "uploading";
+    return ((await deps.call(job)) as { processing_state?: string }).processing_state === PROCESSING_UPLOADING;
   } catch {
     return false;
   }
@@ -141,8 +149,8 @@ async function waitUntilReady(job: string, deps: UploaderDeps, signal?: AbortSig
       if (signal?.aborted || !isTransient(error)) throw error;
       return {};
     })) as { transfer_state?: string; client_phase?: string };
-    if (status.transfer_state === "ready") return;
-    if (status.transfer_state === "closed" || status.client_phase === "expired" || status.client_phase === "rejected")
+    if (status.transfer_state === TRANSFER_READY) return;
+    if (status.transfer_state === TRANSFER_CLOSED || CLOSED_PHASES.has(status.client_phase ?? ""))
       throw new Error("The upload was closed before the file could be sent.");
     await deps.sleep(Math.min(5000, 500 * 1.5 ** attempt), signal);
   }
@@ -171,6 +179,6 @@ async function sendPart(job: string, partNumber: number, body: Blob, deps: Uploa
 }
 
 function isNonRetryableGrantError(error: unknown) {
-  const { statusCode, code } = (error ?? {}) as { statusCode?: number; code?: string };
-  return isDefiniteRefusal(error) && statusCode !== 429 && code !== "transfer_not_ready";
+  const { status, code } = apiError(error);
+  return isDefiniteRefusal(error) && status !== 429 && code !== "transfer_not_ready";
 }

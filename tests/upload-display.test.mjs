@@ -51,3 +51,19 @@ test("polling continues through transient errors and stops on a permanent refusa
   assert.equal(keepPolling(error(404)), false);
   assert.equal(keepPolling(error(403)), false);
 });
+
+test("describeJob gathers the job interpretation the pages show", async () => {
+  const { describeJob } = await import("../frontend/src/uploads/display.ts");
+  const described = describeJob({
+    job_id: "j", client_phase: "complete", processing_state: "failed_qa", publication_state: "published",
+    upload_started_at: "2026-10-08T10:00:00Z", admitted_at: "2026-10-08T10:05:00Z", first_result_stored_at: null,
+  });
+  assert.deepEqual(described, {
+    phase: "Complete", outcome: "Failed quality checks", terminal: true, hasReport: true, diagnosticOnly: true,
+    updatedAt: "2026-10-08T10:05:00Z",
+  });
+  const running = describeJob({ job_id: "j", client_phase: "running", processing_state: "running" });
+  assert.equal(running.terminal, false);
+  assert.equal(running.updatedAt, undefined);
+  assert.equal(describeJob({ job_id: "j", client_phase: "brand_new" }).phase, "brand_new");
+});

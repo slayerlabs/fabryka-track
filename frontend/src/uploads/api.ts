@@ -1,6 +1,6 @@
-import { request } from "../provider";
-import { Sha256 } from "./sha256";
-import type { UploaderDeps } from "./uploader";
+import { request } from "../provider.ts";
+import { Sha256 } from "./sha256.ts";
+import type { UploaderDeps } from "./uploader.ts";
 
 export interface UploadJob {
   job_id: string;
@@ -34,19 +34,6 @@ export interface UploadReport {
     qa?: { checks?: UploadCheck[] };
   };
 }
-
-export const TERMINAL_PHASES = new Set(["complete", "expired", "rejected"]);
-
-export const PHASE_LABELS: Record<string, string> = {
-  uploading: "Uploading",
-  validating: "Validating",
-  queued: "Queued",
-  running: "Running",
-  finalizing: "Finalizing",
-  complete: "Complete",
-  expired: "Expired",
-  rejected: "Rejected",
-};
 
 const job = (id: string) => `/api/uploads/${encodeURIComponent(id)}`;
 
@@ -82,7 +69,7 @@ function sleep(ms: number, signal?: AbortSignal) {
 }
 
 export const browserUploaderDeps = (): UploaderDeps => ({
-  call: (path, init) => request(path, init),
+  call: request,
   fetch: (url, init) => fetch(url, init),
   sleep,
   createHash: () => new Sha256(),
