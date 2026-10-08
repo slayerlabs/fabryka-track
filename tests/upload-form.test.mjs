@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DECLARATION_VERSION, validateUpload } from "../frontend/src/uploads/form.ts";
+import { DECLARATION_TEXT, DECLARATION_VERSION, validateUpload } from "../frontend/src/uploads/form.ts";
 
 const valid = {
   file: { name: "corpus.jsonl", size: 1024 },
@@ -56,4 +56,9 @@ test("the file must be a non-empty JSONL or Parquet file of at most 512 MiB", ()
   assert.ok(validateUpload({ ...valid, file: { name: "data.jsonl", size: 0 } }).errors.file);
   assert.ok(validateUpload({ ...valid, file: { name: "data.jsonl", size: 512 * 1024 * 1024 + 1 } }).errors.file);
   assert.equal(validateUpload({ ...valid, file: { name: "data.jsonl", size: 512 * 1024 * 1024 } }).errors.file, undefined);
+});
+
+test("the declaration uses the same spelling as the license field", () => {
+  assert.match(DECLARATION_TEXT, /\blicense\b/);
+  assert.doesNotMatch(DECLARATION_TEXT, /licence/);
 });

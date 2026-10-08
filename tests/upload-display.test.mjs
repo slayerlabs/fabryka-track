@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { bindingLabel, humanize, stoppedMessage } from "../frontend/src/uploads/display.ts";
+import { bindingLabel, diagnosticOnly, humanize, jobOutcome, keepPolling, showsReport, stoppedMessage } from "../frontend/src/uploads/display.ts";
 
 test("machine codes read as plain words", () => {
   assert.equal(humanize("failed_qa"), "Failed qa");
@@ -19,4 +19,35 @@ test("stopping says the job was cancelled only once a job could exist", () => {
   assert.equal(stoppedMessage("hashing"), "Upload stopped.");
   for (const phase of ["preparing", "uploading", "confirming"])
     assert.equal(stoppedMessage(phase), "Upload stopped. The job was cancelled.");
+});
+
+const job = (processing_state, extra = {}) => ({ job_id: "j", client_phase: "complete", processing_state, ...extra });
+
+test("the outcome follows the processing state, not the client phase", () => {
+  assert.equal(jobOutcome(job("passed")), "Passed");
+  assert.equal(jobOutcome(job("failed_qa", { failure_code: "qa_failed" })), "Failed quality checks");
+  assert.equal(jobOutcome(job("failed", { failure_code: "memory_limit" })), "Failed (Memory limit)");
+  assert.equal(jobOutcome(job("failed")), "Failed");
+  assert.equal(jobOutcome(job("cancelled")), "Cancelled");
+  assert.equal(jobOutcome(job("rejected", { client_phase: "rejected" })), "Rejected");
+  assert.equal(jobOutcome(job("uploading", { client_phase: "expired" })), "Expired");
+  assert.equal(jobOutcome(job("running", { client_phase: "running" })), "—");
+});
+
+test("report and downloads appear only for a published result", () => {
+  assert.equal(showsReport(job("passed", { publication_state: "published" })), true);
+  assert.equal(showsReport(job("cancelled", { publication_state: "none" })), false);
+  assert.equal(showsReport(job("passed", { publication_state: "pending" })), false);
+  assert.equal(diagnosticOnly(job("failed_qa", { publication_state: "published" })), true);
+  assert.equal(diagnosticOnly(job("passed", { publication_state: "published" })), false);
+  assert.equal(diagnosticOnly(job("failed_qa", { publication_state: "none" })), false);
+});
+
+test("polling continues through transient errors and stops on a permanent refusal", () => {
+  const error = (statusCode) => Object.assign(new Error("x"), { statusCode });
+  assert.equal(keepPolling(new TypeError("Failed to fetch")), true);
+  assert.equal(keepPolling(error(502)), true);
+  assert.equal(keepPolling(error(429)), true);
+  assert.equal(keepPolling(error(404)), false);
+  assert.equal(keepPolling(error(403)), false);
 });

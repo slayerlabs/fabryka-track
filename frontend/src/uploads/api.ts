@@ -2,22 +2,13 @@ import { request } from "../provider";
 import { Sha256 } from "./sha256";
 import type { UploaderDeps } from "./uploader";
 
-export interface UploadArtifact {
-  artifact_id: string;
-  kind: string;
-  bytes: number;
-  sha256: string;
-  first_stored_at?: string | null;
-  expires_at?: string | null;
-}
-
 export interface UploadJob {
   job_id: string;
   client_phase: string;
+  processing_state?: string | null;
   publication_state?: string | null;
   transfer_state?: string | null;
   failure_code?: string | null;
-  artifacts?: UploadArtifact[];
   upload_started_at?: string | null;
   upload_deadline?: string | null;
   admitted_at?: string | null;

@@ -7,7 +7,15 @@ import {
   type UploadFormState,
 } from "../uploads/form";
 import { uploadFile, type UploadProgress } from "../uploads/uploader";
-import { bindingLabel, humanize, stoppedMessage } from "../uploads/display";
+import {
+  bindingLabel,
+  diagnosticOnly,
+  humanize,
+  jobOutcome,
+  keepPolling,
+  showsReport,
+  stoppedMessage,
+} from "../uploads/display";
 import { request } from "../provider";
 import { HuggingFaceButton } from "./Account";
 import {
@@ -42,12 +50,6 @@ function size(bytes?: number | null) {
 
 function phase(job: UploadJob) {
   return PHASE_LABELS[job.client_phase] ?? job.client_phase;
-}
-
-function outcome(job: UploadJob) {
-  if (job.failure_code) return humanize(job.failure_code);
-  if (job.client_phase === "complete") return job.publication_state ? humanize(job.publication_state) : "Done";
-  return "—";
 }
 
 function lastUpdate(job: UploadJob) {
@@ -215,18 +217,13 @@ function NewUploadForm() {
             </label>
           </div>
         </div>
-        <fieldset
-          className="field"
-          style={{ border: 0, padding: 0, minWidth: 0 }}
-          disabled={busy}
-          role="radiogroup"
-          aria-labelledby="mask-names-label"
-        >
+        <div className="field" role="radiogroup" aria-labelledby="mask-names-label">
           <span id="mask-names-label">Mask personal names?</span>
           <label>
             <input
               type="radio"
               name="mask_names"
+              disabled={busy}
               checked={state.mask_names === "yes"}
               onChange={() => set("mask_names", "yes")}
             />{" "}
@@ -236,13 +233,14 @@ function NewUploadForm() {
             <input
               type="radio"
               name="mask_names"
+              disabled={busy}
               checked={state.mask_names === "no"}
               onChange={() => set("mask_names", "no")}
             />{" "}
             No, keep names
           </label>
           <FieldError text={errors.mask_names} />
-        </fieldset>
+        </div>
         <div className="field">
           <span>Declaration</span>
           <label>
@@ -271,7 +269,7 @@ function NewUploadForm() {
           <button className="primary" type="submit" disabled={busy}>
             {busy ? "Uploading…" : "Upload file"}
           </button>
-          {busy && (
+          {busy && progress.phase !== "confirming" && (
             <button className="secondary" type="button" onClick={() => abort.current?.abort()}>
               Stop upload
             </button>
@@ -290,6 +288,7 @@ export function UploadsPage() {
       () => setLinked(true),
     );
   }, []);
+  if (linked === null) return <p className="muted">Loading…</p>;
   if (linked === false)
     return (
       <section className="panel">
@@ -307,30 +306,43 @@ function UploadsWorkspace() {
   const [cursor, setCursor] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState("");
+  const [loadingMore, setLoadingMore] = useState(false);
+  const unmounted = useRef(new AbortController());
   const active = jobs.some((job) => !TERMINAL_PHASES.has(job.client_phase));
 
   async function load(next?: string | null) {
+    const signal = unmounted.current.signal;
     try {
-      const page = await listUploads(next);
+      const page = await listUploads(next, signal);
       setJobs((current) => (next ? [...current, ...page.jobs] : page.jobs));
       setCursor(page.next_cursor);
       setError("");
     } catch (e) {
-      setError(message(e));
+      if (!signal.aborted) setError(message(e));
     } finally {
-      setLoaded(true);
+      if (!signal.aborted) setLoaded(true);
     }
   }
 
+  async function loadMore(next: string) {
+    setLoadingMore(true);
+    await load(next);
+    setLoadingMore(false);
+  }
+
   useEffect(() => {
+    // Created per mount so StrictMode's dev remount does not inherit an aborted controller.
+    const controller = new AbortController();
+    unmounted.current = controller;
     void load();
+    return () => controller.abort();
   }, []);
   useEffect(() => {
     // Refreshing replaces the list with page one, so it would drop pages loaded with "Load more".
-    if (!active || jobs.length > PAGE_SIZE) return;
+    if (!active || loadingMore || jobs.length > PAGE_SIZE) return;
     const timer = setInterval(() => void load(), POLL_MS * 3);
     return () => clearInterval(timer);
-  }, [active, jobs.length]);
+  }, [active, loadingMore, jobs.length]);
 
   return (
     <>
@@ -376,7 +388,7 @@ function UploadsWorkspace() {
                       </Link>
                     </td>
                     <td>{phase(job)}</td>
-                    <td>{outcome(job)}</td>
+                    <td>{jobOutcome(job)}</td>
                     <td>{size(job.encoded_bytes)}</td>
                     <td>{when(job.upload_started_at)}</td>
                     <td>{when(lastUpdate(job))}</td>
@@ -388,7 +400,7 @@ function UploadsWorkspace() {
         )}
         {cursor && (
           <div className="actions">
-            <button className="secondary" onClick={() => void load(cursor)}>
+            <button className="secondary" disabled={loadingMore} onClick={() => void loadMore(cursor)}>
               Load more
             </button>
           </div>
@@ -448,10 +460,10 @@ function ReportSummary({ id }: { id: string }) {
   );
 }
 
-function ResultDownload({ id }: { id: string }) {
+function ResultDownload({ id, diagnosticFirst }: { id: string; diagnosticFirst: boolean }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [diagnostic, setDiagnostic] = useState(false);
+  const [diagnostic, setDiagnostic] = useState(diagnosticFirst);
   async function download(asDiagnostic: boolean) {
     setBusy(true);
     setError("");
@@ -472,9 +484,11 @@ function ResultDownload({ id }: { id: string }) {
         </p>
       )}
       <div className="actions">
-        <button className="primary" disabled={busy} onClick={() => void download(false)}>
-          Download result
-        </button>
+        {!diagnosticFirst && (
+          <button className="primary" disabled={busy} onClick={() => void download(false)}>
+            Download result
+          </button>
+        )}
         {diagnostic && (
           <button className="secondary" disabled={busy} onClick={() => void download(true)}>
             Download diagnostic result
@@ -490,6 +504,7 @@ export function UploadDetailPage() {
   const [job, setJob] = useState<UploadJob | null>(null);
   const [error, setError] = useState("");
   const [cancelling, setCancelling] = useState(false);
+  const [stopped, setStopped] = useState(false);
   const terminal = job ? TERMINAL_PHASES.has(job.client_phase) : false;
 
   useEffect(() => {
@@ -501,16 +516,18 @@ export function UploadDetailPage() {
           setError("");
         },
         (e) => {
-          if (!controller.signal.aborted) setError(message(e));
+          if (controller.signal.aborted) return;
+          setError(message(e));
+          if (!keepPolling(e)) setStopped(true);
         },
       );
     void refresh();
-    const timer = terminal ? undefined : setInterval(refresh, POLL_MS);
+    const timer = terminal || stopped ? undefined : setInterval(refresh, POLL_MS);
     return () => {
       controller.abort();
       clearInterval(timer);
     };
-  }, [id, terminal]);
+  }, [id, terminal, stopped]);
 
   async function cancel() {
     if (!window.confirm("Cancel this upload? This cannot be undone.")) return;
@@ -542,7 +559,7 @@ export function UploadDetailPage() {
               <table>
                 <tbody>
                   <tr><th>Phase</th><td>{phase(job)}</td></tr>
-                  <tr><th>Outcome</th><td>{outcome(job)}</td></tr>
+                  <tr><th>Outcome</th><td>{jobOutcome(job)}</td></tr>
                   <tr><th>Size</th><td>{size(job.encoded_bytes)}</td></tr>
                   <tr><th>SHA-256</th><td><code>{job.input_sha256 ?? "—"}</code></td></tr>
                   <tr><th>Upload started</th><td>{when(job.upload_started_at)}</td></tr>
@@ -563,11 +580,11 @@ export function UploadDetailPage() {
           </>
         )}
       </section>
-      {job && (job.client_phase === "complete" || job.client_phase === "rejected") && (
+      {job && showsReport(job) && (
         <section className="panel">
           <h2>Report</h2>
           <ReportSummary id={id} />
-          <ResultDownload id={id} />
+          <ResultDownload id={id} diagnosticFirst={diagnosticOnly(job)} />
         </section>
       )}
     </>

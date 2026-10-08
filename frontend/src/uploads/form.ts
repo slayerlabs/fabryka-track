@@ -1,7 +1,7 @@
 export const MAX_UPLOAD_BYTES = 512 * 1024 * 1024;
 export const DECLARATION_VERSION = "upload-declaration-v0-placeholder";
 export const DECLARATION_TEXT =
-  "I confirm that I have the right to share this data for processing and publication, and that the licence I give is truthful.";
+  "I confirm that I have the right to share this data for processing and publication, and that the license I give is truthful.";
 
 export interface UploadForm {
   format: "jsonl" | "parquet";

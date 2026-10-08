@@ -95,9 +95,10 @@ export async function uploadFile(
       throw error;
     });
   } catch (error) {
-    if (confirmError === null || isDefiniteRefusal(confirmError) || (await stillUploading(job, deps)))
-      // Without resume, an abandoned job would only hold the user's upload slot until its deadline.
+    // Without resume, an abandoned job would only hold the user's upload slot until its deadline.
+    if (confirmError === null || isDefiniteRefusal(confirmError) || (await stillUploading(job, deps))) {
       await deps.call(`${job}/cancel`, post({ action_key: deps.newKey() })).catch(() => undefined);
+    }
     throw error;
   }
   return session.job_id;
