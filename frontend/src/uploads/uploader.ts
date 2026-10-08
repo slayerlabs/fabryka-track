@@ -4,13 +4,13 @@ import type { Hasher } from "./sha256";
 const CHUNK_BYTES = 8 * 1024 * 1024;
 const PART_RETRIES = 3;
 const READY_POLLS = 40;
+const REQUEST_RETRIES = 4;
 
 export interface SliceableFile {
   name: string;
   size: number;
   slice(start: number, end: number): Blob;
 }
-
 
 export interface UploadProgress {
   phase: "hashing" | "preparing" | "uploading" | "confirming";
@@ -66,20 +66,18 @@ export async function uploadFile(
   if (file.size === 0) throw new Error("The file is empty.");
   const sha256 = await hashFile(file, deps.createHash(), options);
   onProgress?.({ phase: "preparing", loaded: 0, total: file.size });
-  const session = (await deps.call(
-    "/api/uploads",
-    post(
-      {
-        action_key: deps.newKey(),
-        input: { format: form.format, encoded_bytes: file.size, sha256, filename: file.name },
-        parameters: form.parameters,
-        declaration: form.declaration,
-      },
-      signal,
-    ),
-  )) as { job_id: string; part_size_bytes?: number };
+  // No abort signal: an abandoned in-flight create could still produce a job that holds the slot.
+  const create = post({
+    action_key: deps.newKey(),
+    input: { format: form.format, encoded_bytes: file.size, sha256, filename: file.name },
+    parameters: form.parameters,
+    declaration: form.declaration,
+  });
+  const session = (await withRetries(deps, () => deps.call("/api/uploads", create))) as { job_id: string; part_size_bytes?: number };
   const job = `/api/uploads/${encodeURIComponent(session.job_id)}`;
+  let confirmError: unknown = null;
   try {
+    signal?.throwIfAborted();
     await waitUntilReady(job, deps, signal);
     const partSize = session.part_size_bytes || CHUNK_BYTES;
     const parts: { part_number: number; etag: string }[] = [];
@@ -91,26 +89,59 @@ export async function uploadFile(
       onProgress?.({ phase: "uploading", loaded: end, total: file.size });
     }
     onProgress?.({ phase: "confirming", loaded: file.size, total: file.size });
-    await deps.call(
-      `${job}/confirm`,
-      post({ action_key: deps.newKey(), parts, encoded_bytes: file.size, input_sha256: sha256 }, signal),
-    );
+    const confirm = post({ action_key: deps.newKey(), parts, encoded_bytes: file.size, input_sha256: sha256 });
+    await withRetries(deps, () => deps.call(`${job}/confirm`, confirm)).catch((error) => {
+      confirmError = error;
+      throw error;
+    });
   } catch (error) {
-    // Without resume, an abandoned job would only hold the user's upload slot until its deadline.
-    await deps.call(`${job}/cancel`, post({ action_key: deps.newKey() })).catch(() => undefined);
+    if (confirmError === null || isDefiniteRefusal(confirmError) || (await stillUploading(job, deps)))
+      // Without resume, an abandoned job would only hold the user's upload slot until its deadline.
+      await deps.call(`${job}/cancel`, post({ action_key: deps.newKey() })).catch(() => undefined);
     throw error;
   }
   return session.job_id;
 }
 
+const statusOf = (error: unknown) => (error as { statusCode?: number } | null)?.statusCode;
+
+function isTransient(error: unknown) {
+  const status = statusOf(error);
+  return status === undefined || status >= 500;
+}
+
+function isDefiniteRefusal(error: unknown) {
+  const status = statusOf(error);
+  return status !== undefined && status >= 400 && status < 500;
+}
+
+async function stillUploading(job: string, deps: UploaderDeps) {
+  try {
+    return ((await deps.call(job)) as { processing_state?: string }).processing_state === "uploading";
+  } catch {
+    return false;
+  }
+}
+
+async function withRetries<T>(deps: UploaderDeps, attempt: () => Promise<T>) {
+  for (let retry = 0; ; retry++) {
+    try {
+      return await attempt();
+    } catch (error) {
+      if (!isTransient(error) || retry >= REQUEST_RETRIES) throw error;
+      await deps.sleep(1000 * 2 ** retry);
+    }
+  }
+}
+
 async function waitUntilReady(job: string, deps: UploaderDeps, signal?: AbortSignal) {
   for (let attempt = 0; attempt < READY_POLLS; attempt++) {
     const status = (await deps.call(job, { signal }).catch((error) => {
-      if (signal?.aborted) throw error;
+      if (signal?.aborted || !isTransient(error)) throw error;
       return {};
     })) as { transfer_state?: string; client_phase?: string };
     if (status.transfer_state === "ready") return;
-    if (status.client_phase === "expired" || status.client_phase === "rejected")
+    if (status.transfer_state === "closed" || status.client_phase === "expired" || status.client_phase === "rejected")
       throw new Error("The upload was closed before the file could be sent.");
     await deps.sleep(Math.min(5000, 500 * 1.5 ** attempt), signal);
   }
@@ -129,11 +160,16 @@ async function sendPart(job: string, partNumber: number, body: Blob, deps: Uploa
       if (response.ok && etag) return etag;
       hiddenEtag = response.ok;
     } catch (error) {
-      if (signal?.aborted) throw error;
+      if (signal?.aborted || isNonRetryableGrantError(error)) throw error;
     }
     if (attempt < PART_RETRIES) await deps.sleep(1000 * 2 ** attempt, signal);
   }
   if (hiddenEtag)
     throw new Error(`Part ${partNumber} was stored, but the storage response did not expose its ETag. Report this to the Track team.`);
   throw new Error(`Part ${partNumber} could not be uploaded. Check your connection and try again.`);
+}
+
+function isNonRetryableGrantError(error: unknown) {
+  const { statusCode, code } = (error ?? {}) as { statusCode?: number; code?: string };
+  return isDefiniteRefusal(error) && statusCode !== 429 && code !== "transfer_not_ready";
 }

@@ -20,7 +20,7 @@ function sliceOnlyFile(bytes, name = "data.jsonl") {
   };
 }
 
-function fakeTrack({ readyAfter = 2, failPuts = {} } = {}) {
+function fakeTrack({ readyAfter = 2, failPuts = {}, statusAfterConfirm = null } = {}) {
   const calls = [];
   const puts = [];
   let polls = 0;
@@ -32,7 +32,8 @@ function fakeTrack({ readyAfter = 2, failPuts = {} } = {}) {
       return { job_id: JOB, transfer_state: "pending", part_size_bytes: 8 * MiB };
     if (path === `/api/uploads/${JOB}`) {
       polls++;
-      return { job_id: JOB, client_phase: "uploading", transfer_state: polls > readyAfter ? "ready" : "pending" };
+      return { job_id: JOB, client_phase: "uploading", processing_state: "uploading",
+               transfer_state: polls > readyAfter ? "ready" : "pending", ...(statusAfterConfirm && calls.some((c) => c.path.endsWith("/confirm")) ? statusAfterConfirm : {}) };
     }
     if (path === `/api/uploads/${JOB}/parts`) {
       if (polls <= readyAfter) throw Object.assign(new Error("not ready"), { statusCode: 409 });
@@ -187,4 +188,97 @@ test("a storage response without a readable ETag is reported as such", async () 
     return new Response(null, { status: 200 });
   };
   await assert.rejects(uploadFile(sliceOnlyFile(randomBytes(10)), form, deps(track, { fetch })), /ETag/);
+});
+
+const failure = (statusCode, code, text = "failed") => Object.assign(new Error(text), { statusCode, code });
+const lost = () => new TypeError("Failed to fetch");
+
+function failing(track, path, errors) {
+  const queue = [...errors];
+  return async (p, init) => {
+    if (p === path || p.endsWith(path)) {
+      track.calls.push({ path: p, method: init?.method ?? "GET", body: init?.body ? JSON.parse(init.body) : undefined, init, failed: true });
+      if (queue.length) throw queue.shift();
+    }
+    return track.call(p, init);
+  };
+}
+
+const keysOf = (track, suffix) => track.calls.filter((c) => c.path.endsWith(suffix) && c.body).map((c) => c.body.action_key);
+
+test("create is retried with the same key after a lost response or a 5xx", async () => {
+  const track = fakeTrack({ readyAfter: 0 });
+  const call = failing(track, "/api/uploads", [lost(), failure(502, "provider_unavailable")]);
+  assert.equal(await uploadFile(sliceOnlyFile(randomBytes(10)), form, deps(track, { call })), JOB);
+  const keys = keysOf(track, "/api/uploads");
+  assert.equal(keys.length, 4);
+  assert.equal(new Set(keys).size, 1);
+});
+
+test("aborting while create is in flight still cancels the job it created", async () => {
+  const controller = new AbortController();
+  const track = fakeTrack({ readyAfter: 0 });
+  let createInit;
+  const call = async (path, init) => {
+    if (path === "/api/uploads") {
+      createInit = init;
+      controller.abort();
+    }
+    return track.call(path, init);
+  };
+  await assert.rejects(
+    uploadFile(sliceOnlyFile(randomBytes(10)), form, deps(track, { call }), { signal: controller.signal }),
+    { name: "AbortError" },
+  );
+  assert.equal(createInit.signal, undefined);
+  assert.equal(track.calls.at(-1).path, `/api/uploads/${JOB}/cancel`);
+  assert.equal(track.puts.length, 0);
+});
+
+test("confirm is retried with the same key after a lost response", async () => {
+  const track = fakeTrack({ readyAfter: 0 });
+  const call = failing(track, "/confirm", [lost(), failure(504, null)]);
+  assert.equal(await uploadFile(sliceOnlyFile(randomBytes(10)), form, deps(track, { call })), JOB);
+  assert.equal(new Set(keysOf(track, "/confirm")).size, 1);
+  assert.ok(!track.calls.some((c) => c.path.endsWith("/cancel")));
+});
+
+test("a job whose confirm response was lost is not cancelled once it left the uploading state", async () => {
+  const track = fakeTrack({ readyAfter: 0, statusAfterConfirm: { processing_state: "validating", client_phase: "validating" } });
+  const call = failing(track, "/confirm", Array.from({ length: 10 }, lost));
+  await assert.rejects(uploadFile(sliceOnlyFile(randomBytes(10)), form, deps(track, { call })));
+  assert.ok(!track.calls.some((c) => c.path.endsWith("/cancel")));
+});
+
+test("a confirm refused with a definite 4xx cancels the job", async () => {
+  const track = fakeTrack({ readyAfter: 0 });
+  const call = failing(track, "/confirm", [failure(422, "invalid_request", "The data pipeline rejected the request.")]);
+  await assert.rejects(uploadFile(sliceOnlyFile(randomBytes(10)), form, deps(track, { call })), /rejected the request/);
+  assert.equal(track.calls.filter((c) => c.path.endsWith("/confirm")).length, 1);
+  assert.equal(track.calls.at(-1).path, `/api/uploads/${JOB}/cancel`);
+});
+
+test("waiting for readiness fails fast on a non-transient error", async () => {
+  const track = fakeTrack({ readyAfter: Infinity });
+  const call = failing(track, `/api/uploads/${JOB}`, Array.from({ length: 50 }, () => failure(404, "not_found", "Upload not found.")));
+  await assert.rejects(uploadFile(sliceOnlyFile(randomBytes(10)), form, deps(track, { call })), /Upload not found/);
+  assert.equal(track.calls.filter((c) => c.path === `/api/uploads/${JOB}` && c.failed).length, 1);
+});
+
+test("a transfer that closes without becoming ready is an error", async () => {
+  const track = fakeTrack({ readyAfter: Infinity });
+  const call = async (path, init) => {
+    const result = await track.call(path, init);
+    return path === `/api/uploads/${JOB}` ? { ...result, transfer_state: "closed" } : result;
+  };
+  await assert.rejects(uploadFile(sliceOnlyFile(randomBytes(10)), form, deps(track, { call })), /closed/);
+  assert.equal(track.calls.filter((c) => c.path === `/api/uploads/${JOB}`).length, 1);
+});
+
+test("a non-retryable grant error stops the upload with its own message", async () => {
+  const track = fakeTrack({ readyAfter: 0 });
+  const call = failing(track, "/parts", Array.from({ length: 10 }, () => failure(410, "expired", "This upload has expired.")));
+  await assert.rejects(uploadFile(sliceOnlyFile(randomBytes(10)), form, deps(track, { call })), /This upload has expired/);
+  assert.equal(track.calls.filter((c) => c.path.endsWith("/parts") && c.failed).length, 1);
+  assert.equal(track.puts.length, 0);
 });
