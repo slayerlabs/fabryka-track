@@ -3,6 +3,7 @@ import test from "node:test";
 import { DECLARATION_TEXT, DECLARATION_VERSION, validateUpload } from "../frontend/src/uploads/form.ts";
 
 const valid = {
+  pipeline: "dynaword-upload",
   file: { name: "corpus.jsonl", size: 1024 },
   source: "my_source",
   added: "2026-10-08",
@@ -18,6 +19,7 @@ test("a complete form becomes the create request with blank optional fields omit
   const { errors, form } = validateUpload(valid);
   assert.deepEqual(errors, {});
   assert.deepEqual(form, {
+    pipeline: "dynaword-upload",
     format: "jsonl",
     parameters: { source: "my_source", added: "2026-10-08", license: "CC0-1.0", per_record_provenance: false, mask_names: false },
     declaration: { accepted: true, version: DECLARATION_VERSION },
@@ -27,6 +29,11 @@ test("a complete form becomes the create request with blank optional fields omit
   assert.equal(filled.form.format, "parquet");
   assert.deepEqual(filled.form.parameters, { source: "my_source", added: "2026-10-08", license: "cc-by-4.0",
     author: "Ada", source_ref: "https://example.org", per_record_provenance: true, mask_names: true });
+});
+
+test("a mode must be chosen", () => {
+  assert.ok(validateUpload({ ...valid, pipeline: "" }).errors.pipeline);
+  assert.equal(validateUpload(valid).errors.pipeline, undefined);
 });
 
 test("source must match the controller pattern", () => {

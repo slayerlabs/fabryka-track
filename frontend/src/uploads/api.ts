@@ -2,8 +2,21 @@ import { request } from "../provider.ts";
 import { Sha256 } from "./sha256.ts";
 import type { UploaderDeps } from "./uploader.ts";
 
+export interface Rejection {
+  position: number;
+  rule: string;
+  field?: string | null;
+}
+
+export interface UploadPipeline {
+  pipeline: string;
+  title: string;
+  parameters: Record<string, unknown>;
+}
+
 export interface UploadJob {
   job_id: string;
+  pipeline: string;
   client_phase: string;
   processing_state?: string | null;
   publication_state?: string | null;
@@ -16,6 +29,7 @@ export interface UploadJob {
   expires_at?: string | null;
   encoded_bytes?: number | null;
   input_sha256?: string | null;
+  rejection?: Rejection | null;
 }
 
 export interface UploadCheck {
@@ -31,7 +45,18 @@ export interface UploadReport {
   report?: {
     rows_in?: number | null;
     rows_out?: number | null;
-    qa?: { checks?: UploadCheck[] };
+    counters?: { elapsed_ms?: number | null; input_bytes?: number | null; output_bytes?: number | null };
+    qa?: { checks?: UploadCheck[]; stats?: Record<string, number | null> };
+    report?: {
+      funnel?: {
+        rows_in?: number | null;
+        rejected?: Record<string, number>;
+        removed?: Record<string, number>;
+        rows_out?: number | null;
+      };
+      pii_masked?: Record<string, number | null>;
+      pii_unmeasured?: string[];
+    };
   };
 }
 
@@ -42,6 +67,9 @@ export const listUploads = (cursor?: string | null, signal?: AbortSignal) =>
     "/api/uploads" + (cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""),
     { signal },
   );
+
+export const listPipelines = (signal?: AbortSignal) =>
+  request<{ pipelines: UploadPipeline[] }>("/api/uploads/pipelines", { signal });
 
 export const getUpload = (id: string, signal?: AbortSignal) => request<UploadJob>(job(id), { signal });
 

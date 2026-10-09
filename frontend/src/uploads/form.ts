@@ -5,12 +5,14 @@ export const DECLARATION_TEXT =
   "I confirm that I have the right to share this data for processing and publication, and that the license I give is truthful.";
 
 export interface UploadForm {
+  pipeline: string;
   format: "jsonl" | "parquet";
   parameters: Record<string, string | boolean>;
   declaration: { accepted: true; version: string };
 }
 
 export interface UploadFormState {
+  pipeline: string;
   file: File | null;
   source: string;
   added: string;
@@ -40,6 +42,7 @@ function isCalendarDate(value: string) {
 export function validateUpload(state: UploadFormState): { errors: UploadErrors; form?: UploadForm } {
   const errors: UploadErrors = {};
   const format = state.file ? formatFor(state.file.name) : null;
+  if (!state.pipeline) errors.pipeline = "Choose a mode.";
   if (!state.file) errors.file = "Choose a file to upload.";
   else if (!format) errors.file = "Choose a .jsonl or .parquet file.";
   else if (state.file.size === 0) errors.file = "The file is empty.";
@@ -60,5 +63,5 @@ export function validateUpload(state: UploadFormState): { errors: UploadErrors; 
   }
   parameters.per_record_provenance = state.per_record_provenance;
   parameters.mask_names = state.mask_names === "yes";
-  return { errors, form: { format, parameters, declaration: { accepted: true, version: DECLARATION_VERSION } } };
+  return { errors, form: { pipeline: state.pipeline, format, parameters, declaration: { accepted: true, version: DECLARATION_VERSION } } };
 }

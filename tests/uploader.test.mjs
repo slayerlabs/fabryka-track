@@ -69,6 +69,7 @@ function deps(track, extra = {}) {
 }
 
 const form = {
+  pipeline: "dynaword-upload",
   format: "jsonl",
   parameters: { source: "my_source", added: "2026-10-08", mask_names: true },
   declaration: { accepted: true, version: "upload-declaration-v0-placeholder" },
@@ -88,6 +89,7 @@ test("a file is hashed, created, waited on, uploaded in 8 MiB parts and confirme
     format: "jsonl", encoded_bytes: bytes.length, filename: "data.jsonl",
     sha256: createHash("sha256").update(bytes).digest("hex"),
   });
+  assert.equal(create.body.pipeline, "dynaword-upload");
   assert.deepEqual(create.body.parameters, form.parameters);
   assert.deepEqual(create.body.declaration, form.declaration);
 

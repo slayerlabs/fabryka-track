@@ -17,6 +17,7 @@ ACTION_KEY = "0b0c7d9e-1f2a-4b3c-8d4e-5f6a7b8c9d0e"
 def create_body(**overrides):
     body = {
         "action_key": ACTION_KEY,
+        "pipeline": "dynaword-upload",
         "input": {"format": "jsonl", "encoded_bytes": 1024, "sha256": "a" * 64, "filename": "data.jsonl"},
         "parameters": {"source": "my_source", "added": "2026-10-08", "license": "cc-by-4.0", "mask_names": False},
         "declaration": {"accepted": True, "version": data_uploads.DECLARATION_VERSION},
@@ -91,7 +92,7 @@ def test_unconfigured_controller_answers_503(client, controller, monkeypatch):
 
 
 def test_create_forwards_track_pair_and_hugging_face_identity(client, controller):
-    response = client.post("/api/uploads", json=create_body())
+    response = client.post("/api/uploads", json=create_body(pipeline="other-mode"))
     assert response.status_code == 201
     assert response.json()["job_id"] == JOB_ID
     sent = controller.requests[0]
@@ -102,7 +103,7 @@ def test_create_forwards_track_pair_and_hugging_face_identity(client, controller
     assert sent.headers["x-pipeline-user-name"] == "tester"
     assert sent.headers["idempotency-key"] == ACTION_KEY
     assert json.loads(sent.content) == {
-        "protocol": "job-v1", "pipeline": "dynaword-upload",
+        "protocol": "job-v1", "pipeline": "other-mode",
         "input": {"format": "jsonl", "encoded_bytes": 1024, "sha256": "a" * 64, "filename": "data.jsonl"},
         "parameters": {"source": "my_source", "added": "2026-10-08", "license": "cc-by-4.0", "mask_names": False},
         "declaration": {"version": "upload-declaration-v0-placeholder", "accepted": True},
@@ -178,6 +179,7 @@ CONFIRM = {"parts": [{"part_number": 1, "etag": '"abc"'}, {"part_number": 2, "et
      ("POST", f"/jobs/v1/jobs/{JOB_ID}/confirm", "", {"protocol": "job-v1", **CONFIRM}, ACTION_KEY)),
     ("post", f"/api/uploads/{JOB_ID}/cancel", {"action_key": ACTION_KEY},
      ("POST", f"/jobs/v1/jobs/{JOB_ID}/cancel", "", {"protocol": "job-v1"}, ACTION_KEY)),
+    ("get", "/api/uploads/pipelines", None, ("GET", "/jobs/v1/pipelines", "", None, None)),
     ("get", f"/api/uploads/{JOB_ID}", None, ("GET", f"/jobs/v1/jobs/{JOB_ID}", "", None, None)),
     ("get", f"/api/uploads/{JOB_ID}/report", None, ("GET", f"/jobs/v1/jobs/{JOB_ID}/report", "", None, None)),
     ("get", f"/api/uploads/{JOB_ID}/result", None, ("GET", f"/jobs/v1/jobs/{JOB_ID}/result", "", None, None)),
@@ -330,3 +332,34 @@ def test_a_create_without_a_license_never_reaches_the_controller(client, control
         body["parameters"]["license"] = license
     assert client.post("/api/uploads", json=body).status_code == 422
     assert controller.requests == []
+
+
+@pytest.mark.parametrize("pipeline", [None, "", "Dynaword", "1st", "has_underscore", "a" * 65])
+def test_a_create_without_a_valid_pipeline_never_reaches_the_controller(client, controller, pipeline):
+    body = create_body()
+    del body["pipeline"]
+    if pipeline is not None:
+        body["pipeline"] = pipeline
+    assert client.post("/api/uploads", json=body).status_code == 422
+    assert controller.requests == []
+
+
+def test_an_unknown_pipeline_is_refused_by_the_controller_with_a_stable_message(client, controller):
+    controller.reply = controller_error(422, "invalid_request")
+    response = client.post("/api/uploads", json=create_body(pipeline="no-such-mode"))
+    assert response.status_code == 422
+    assert response.json() == {"detail": data_uploads.MESSAGES["invalid_request"], "code": "invalid_request",
+                               "request_id": REQUEST_ID}
+    assert json.loads(controller.requests[0].content)["pipeline"] == "no-such-mode"
+
+
+def test_pipelines_list_is_guarded_like_the_other_upload_routes(client, controller):
+    controller.reply = controller_error(401, "unauthorized")
+    response = client.get("/api/uploads/pipelines")
+    assert (response.status_code, response.json()["detail"]) == (502, data_uploads.UNAVAILABLE)
+    controller.reply = None
+    drop_hf_identity()
+    assert client.get("/api/uploads/pipelines").status_code == 403
+    client.cookies.clear()
+    assert client.get("/api/uploads/pipelines").status_code == 401
+    assert len(controller.requests) == 1

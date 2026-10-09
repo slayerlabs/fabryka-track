@@ -1,4 +1,4 @@
-import type { UploadJob } from "./api.ts";
+import type { Rejection, UploadJob, UploadPipeline } from "./api.ts";
 import type { UploadProgress } from "./uploader.ts";
 import { apiError } from "../provider.ts";
 
@@ -19,13 +19,16 @@ const PHASE_LABELS: Record<string, string> = {
   rejected: "Rejected",
 };
 
-type JobState = Pick<UploadJob, "client_phase" | "processing_state" | "publication_state" | "failure_code">;
+type JobState = Pick<UploadJob, "client_phase" | "processing_state" | "publication_state" | "failure_code" | "rejection">;
 
 export function humanize(code?: string | null) {
   if (!code) return "—";
   const words = code.replaceAll("_", " ");
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
+
+export const modeLabel = (pipeline: string, pipelines: UploadPipeline[]) =>
+  pipelines.find((entry) => entry.pipeline === pipeline)?.title ?? pipeline;
 
 export function bindingLabel(binding?: boolean) {
   if (binding === undefined) return "—";
@@ -47,7 +50,7 @@ export function jobOutcome(job: JobState) {
     case "cancelled":
       return "Cancelled";
     case "rejected":
-      return "Rejected";
+      return job.failure_code === "records_invalid" ? "Rejected: invalid records" : "Rejected";
   }
   return job.client_phase === "expired" ? "Expired" : "—";
 }
@@ -55,6 +58,35 @@ export function jobOutcome(job: JobState) {
 export function failureHint(job: Pick<UploadJob, "processing_state" | "failure_code">) {
   if (job.processing_state !== "failed" || job.failure_code !== "input_corrupt") return null;
   return "No record was accepted. Check that every line has an id and a text, that the license is set, and that each record has its own source_ref when records carry their own provenance.";
+}
+
+const REJECTION_TAIL = " No record in the first part of the file passed, so the upload was stopped before processing.";
+
+const FORM_LABELS: Record<string, string> = { license: "License" };
+
+function rejectionReason({ position, rule, field }: Rejection) {
+  switch (rule) {
+    case "json_object":
+      return `Record ${position} is not a JSON object.`;
+    case "required":
+      return `Record ${position} has no ${field}.`;
+    case "non_blank":
+      return `Record ${position} has a blank ${field}.`;
+    case "field_or_parameter":
+      return `Record ${position} has no ${field}. Set ${FORM_LABELS[field ?? ""] ?? field} in the form or add ${field} to every record.`;
+    case "required_when_parameter":
+      return `Record ${position} has no ${field}, which every record needs when 'Records carry their own provenance' is checked.`;
+    case "parquet_column":
+      return `The Parquet file has no ${field} column.`;
+  }
+  const subject = position > 0 ? `Record ${position}` : "A record";
+  return `${subject} did not pass the ${rule} check${field ? ` on ${field}` : ""}.`;
+}
+
+export function rejectionMessage(job: JobState) {
+  if (job.processing_state !== "rejected" || job.failure_code !== "records_invalid") return null;
+  const reason = job.rejection ? rejectionReason(job.rejection) : "The first records did not pass the pre-check.";
+  return reason + REJECTION_TAIL;
 }
 
 export const showsReport = (job: JobState) => job.publication_state === "published";
