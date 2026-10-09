@@ -59,6 +59,8 @@ export function failureHint(job: Pick<UploadJob, "processing_state" | "failure_c
 
 const REJECTION_TAIL = " No record in the first part of the file passed, so the upload was stopped before processing.";
 
+const FORM_LABELS: Record<string, string> = { license: "License" };
+
 function rejectionReason({ position, rule, field }: Rejection) {
   switch (rule) {
     case "json_object":
@@ -68,7 +70,7 @@ function rejectionReason({ position, rule, field }: Rejection) {
     case "non_blank":
       return `Record ${position} has an empty ${field}.`;
     case "field_or_parameter":
-      return `Record ${position} has no ${field}. Set License in the form or add ${field} to every record.`;
+      return `Record ${position} has no ${field}. Set ${field && FORM_LABELS[field] || field} in the form or add ${field} to every record.`;
     case "required_when_parameter":
       return `Record ${position} has no ${field}, which every record needs when per-record provenance is on.`;
     case "parquet_column":

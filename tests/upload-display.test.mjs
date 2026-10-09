@@ -85,6 +85,7 @@ test("each pre-check rule has a plain message", () => {
     [{ position: 3, rule: "required", field: "text" }, "Record 3 has no text."],
     [{ position: 3, rule: "non_blank", field: "text" }, "Record 3 has an empty text."],
     [{ position: 3, rule: "field_or_parameter", field: "license" }, "Record 3 has no license. Set License in the form or add license to every record."],
+    [{ position: 3, rule: "field_or_parameter", field: "author" }, "Record 3 has no author. Set author in the form or add author to every record."],
     [{ position: 3, rule: "required_when_parameter", field: "source_ref" }, "Record 3 has no source_ref, which every record needs when per-record provenance is on."],
     [{ position: 0, rule: "parquet_column", field: "text" }, "The Parquet file has no text column."],
   ];
