@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -47,6 +47,17 @@ class Settings(BaseSettings):
     r2_bucket: str | None = None
     r2_access_key: str | None = None
     r2_secret_key: str | None = None
+    pipeline_url: str = "https://data-pipeline.fabryka.ai"
+    pipeline_username: str | None = None
+    pipeline_password: str | None = None
+
+    @field_validator("pipeline_url")
+    @classmethod
+    def pipeline_url_uses_https(cls, value: str) -> str:
+        # The Track Basic pair travels with every controller call.
+        if not value.startswith("https://"):
+            raise ValueError("FABRYKA_PIPELINE_URL must start with https://")
+        return value
 
 
 settings = Settings()

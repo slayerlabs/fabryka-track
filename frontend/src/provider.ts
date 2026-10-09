@@ -22,6 +22,14 @@ function record(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+export function apiError(error: unknown): { status?: number; code?: string } {
+  const { statusCode, code } = (record(error) ? error : {}) as { statusCode?: unknown; code?: unknown };
+  return {
+    status: typeof statusCode === "number" ? statusCode : undefined,
+    code: typeof code === "string" ? code : undefined,
+  };
+}
+
 export async function request<T = unknown>(
   path: string,
   options: RequestInit = {},
@@ -59,6 +67,7 @@ export async function request<T = unknown>(
           : `Request failed (${response.status})`;
     throw Object.assign(new Error(message), {
       statusCode: response.status,
+      code: record(body) && typeof body.code === "string" ? body.code : undefined,
     }) satisfies HttpError;
   }
   // Callers supply the response contract of the same-version FastAPI endpoint.

@@ -22,6 +22,7 @@ import {
   PublishedBenchmarksPage,
 } from "./pages/Public";
 import { BenchmarksPage } from "./pages/Benchmarks";
+import { UploadDetailPage, UploadsPage } from "./pages/Uploads";
 import { LeaderboardPage } from "./pages/Leaderboard";
 import { ModelBoardPage } from "./pages/ModelBoard";
 import { CheckpointsPage } from "./pages/Checkpoints";
@@ -66,11 +67,13 @@ export function App() {
         .find(([path]) => path === location.pathname)?.[1] ||
       (location.pathname.startsWith("/run/")
         ? "Run dashboard"
-        : location.pathname.startsWith("/compare/")
-          ? "Compare runs"
-          : location.pathname.startsWith("/goals/")
-            ? "250M English base model"
-            : "Account");
+        : location.pathname.startsWith("/uploads")
+          ? "Data uploads"
+          : location.pathname.startsWith("/compare/")
+            ? "Compare runs"
+            : location.pathname.startsWith("/goals/")
+              ? "250M English base model"
+              : "Account");
     document.title =
       location.pathname === "/"
         ? "Serious experiment tracking · Fabryka Track"
@@ -231,6 +234,22 @@ function ApplicationShell() {
               element={
                 <Authenticated key="benchmarks" fallback={<LoginPage />}>
                   <BenchmarksPage />
+                </Authenticated>
+              }
+            />
+            <Route
+              path="/uploads"
+              element={
+                <Authenticated key="uploads" fallback={<LoginPage />}>
+                  <UploadsPage />
+                </Authenticated>
+              }
+            />
+            <Route
+              path="/uploads/:id"
+              element={
+                <Authenticated key="upload" fallback={<LoginPage />}>
+                  <UploadDetailPage />
                 </Authenticated>
               }
             />

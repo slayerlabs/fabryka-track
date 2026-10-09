@@ -78,8 +78,11 @@ app.include_router(published_benchmarks_router)
 from .model_board import router as model_board_router
 app.include_router(model_board_router)
 from .metric_charts import router as metric_charts_router
+from .data_uploads import ControllerError, controller_error_response, router as data_uploads_router
 from .run_history import read_history
 app.include_router(metric_charts_router)
+app.include_router(data_uploads_router)
+app.add_exception_handler(ControllerError, controller_error_response)
 
 
 @app.middleware("http")
@@ -417,29 +420,30 @@ def goal_rfc_page():
                             headers={"Cache-Control": "no-store"})
 
 
+ID_PAGES = {"run": ("Run dashboard", False), "compare": ("Compare runs", True), "uploads": ("Data upload", False)}
+
+
 @app.get("/{path:path}", response_class=HTMLResponse)
 def web(path: str = ""):
     pages = {"": "Serious experiment tracking", "overview": "Overview", "goals": "Goals / RFCs", "new": "Training studio", "runs": "Focused runs",
              "benchmarks": "Evaluation queue", "leaderboard": "Training results", "models": "Model leaderboard", "guide": "Learning guide",
              "login": "Sign in", "register": "Sign in", "account": "Account", "checkpoints": "Checkpoints",
              "status": "Goal status", "agents": "Agent sign up",
-             "benchmark-results": "Published benchmarks",
+             "benchmark-results": "Published benchmarks", "uploads": "Data uploads",
              "goals/250m-english-base-model": "250M English base model"}
     path = path.rstrip("/")
     title = pages.get(path)
     if title is None:
         kind, _, identifiers = path.partition("/")
+        title, allows_many = ID_PAGES.get(kind, (None, False))
         try:
-            if kind not in {"run", "compare"} or not identifiers:
+            ids = identifiers.split(",")
+            if title is None or not identifiers or (len(ids) > 1 and not allows_many):
                 raise ValueError()
-            from uuid import UUID
-            for identifier in identifiers.split(","):
+            for identifier in ids:
                 UUID(identifier)
-            if kind == "run" and "," in identifiers:
-                raise ValueError()
         except ValueError:
             raise HTTPException(404, "Page not found")
-        title = "Run dashboard" if kind == "run" else "Compare runs"
     entry = Path(__file__).parent / "web" / "index.html"
     if not entry.is_file():
         raise HTTPException(503, "Frontend build missing. Run npm ci && npm run build in frontend/.")
