@@ -40,7 +40,6 @@ const navigation: { label: string; links: [string, string, IconName][] }[] = [
       ["/runs", "Focused runs", "play"],
       ["/checkpoints", "Checkpoints", "layers"],
       ["/benchmarks", "Evaluation queue", "chart"],
-      ["/uploads", "Data uploads", "database"],
       ["/leaderboard", "Fabryka leaderboard", "trophy"],
     ],
   },
@@ -68,11 +67,13 @@ export function App() {
         .find(([path]) => path === location.pathname)?.[1] ||
       (location.pathname.startsWith("/run/")
         ? "Run dashboard"
-        : location.pathname.startsWith("/compare/")
-          ? "Compare runs"
-          : location.pathname.startsWith("/goals/")
-            ? "250M English base model"
-            : "Account");
+        : location.pathname.startsWith("/uploads")
+          ? "Data uploads"
+          : location.pathname.startsWith("/compare/")
+            ? "Compare runs"
+            : location.pathname.startsWith("/goals/")
+              ? "250M English base model"
+              : "Account");
     document.title =
       location.pathname === "/"
         ? "Serious experiment tracking · Fabryka Track"
