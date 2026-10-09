@@ -245,7 +245,14 @@ function BoardTable({
                 <td className="lb-number">{compact(row.n_params)}</td>
                 <td className="lb-number">{compact(row.tokens_seen)}</td>
                 <td>
-                  <span className={`mb-badge mb-badge-${row.trust}`}>
+                  <span
+                    className={`mb-badge mb-badge-${row.trust}`}
+                    title={
+                      row.trust === "reported"
+                        ? "Owner-submitted results; see Details for the evaluation protocol and harness."
+                        : undefined
+                    }
+                  >
                     {TRUST_LABELS[row.trust]}
                   </span>
                 </td>

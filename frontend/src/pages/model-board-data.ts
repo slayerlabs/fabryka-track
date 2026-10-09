@@ -58,7 +58,7 @@ export type SizeKey = "all" | "16" | "32" | "64" | "150" | "350" | "350+";
 export const TRUST_LABELS: Record<Trust, string> = {
   verified: "verified ✓",
   measured: "measured by Fabryka",
-  reported: "self-reported (different protocol)",
+  reported: "self-reported",
   track: "measured by track",
 };
 // Disjoint size classes on n_params, upper bounds inclusive, decimal millions.
