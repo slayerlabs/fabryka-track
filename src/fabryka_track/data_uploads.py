@@ -82,6 +82,7 @@ class Declaration(Body):
 
 class CreateUpload(Body):
     action_key: str = Field(pattern=ACTION_KEY)
+    pipeline: str = Field(pattern=r"^[a-z][a-z0-9-]{0,63}$")
     input: UploadInput
     parameters: UploadParameters
     declaration: Declaration
@@ -196,9 +197,14 @@ def list_uploads(cursor: str | None = None, caller=Depends(uploader)):
     return forward(caller, "GET", "/jobs", params=params)
 
 
+@router.get("/pipelines")
+def list_pipelines(caller=Depends(uploader)):
+    return forward(caller, "GET", "/pipelines")
+
+
 @router.post("")
 def create_upload(body: CreateUpload, caller=Depends(uploader)):
-    payload = {"protocol": PROTOCOL, "pipeline": "dynaword-upload", "input": body.input.model_dump(),
+    payload = {"protocol": PROTOCOL, "pipeline": body.pipeline, "input": body.input.model_dump(),
                "parameters": body.parameters.model_dump(exclude_none=True),
                "declaration": {"version": body.declaration.version, "accepted": True}}
     return forward(caller, "POST", "/jobs", json=payload, action_key=body.action_key)

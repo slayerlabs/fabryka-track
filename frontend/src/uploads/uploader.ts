@@ -71,6 +71,7 @@ export async function uploadFile(
   // No abort signal: an abandoned in-flight create could still produce a job that holds the slot.
   const create = post({
     action_key: deps.newKey(),
+    pipeline: form.pipeline,
     input: { format: form.format, encoded_bytes: file.size, sha256, filename: file.name },
     parameters: form.parameters,
     declaration: form.declaration,

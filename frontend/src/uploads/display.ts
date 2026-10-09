@@ -1,4 +1,4 @@
-import type { Rejection, UploadJob } from "./api.ts";
+import type { Rejection, UploadJob, UploadPipeline } from "./api.ts";
 import type { UploadProgress } from "./uploader.ts";
 import { apiError } from "../provider.ts";
 
@@ -26,6 +26,9 @@ export function humanize(code?: string | null) {
   const words = code.replaceAll("_", " ");
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
+
+export const modeLabel = (pipeline: string, pipelines: UploadPipeline[]) =>
+  pipelines.find((entry) => entry.pipeline === pipeline)?.title ?? pipeline;
 
 export function bindingLabel(binding?: boolean) {
   if (binding === undefined) return "—";

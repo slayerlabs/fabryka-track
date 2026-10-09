@@ -9,7 +9,7 @@ import {
   type UploadFormState,
 } from "../uploads/form";
 import { uploadFile, type UploadProgress } from "../uploads/uploader";
-import { bindingLabel, describeJob, failureHint, humanize, keepPolling, rejectionMessage, stoppedMessage } from "../uploads/display";
+import { bindingLabel, describeJob, failureHint, humanize, keepPolling, modeLabel, rejectionMessage, stoppedMessage } from "../uploads/display";
 import { checksOpen, summarizeReport } from "../uploads/report";
 import { apiError } from "../provider";
 import { HuggingFaceButton } from "./Account";
@@ -18,9 +18,11 @@ import {
   cancelUpload,
   getReport,
   getUpload,
+  listPipelines,
   listUploads,
   resultGrant,
   type UploadJob,
+  type UploadPipeline,
   type UploadReport,
 } from "../uploads/api";
 
@@ -65,6 +67,7 @@ const MASK_CHOICES = [
 ] as const;
 
 const emptyForm = (): UploadFormState => ({
+  pipeline: "",
   file: null,
   source: "",
   added: new Date().toISOString().slice(0, 10),
@@ -84,7 +87,28 @@ function FieldError({ text }: { text?: string }) {
   ) : null;
 }
 
-function NewUploadForm() {
+interface Pipelines {
+  list: UploadPipeline[];
+  loaded: boolean;
+  error: string;
+}
+
+function usePipelines(): Pipelines {
+  const [value, setValue] = useState<Pipelines>({ list: [], loaded: false, error: "" });
+  useEffect(() => {
+    const controller = new AbortController();
+    listPipelines(controller.signal).then(
+      (reply) => setValue({ list: reply.pipelines, loaded: true, error: "" }),
+      (e) => {
+        if (!controller.signal.aborted) setValue({ list: [], loaded: true, error: message(e) });
+      },
+    );
+    return () => controller.abort();
+  }, []);
+  return value;
+}
+
+function NewUploadForm({ pipelines }: { pipelines: Pipelines }) {
   const navigate = useNavigate();
   const [state, setState] = useState<UploadFormState>(emptyForm);
   const [errors, setErrors] = useState<UploadErrors>({});
@@ -93,6 +117,12 @@ function NewUploadForm() {
   const lastPhase = useRef<UploadProgress["phase"]>("hashing");
   const abort = useRef<AbortController | null>(null);
   const busy = progress !== null;
+  const noModes = pipelines.loaded && !pipelines.error && pipelines.list.length === 0;
+  const onlyMode = pipelines.list.length === 1 ? pipelines.list[0].pipeline : "";
+
+  useEffect(() => {
+    if (onlyMode) setState((current) => (current.pipeline ? current : { ...current, pipeline: onlyMode }));
+  }, [onlyMode]);
 
   useEffect(() => {
     if (!busy) return;
@@ -139,6 +169,33 @@ function NewUploadForm() {
         finishes; an interrupted upload cannot be resumed and has to be started again.
       </p>
       <form onSubmit={submit} noValidate>
+        <label className="field">
+          <span>Mode</span>
+          <select
+            value={state.pipeline}
+            disabled={busy || !pipelines.list.length}
+            onChange={(event) => set("pipeline", event.target.value)}
+          >
+            {pipelines.list.length !== 1 && <option value="">Choose a mode</option>}
+            {pipelines.list.map(({ pipeline, title }) => (
+              <option key={pipeline} value={pipeline}>
+                {title}
+              </option>
+            ))}
+          </select>
+          {!pipelines.loaded && <small className="muted">Loading modes…</small>}
+          {pipelines.error && (
+            <small className="error" role="alert">
+              {pipelines.error}
+            </small>
+          )}
+          {noModes && (
+            <small className="error" role="alert">
+              No upload modes are available right now.
+            </small>
+          )}
+          <FieldError text={errors.pipeline} />
+        </label>
         <label className="field">
           <span>File</span>
           <input
@@ -240,7 +297,7 @@ function NewUploadForm() {
           </p>
         )}
         <div className="actions">
-          <button className="primary" type="submit" disabled={busy}>
+          <button className="primary" type="submit" disabled={busy || !pipelines.list.length}>
             {busy ? "Uploading…" : "Upload file"}
           </button>
           {busy && progress.phase !== "confirming" && (
@@ -282,6 +339,7 @@ function UploadsWorkspace() {
   const [error, setError] = useState("");
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshes, setRefreshes] = useState(0);
+  const pipelines = usePipelines();
   const unmounted = useRef(new AbortController());
   const active = jobs.some((job) => !describeJob(job).terminal);
 
@@ -333,7 +391,7 @@ function UploadsWorkspace() {
           report and result.
         </p>
       </section>
-      <NewUploadForm />
+      <NewUploadForm pipelines={pipelines} />
       <section className="panel">
         <h2>Your uploads</h2>
         {error && (
@@ -351,6 +409,7 @@ function UploadsWorkspace() {
               <thead>
                 <tr>
                   <th>Upload</th>
+                  <th>Mode</th>
                   <th>Phase</th>
                   <th>Outcome</th>
                   <th>Size</th>
@@ -368,6 +427,7 @@ function UploadsWorkspace() {
                           {job.job_id.slice(0, 8)}
                         </Link>
                       </td>
+                      <td>{modeLabel(job.pipeline, pipelines.list)}</td>
                       <td>{described.phase}</td>
                       <td>{described.outcome}</td>
                       <td>{size(job.encoded_bytes)}</td>
@@ -499,6 +559,7 @@ export function UploadDetailPage() {
   const [job, setJob] = useState<UploadJob | null>(null);
   const [error, setError] = useState("");
   const [cancelling, setCancelling] = useState(false);
+  const pipelines = usePipelines();
   const described = job && describeJob(job);
 
   useEffect(() => {
@@ -553,6 +614,7 @@ export function UploadDetailPage() {
             <div className="table-scroll">
               <table>
                 <tbody>
+                  <tr><th>Mode</th><td>{modeLabel(job.pipeline, pipelines.list)}</td></tr>
                   <tr><th>Phase</th><td>{described.phase}</td></tr>
                   <tr><th>Outcome</th><td>{described.outcome}</td></tr>
                   <tr><th>Size</th><td>{size(job.encoded_bytes)}</td></tr>

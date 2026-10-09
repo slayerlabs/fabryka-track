@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { bindingLabel, diagnosticOnly, humanize, jobOutcome, keepPolling, rejectionMessage, showsReport, stoppedMessage } from "../frontend/src/uploads/display.ts";
+import { bindingLabel, diagnosticOnly, humanize, jobOutcome, keepPolling, modeLabel, rejectionMessage, showsReport, stoppedMessage } from "../frontend/src/uploads/display.ts";
 
 test("machine codes read as plain words", () => {
   assert.equal(humanize("failed_qa"), "Failed qa");
@@ -114,4 +114,11 @@ test("only a rejection for invalid records carries a message", () => {
   assert.equal(rejectionMessage(other), null);
   assert.equal(jobOutcome(other), "Rejected");
   assert.equal(rejectionMessage({ processing_state: "failed", failure_code: "records_invalid", client_phase: "closed" }), null);
+});
+
+test("a mode shows its title from the list and falls back to the pipeline id", () => {
+  const pipelines = [{ pipeline: "dynaword-upload", title: "Dynaword", parameters: {} }];
+  assert.equal(modeLabel("dynaword-upload", pipelines), "Dynaword");
+  assert.equal(modeLabel("x", []), "x");
+  assert.equal(modeLabel("x", pipelines), "x");
 });

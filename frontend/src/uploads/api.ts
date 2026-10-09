@@ -8,8 +8,15 @@ export interface Rejection {
   field?: string | null;
 }
 
+export interface UploadPipeline {
+  pipeline: string;
+  title: string;
+  parameters: Record<string, unknown>;
+}
+
 export interface UploadJob {
   job_id: string;
+  pipeline: string;
   client_phase: string;
   processing_state?: string | null;
   publication_state?: string | null;
@@ -60,6 +67,9 @@ export const listUploads = (cursor?: string | null, signal?: AbortSignal) =>
     "/api/uploads" + (cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""),
     { signal },
   );
+
+export const listPipelines = (signal?: AbortSignal) =>
+  request<{ pipelines: UploadPipeline[] }>("/api/uploads/pipelines", { signal });
 
 export const getUpload = (id: string, signal?: AbortSignal) => request<UploadJob>(job(id), { signal });
 
