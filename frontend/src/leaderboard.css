@@ -412,6 +412,33 @@
   line-height: 1.6;
   margin-top: 4px;
 }
+.lb-run-name .mb-model-meta {
+  color: var(--lb-muted);
+  font-size: 9px;
+  line-height: 1.35;
+  margin-top: 2px;
+}
+.mb-model-details {
+  margin-top: 4px;
+  font-size: 10px;
+}
+.mb-model-details summary {
+  width: fit-content;
+  color: var(--lb-accent);
+  cursor: pointer;
+  line-height: 1.4;
+  user-select: none;
+}
+.mb-model-details summary:hover {
+  text-decoration: underline;
+}
+.mb-model-detail-content {
+  padding: 2px 0 3px 10px;
+  border-left: 1px solid var(--lb-line);
+}
+.mb-model-detail-content small {
+  overflow-wrap: anywhere;
+}
 .lb-number {
   font: 12px var(--mono);
   font-variant-numeric: tabular-nums;
