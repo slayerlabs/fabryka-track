@@ -98,7 +98,9 @@ function usePipelines(): Pipelines {
   useEffect(() => {
     const controller = new AbortController();
     listPipelines(controller.signal).then(
-      (reply) => setValue({ list: reply.pipelines, loaded: true, error: "" }),
+      (reply) => {
+        if (!controller.signal.aborted) setValue({ list: reply.pipelines ?? [], loaded: true, error: "" });
+      },
       (e) => {
         if (!controller.signal.aborted) setValue({ list: [], loaded: true, error: message(e) });
       },
