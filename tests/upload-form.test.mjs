@@ -6,7 +6,7 @@ const valid = {
   file: { name: "corpus.jsonl", size: 1024 },
   source: "my_source",
   added: "2026-10-08",
-  license: "",
+  license: " CC0-1.0 ",
   author: "  ",
   source_ref: "",
   per_record_provenance: false,
@@ -19,7 +19,7 @@ test("a complete form becomes the create request with blank optional fields omit
   assert.deepEqual(errors, {});
   assert.deepEqual(form, {
     format: "jsonl",
-    parameters: { source: "my_source", added: "2026-10-08", per_record_provenance: false, mask_names: false },
+    parameters: { source: "my_source", added: "2026-10-08", license: "CC0-1.0", per_record_provenance: false, mask_names: false },
     declaration: { accepted: true, version: DECLARATION_VERSION },
   });
   const filled = validateUpload({ ...valid, file: { name: "x.PARQUET", size: 5 }, license: " cc-by-4.0 ",
@@ -61,4 +61,10 @@ test("the file must be a non-empty JSONL or Parquet file of at most 512 MiB", ()
 test("the declaration uses the same spelling as the license field", () => {
   assert.match(DECLARATION_TEXT, /\blicense\b/);
   assert.doesNotMatch(DECLARATION_TEXT, /licence/);
+});
+
+test("a license is required, since records without one are all rejected", () => {
+  for (const license of ["", "   "])
+    assert.match(validateUpload({ ...valid, license }).errors.license, /license/i, JSON.stringify(license));
+  assert.equal(validateUpload({ ...valid, license: "CC-BY-4.0" }).errors.license, undefined);
 });

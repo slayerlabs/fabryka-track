@@ -9,7 +9,7 @@ import {
   type UploadFormState,
 } from "../uploads/form";
 import { uploadFile, type UploadProgress } from "../uploads/uploader";
-import { bindingLabel, describeJob, humanize, keepPolling, stoppedMessage } from "../uploads/display";
+import { bindingLabel, describeJob, failureHint, humanize, keepPolling, stoppedMessage } from "../uploads/display";
 import { apiError } from "../provider";
 import { HuggingFaceButton } from "./Account";
 import {
@@ -47,10 +47,15 @@ const PROGRESS_LABELS: Record<UploadProgress["phase"], string> = {
   confirming: "Confirming upload",
 };
 
-const OPTIONAL_TEXT_FIELDS = [
-  { key: "license", label: "License (optional)", placeholder: "cc-by-4.0" },
-  { key: "author", label: "Author (optional)", placeholder: undefined },
-  { key: "source_ref", label: "Source reference (optional)", placeholder: "https://" },
+const TEXT_FIELDS = [
+  {
+    key: "license",
+    label: "License",
+    placeholder: "CC-BY-4.0",
+    hint: "Applies to every record that does not carry its own license.",
+  },
+  { key: "author", label: "Author (optional)", placeholder: undefined, hint: undefined },
+  { key: "source_ref", label: "Source reference (optional)", placeholder: "https://", hint: undefined },
 ] as const;
 
 const MASK_CHOICES = [
@@ -166,7 +171,7 @@ function NewUploadForm() {
             />
             <FieldError text={errors.added} />
           </label>
-          {OPTIONAL_TEXT_FIELDS.map(({ key, label, placeholder }) => (
+          {TEXT_FIELDS.map(({ key, label, placeholder, hint }) => (
             <label className="field" key={key}>
               <span>{label}</span>
               <input
@@ -175,6 +180,8 @@ function NewUploadForm() {
                 placeholder={placeholder}
                 onChange={(event) => set(key, event.target.value)}
               />
+              {hint && <small className="muted">{hint}</small>}
+              <FieldError text={errors[key]} />
             </label>
           ))}
           <div className="field">
@@ -188,6 +195,7 @@ function NewUploadForm() {
               />{" "}
               Records carry their own provenance
             </label>
+            <small className="muted">When checked, every record must have its own source_ref.</small>
           </div>
         </div>
         <div className="field" role="radiogroup" aria-labelledby="mask-names-label">
@@ -543,6 +551,11 @@ export function UploadDetailPage() {
                 </tbody>
               </table>
             </div>
+            {failureHint(job) && (
+              <p className="notice" role="status">
+                {failureHint(job)}
+              </p>
+            )}
             {!described.terminal && (
               <div className="actions">
                 <button className="secondary" disabled={cancelling} onClick={() => void cancel()}>

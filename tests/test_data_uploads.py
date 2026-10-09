@@ -320,3 +320,13 @@ def test_unusable_hugging_face_username_has_its_own_message(client, controller):
 def test_action_key_rejects_a_trailing_newline(client, controller):
     assert client.post("/api/uploads", json=create_body(action_key=ACTION_KEY + "\n")).status_code == 422
     assert controller.requests == []
+
+
+@pytest.mark.parametrize("license", [None, "", "   "], ids=["missing", "empty", "blank"])
+def test_a_create_without_a_license_never_reaches_the_controller(client, controller, license):
+    body = create_body()
+    body["parameters"] = {key: value for key, value in body["parameters"].items() if key != "license"}
+    if license is not None:
+        body["parameters"]["license"] = license
+    assert client.post("/api/uploads", json=body).status_code == 422
+    assert controller.requests == []

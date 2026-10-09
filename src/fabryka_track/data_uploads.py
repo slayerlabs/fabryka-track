@@ -67,7 +67,8 @@ class UploadInput(Body):
 class UploadParameters(Body):
     source: str = Field(pattern=r"^[a-z0-9][a-z0-9_]*$", max_length=128)
     added: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
-    license: str | None = Field(default=None, max_length=4096)
+    # a record without a license of its own takes this one; with neither the recipe rejects every record
+    license: str = Field(min_length=1, max_length=4096, pattern=r"\S")
     author: str | None = Field(default=None, max_length=4096)
     source_ref: str | None = Field(default=None, max_length=4096)
     per_record_provenance: StrictBool | None = None
