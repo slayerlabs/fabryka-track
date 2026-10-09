@@ -77,7 +77,7 @@ function rejectionReason({ position, rule, field }: Rejection) {
     case "required_when_parameter":
       return `Record ${position} has no ${field}, which every record needs when 'Records carry their own provenance' is checked.`;
     case "override_needs_field":
-      return `Record ${position} has its own ${field}, different from the form's ${FORM_LABELS[field ?? ""] ?? field}, but no source_ref. Add source_ref to the record, or leave ${field} out of the record to use the form's.`;
+      return `Record ${position} has its own ${field} but no source_ref; a ${field} that differs from the form's ${FORM_LABELS[field ?? ""] ?? field} needs one. Add source_ref to the record, or leave ${field} out of the record to use the form's.`;
     case "parquet_column":
       return `The Parquet file has no ${field} column.`;
   }
