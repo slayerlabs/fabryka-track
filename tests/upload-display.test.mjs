@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { bindingLabel, diagnosticOnly, humanize, jobOutcome, keepPolling, showsReport, stoppedMessage } from "../frontend/src/uploads/display.ts";
+import { bindingLabel, diagnosticOnly, humanize, jobOutcome, keepPolling, rejectionMessage, showsReport, stoppedMessage } from "../frontend/src/uploads/display.ts";
 
 test("machine codes read as plain words", () => {
   assert.equal(humanize("failed_qa"), "Failed qa");
@@ -74,4 +74,32 @@ test("a job whose every record was refused explains the usual causes", async () 
   assert.match(failureHint({ processing_state: "failed", failure_code: "input_corrupt" }), /source_ref/);
   assert.equal(failureHint({ processing_state: "failed", failure_code: "provider_transient" }), null);
   assert.equal(failureHint({ processing_state: "passed", failure_code: null }), null);
+});
+
+const rejected = (rejection) => ({ processing_state: "rejected", failure_code: "records_invalid", client_phase: "closed", rejection });
+const TAIL = " No record in the first part of the file passed, so the upload was stopped before processing.";
+
+test("each pre-check rule has a plain message", () => {
+  const cases = [
+    [{ position: 3, rule: "json_object", field: null }, "Record 3 is not a JSON object."],
+    [{ position: 3, rule: "required", field: "text" }, "Record 3 has no text."],
+    [{ position: 3, rule: "non_blank", field: "text" }, "Record 3 has an empty text."],
+    [{ position: 3, rule: "field_or_parameter", field: "license" }, "Record 3 has no license. Set License in the form or add license to every record."],
+    [{ position: 3, rule: "required_when_parameter", field: "source_ref" }, "Record 3 has no source_ref, which every record needs when per-record provenance is on."],
+    [{ position: 0, rule: "parquet_column", field: "text" }, "The Parquet file has no text column."],
+  ];
+  for (const [rejection, message] of cases) assert.equal(rejectionMessage(rejected(rejection)), message + TAIL);
+});
+
+test("an unknown rule or a missing rejection falls back", () => {
+  assert.equal(rejectionMessage(rejected({ position: 2, rule: "new_rule", field: "id" })), "Record 2 did not pass the new_rule check on id." + TAIL);
+  assert.equal(rejectionMessage(rejected(null)), "The first records did not pass the pre-check." + TAIL);
+});
+
+test("the list says the records were invalid", () => {
+  assert.equal(jobOutcome(rejected(null)), "Rejected: invalid records");
+});
+
+test("other jobs have no rejection message", () => {
+  assert.equal(rejectionMessage({ processing_state: "failed", failure_code: "input_corrupt", client_phase: "closed" }), null);
 });

@@ -2,6 +2,12 @@ import { request } from "../provider.ts";
 import { Sha256 } from "./sha256.ts";
 import type { UploaderDeps } from "./uploader.ts";
 
+export interface Rejection {
+  position: number;
+  rule: string;
+  field?: string | null;
+}
+
 export interface UploadJob {
   job_id: string;
   client_phase: string;
@@ -16,6 +22,7 @@ export interface UploadJob {
   expires_at?: string | null;
   encoded_bytes?: number | null;
   input_sha256?: string | null;
+  rejection?: Rejection | null;
 }
 
 export interface UploadCheck {

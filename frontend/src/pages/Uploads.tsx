@@ -9,7 +9,7 @@ import {
   type UploadFormState,
 } from "../uploads/form";
 import { uploadFile, type UploadProgress } from "../uploads/uploader";
-import { bindingLabel, describeJob, failureHint, humanize, keepPolling, stoppedMessage } from "../uploads/display";
+import { bindingLabel, describeJob, failureHint, humanize, keepPolling, rejectionMessage, stoppedMessage } from "../uploads/display";
 import { checksOpen, summarizeReport } from "../uploads/report";
 import { apiError } from "../provider";
 import { HuggingFaceButton } from "./Account";
@@ -568,6 +568,11 @@ export function UploadDetailPage() {
             {failureHint(job) && (
               <p className="notice" role="status">
                 {failureHint(job)}
+              </p>
+            )}
+            {rejectionMessage(job) && (
+              <p className="notice" role="status">
+                {rejectionMessage(job)}
               </p>
             )}
             {!described.terminal && (
