@@ -22,7 +22,9 @@ const rows = (r, t) => summarizeReport(r).find((s) => s.title === t)?.rows ?? []
 const row = (r, t, label) => rows(r, t).find((x) => x.label === label)?.value;
 
 test("an old report shows what it has and no funnel or masks", () => {
-  assert.deepEqual(titles(OLD), ["What happened to the data", "Processing"]);
+  assert.deepEqual(titles(OLD), ["Records", "What happened to the data", "Processing"]);
+  assert.deepEqual(rows(OLD, "Records"), [{ label: "Records in", value: "212" }, { label: "Records out", value: "212" }]);
+  assert.equal(row(OLD, "What happened to the data", "Records in"), undefined);
   assert.equal(row(OLD, "What happened to the data", "Tokens"), "3,503,190");
   assert.equal(row(OLD, "What happened to the data", "Near-duplicate pairs"), "2");
   assert.equal(row(OLD, "What happened to the data", "Not measured"), "PERSON, street_address");
@@ -51,13 +53,47 @@ test("a new report shows the funnel and the masks", () => {
   assert.equal(row(NEW, "Personal data masked", "Records with a mask"), "1");
 });
 
-test("every rejection reason has a readable label", () => {
+test("every rejection reason has its exact label", () => {
   const r = structuredClone(NEW);
-  const reasons = ["unparseable", "not_an_object", "missing_id", "invalid_id", "duplicate_id", "invalid_text", "empty_text", "source_mismatch", "invalid_field_type", "invalid_date", "missing_license", "missing_source_ref"];
-  r.report.report.funnel.rejected = Object.fromEntries(reasons.map((x) => [x, 1]));
+  const expected = {
+    unparseable: "unparseable line",
+    not_an_object: "not a JSON object",
+    missing_id: "missing id",
+    invalid_id: "invalid id",
+    duplicate_id: "duplicate id",
+    invalid_text: "invalid text",
+    empty_text: "empty text",
+    source_mismatch: "source mismatch",
+    invalid_field_type: "invalid field type",
+    invalid_date: "invalid date",
+    missing_license: "missing license",
+    missing_source_ref: "missing source_ref",
+  };
+  r.report.report.funnel.rejected = Object.fromEntries(Object.keys(expected).map((x) => [x, 1]));
   const labels = rows(r, "Records").map((x) => x.label).filter((l) => l.startsWith("Rejected: "));
-  assert.equal(labels.length, 12);
-  for (const l of labels) assert.doesNotMatch(l, /^Rejected: [a-z]+_[a-z_]+$/);
+  assert.deepEqual(labels, Object.values(expected).map((l) => `Rejected: ${l}`));
+});
+
+test("durations under a second are shown in milliseconds", () => {
+  const r = structuredClone(OLD);
+  for (const [ms, text] of [[450, "450 ms"], [0, "0 ms"], [999, "999 ms"], [1000, "1s"], [59000, "59s"], [61000, "1m 1s"]]) {
+    r.report.counters.elapsed_ms = ms;
+    assert.equal(row(r, "Processing", "Processing time"), text);
+  }
+});
+
+test("sizes use B, KB, MB and GB", () => {
+  const r = structuredClone(OLD);
+  for (const [n, text] of [[0, "0 B"], [1023, "1,023 B"], [1024, "1.0 KB"], [1536, "1.5 KB"], [5 * 1024 * 1024, "5.0 MB"], [1024 ** 3, "1.0 GB"], [2.5 * 1024 ** 3, "2.5 GB"]]) {
+    r.report.counters.input_bytes = n;
+    assert.equal(row(r, "Processing", "Input size"), text);
+  }
+});
+
+test("absent and null fields render nothing", () => {
+  const r = { verdict: "passed", report: { rows_in: null, rows_out: null, counters: { elapsed_ms: null, input_bytes: null }, qa: { stats: { token_count: null } }, report: { funnel: { rows_in: null, rejected: { empty_text: null }, rows_out: null }, pii_masked: { phone: null, records: null } } } };
+  assert.deepEqual(summarizeReport(r), []);
+  assert.deepEqual(summarizeReport({ verdict: "passed", report: { counters: {}, qa: { stats: {} } } }), []);
 });
 
 test("unknown names fall back to the raw name", () => {
