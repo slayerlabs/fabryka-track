@@ -31,7 +31,18 @@ export interface UploadReport {
   report?: {
     rows_in?: number | null;
     rows_out?: number | null;
-    qa?: { checks?: UploadCheck[] };
+    counters?: { elapsed_ms?: number | null; input_bytes?: number | null; output_bytes?: number | null };
+    qa?: { checks?: UploadCheck[]; stats?: Record<string, number | null> };
+    report?: {
+      funnel?: {
+        rows_in?: number | null;
+        rejected?: Record<string, number>;
+        removed?: Record<string, number>;
+        rows_out?: number | null;
+      };
+      pii_masked?: Record<string, number | null>;
+      pii_unmeasured?: string[];
+    };
   };
 }
 

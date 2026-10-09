@@ -10,6 +10,7 @@ import {
 } from "../uploads/form";
 import { uploadFile, type UploadProgress } from "../uploads/uploader";
 import { bindingLabel, describeJob, failureHint, humanize, keepPolling, stoppedMessage } from "../uploads/display";
+import { checksOpen, summarizeReport } from "../uploads/report";
 import { apiError } from "../provider";
 import { HuggingFaceButton } from "./Account";
 import {
@@ -410,32 +411,45 @@ function ReportSummary({ id }: { id: string }) {
         <strong>Verdict:</strong> {report.verdict === "failed_qa" ? "Failed quality checks" : humanize(report.verdict)}
         {report.failure_code && <> · {humanize(report.failure_code)}</>}
       </p>
-      <p>
-        Rows in: {report.report?.rows_in ?? "—"} · Rows out: {report.report?.rows_out ?? "—"}
-      </p>
-      {checks.length > 0 && (
-        <div className="table-scroll">
-          <table>
-            <thead>
-              <tr>
-                <th>Check</th>
-                <th>Binding</th>
-                <th>Status</th>
-                <th>Count</th>
-              </tr>
-            </thead>
-            <tbody>
-              {checks.map((check, index) => (
-                <tr key={`${check.name}-${index}`}>
-                  <td>{check.name ?? "—"}</td>
-                  <td>{bindingLabel(check.binding)}</td>
-                  <td>{humanize(check.status)}</td>
-                  <td>{check.count ?? "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {summarizeReport(report).map((section) => (
+        <div key={section.title}>
+          <h3>{section.title}</h3>
+          <dl>
+            {section.rows.map((row) => (
+              <div key={row.label}>
+                <dt>{row.label}</dt>
+                <dd>{row.value}</dd>
+              </div>
+            ))}
+          </dl>
         </div>
+      ))}
+      {checks.length > 0 && (
+        <details open={checksOpen(report)}>
+          <summary>Quality checks</summary>
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Check</th>
+                  <th>Binding</th>
+                  <th>Status</th>
+                  <th>Count</th>
+                </tr>
+              </thead>
+              <tbody>
+                {checks.map((check, index) => (
+                  <tr key={`${check.name}-${index}`}>
+                    <td>{check.name ?? "—"}</td>
+                    <td>{bindingLabel(check.binding)}</td>
+                    <td>{humanize(check.status)}</td>
+                    <td>{check.count ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </details>
       )}
     </>
   );
