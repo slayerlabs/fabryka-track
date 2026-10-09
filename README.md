@@ -13,7 +13,7 @@ API; session authentication, CSRF protection, and authorization remain server-ow
 ```bash
 npm --prefix frontend ci
 npm --prefix frontend run build
-uv sync --extra test
+uv sync --extra server --extra test --extra eval --extra corpus
 uv run fabryka-track
 ```
 

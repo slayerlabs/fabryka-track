@@ -109,3 +109,24 @@ test("checks are open only when one failed", () => {
   const f = structuredClone(OLD); f.report.qa.checks[0].status = "failed";
   assert.equal(checksOpen(f), true);
 });
+
+test("removal stages are listed in pipeline order whatever order the controller sends", () => {
+  const r = structuredClone(NEW);
+  r.report.report.funnel.removed = { masked_exact_dedup: 0, quality_labels: 0, upload_dedup: 0 };
+  const labels = rows(r, "Records").map((x) => x.label).filter((l) => l.startsWith("Removed: "));
+  assert.deepEqual(labels, ["Removed: too short", "Removed: near or exact duplicates", "Removed: duplicates after masking"]);
+});
+
+test("unknown removal stages follow the known ones in their given order", () => {
+  const r = structuredClone(NEW);
+  r.report.report.funnel.removed = { zeta_stage: 1, masked_exact_dedup: 0, alpha_stage: 2, quality_labels: 0 };
+  const labels = rows(r, "Records").map((x) => x.label).filter((l) => l.startsWith("Removed: "));
+  assert.deepEqual(labels, ["Removed: too short", "Removed: duplicates after masking", "Removed: zeta_stage", "Removed: alpha_stage"]);
+});
+
+test("rejection reasons are listed in RejectReason order, unknown ones last", () => {
+  const r = structuredClone(NEW);
+  r.report.report.funnel.rejected = { missing_source_ref: 1, brand_new: 1, empty_text: 1, unparseable: 1, missing_license: 1 };
+  const labels = rows(r, "Records").map((x) => x.label).filter((l) => l.startsWith("Rejected: "));
+  assert.deepEqual(labels, ["Rejected: unparseable line", "Rejected: empty text", "Rejected: missing license", "Rejected: missing source_ref", "Rejected: brand_new"]);
+});

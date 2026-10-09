@@ -45,6 +45,12 @@ const STAT_LABELS: Record<string, string> = {
   license_review_records: "Records needing license review",
 };
 
+function inOrder(counts: Record<string, number> | undefined, known: Record<string, string>) {
+  const entries = Object.entries(counts ?? {});
+  const rank = (name: string) => Object.keys(known).indexOf(name);
+  return [...entries.filter(([k]) => rank(k) >= 0).sort(([a], [b]) => rank(a) - rank(b)), ...entries.filter(([k]) => rank(k) < 0)];
+}
+
 const label = (map: Record<string, string>, name: string) => map[name] ?? name;
 
 const count = (value: number) => value.toLocaleString("en-US");
@@ -82,8 +88,8 @@ export function summarizeReport(report: UploadReport): SummarySection[] {
   const records = present(funnel
     ? [
         ["Records in", format(funnel.rows_in)],
-        ...Object.entries(funnel.rejected ?? {}).map(([k, v]): [string, string | undefined] => [`Rejected: ${label(REJECT_REASON_LABELS, k)}`, format(v)]),
-        ...Object.entries(funnel.removed ?? {}).map(([k, v]): [string, string | undefined] => [`Removed: ${label(STAGE_LABELS, k).toLowerCase()}`, format(v)]),
+        ...inOrder(funnel.rejected, REJECT_REASON_LABELS).map(([k, v]): [string, string | undefined] => [`Rejected: ${label(REJECT_REASON_LABELS, k)}`, format(v)]),
+        ...inOrder(funnel.removed, STAGE_LABELS).map(([k, v]): [string, string | undefined] => [`Removed: ${label(STAGE_LABELS, k).toLowerCase()}`, format(v)]),
         ["Records out", format(funnel.rows_out)],
       ]
     : [["Records in", format(body.rows_in)], ["Records out", format(body.rows_out)]]);
