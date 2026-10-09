@@ -7,7 +7,7 @@ from sqlalchemy import delete, select
 
 from fabryka_track import data_uploads
 from fabryka_track.database import SessionLocal
-from fabryka_track.models import DataUploadDeclaration, HuggingFaceIdentity
+from fabryka_track.models import HuggingFaceIdentity
 
 REQUEST_ID = "0f0e0d0c-0b0a-4999-8888-777766665555"
 JOB_ID = "6f1c1f3e-2b7a-4d5e-9c3b-1a2b3c4d5e6f"
@@ -105,6 +105,7 @@ def test_create_forwards_track_pair_and_hugging_face_identity(client, controller
         "protocol": "job-v1", "pipeline": "dynaword-upload",
         "input": {"format": "jsonl", "encoded_bytes": 1024, "sha256": "a" * 64, "filename": "data.jsonl"},
         "parameters": {"source": "my_source", "added": "2026-10-08", "license": "cc-by-4.0", "mask_names": False},
+        "declaration": {"version": "upload-declaration-v0-placeholder", "accepted": True},
     }
 
 
@@ -116,8 +117,6 @@ def test_create_without_accepted_declaration_never_reaches_controller(client, co
         del body["declaration"]
     assert client.post("/api/uploads", json=body).status_code == 422
     assert controller.requests == []
-    with SessionLocal() as session:
-        assert session.scalars(select(DataUploadDeclaration)).all() == []
 
 
 @pytest.mark.parametrize("mask_names", [None, "yes"])
@@ -130,14 +129,11 @@ def test_mask_names_is_an_explicit_yes_or_no(client, controller, mask_names):
     assert controller.requests == []
 
 
-def test_repeated_create_returns_same_job_and_records_one_declaration(client, controller):
+def test_repeated_create_returns_same_job(client, controller):
     first = client.post("/api/uploads", json=create_body()).json()
     second = client.post("/api/uploads", json=create_body()).json()
     assert first["job_id"] == second["job_id"] == JOB_ID
-    with SessionLocal() as session:
-        rows = session.scalars(select(DataUploadDeclaration)).all()
-        assert [(row.job_id, row.version) for row in rows] == [(JOB_ID, data_uploads.DECLARATION_VERSION)]
-        assert rows[0].accepted_at is not None
+    assert [r.headers["idempotency-key"] for r in controller.requests] == [ACTION_KEY, ACTION_KEY]
 
 
 def controller_error(status, code):
@@ -155,8 +151,6 @@ def test_limit_errors_map_to_stable_messages(client, controller, code, message):
     response = client.post("/api/uploads", json=create_body())
     assert response.status_code == 429
     assert response.json() == {"detail": message, "code": code, "request_id": REQUEST_ID}
-    with SessionLocal() as session:
-        assert session.scalars(select(DataUploadDeclaration)).all() == []
 
 
 def test_rejected_track_credentials_are_not_reported_as_a_browser_sign_in_problem(client, controller):
@@ -246,29 +240,6 @@ def test_optional_metadata_accepts_the_controller_maximum(client, controller, fi
     assert client.post("/api/uploads", json=body).status_code == 422
 
 
-def test_concurrent_creates_with_one_key_both_return_the_job(client, controller):
-    import threading
-    barrier = threading.Barrier(2, timeout=10)
-    default = FakeController.__call__
-
-    def together(request):
-        barrier.wait()
-        controller.reply = None
-        return default(controller, request)
-    controller.reply = together
-    results = []
-    threads = [threading.Thread(target=lambda: results.append(client.post("/api/uploads", json=create_body())))
-               for _ in range(2)]
-    for thread in threads:
-        thread.start()
-    for thread in threads:
-        thread.join()
-    assert sorted(r.status_code for r in results) == [201, 201]
-    assert {r.json()["job_id"] for r in results} == {JOB_ID}
-    with SessionLocal() as session:
-        assert len(session.scalars(select(DataUploadDeclaration)).all()) == 1
-
-
 def test_no_database_connection_is_held_during_the_controller_call(client, controller):
     from fabryka_track.database import engine
     held = []
@@ -284,8 +255,6 @@ def test_no_database_connection_is_held_during_the_controller_call(client, contr
     assert client.post("/api/uploads", json=create_body()).status_code == 201
     assert client.get("/api/uploads").status_code == 200
     assert held == [0, 0]
-    with SessionLocal() as session:
-        assert session.get(DataUploadDeclaration, JOB_ID) is not None
 
 
 def test_one_controller_client_is_reused_across_requests(client, controller):

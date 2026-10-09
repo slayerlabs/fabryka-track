@@ -10,11 +10,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, StrictBool
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
 
 from .accounts import current_user, require_user
 from .database import SessionLocal
-from .models import DataUploadDeclaration, HuggingFaceIdentity
+from .models import HuggingFaceIdentity
 from .settings import settings
 
 router = APIRouter(prefix="/api/uploads")
@@ -114,7 +113,6 @@ class ControllerError(Exception):
 
 @dataclass(frozen=True)
 class Caller:
-    account_id: str
     subject: str
     username: str
 
@@ -131,7 +129,7 @@ def uploader(request: Request):
         if not USERNAME.fullmatch(identity.username):
             raise HTTPException(403, "Your Hugging Face account has no username Track can use. "
                                      "Sign out and sign in with Hugging Face again.")
-        return Caller(user.id, identity.subject, identity.username)
+        return Caller(identity.subject, identity.username)
 
 
 def controller_client():
@@ -200,18 +198,9 @@ def list_uploads(cursor: str | None = None, caller=Depends(uploader)):
 @router.post("")
 def create_upload(body: CreateUpload, caller=Depends(uploader)):
     payload = {"protocol": PROTOCOL, "pipeline": "dynaword-upload", "input": body.input.model_dump(),
-               "parameters": body.parameters.model_dump(exclude_none=True)}
-    status, job = call(caller, "POST", "/jobs", json=payload, action_key=body.action_key)
-    with SessionLocal() as session:
-        if not session.get(DataUploadDeclaration, job["job_id"]):
-            session.add(DataUploadDeclaration(job_id=job["job_id"], account_id=caller.account_id,
-                                              version=body.declaration.version))
-            try:
-                session.commit()
-            except IntegrityError:
-                # A concurrent create with the same action key already recorded this job's declaration.
-                session.rollback()
-    return JSONResponse(job, status_code=status)
+               "parameters": body.parameters.model_dump(exclude_none=True),
+               "declaration": {"version": body.declaration.version, "accepted": True}}
+    return forward(caller, "POST", "/jobs", json=payload, action_key=body.action_key)
 
 
 @router.post("/{job_id}/parts")

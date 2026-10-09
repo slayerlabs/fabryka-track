@@ -323,11 +323,3 @@ class WhiteBenchmark(Base):
     job_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     detail: Mapped[str | None] = mapped_column(Text, nullable=True)
     result: Mapped[dict] = mapped_column(JSON, default=dict)
-
-
-class DataUploadDeclaration(Base):
-    __tablename__ = "data_upload_declarations"
-    job_id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    account_id: Mapped[str] = mapped_column(String(36), ForeignKey("accounts.id"), index=True)
-    version: Mapped[str] = mapped_column(String(64))
-    accepted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
