@@ -195,28 +195,37 @@ function BoardTable({
                   ) : (
                     <Link to={`/run/${row.run_id}`}>{row.name}</Link>
                   )}
-                  {row.kind === "external" ? (
-                    <span>
-                      {`${row.hf_repo}@${row.revision?.slice(0, 8)} · logged by ${row.owner}`}
-                    </span>
-                  ) : (
-                    row.author && <span>run by {row.owner}</span>
-                  )}
-                  <small>
-                    {checkpointDetails(row)}
-                    {row.scale_rev ? " · " : ""}
-                    {row.scale_rev && (
-                      <abbr title="eff depends on the min/max ranges of its scale; compare eff only between rows with the same scale revision.">
-                        scale {row.scale_rev}
-                      </abbr>
-                    )}
-                    {row.harness || row.harness_sha
-                      ? ` · harness ${[row.harness, row.harness_sha?.slice(0, 8)].filter(Boolean).join(" @ ")}`
-                      : ""}
-                  </small>
-                  {row.public_note && (
-                    <small className="mb-note">{row.public_note}</small>
-                  )}
+                  <span className="mb-model-meta">
+                    {row.kind === "external"
+                      ? `HF checkpoint · ${row.revision?.slice(0, 8) ?? "revision unavailable"}`
+                      : `Track run · ${row.owner}`}
+                  </span>
+                  <details className="mb-model-details">
+                    <summary>Details</summary>
+                    <div className="mb-model-detail-content">
+                      {row.kind === "external" && row.hf_repo && (
+                        <small>
+                          Hugging Face: {row.hf_repo}
+                          {row.revision ? `@${row.revision}` : ""} · logged by {row.owner}
+                        </small>
+                      )}
+                      <small>
+                        {checkpointDetails(row)}
+                        {row.scale_rev ? " · " : ""}
+                        {row.scale_rev && (
+                          <abbr title="eff depends on the min/max ranges of its scale; compare eff only between rows with the same scale revision.">
+                            scale {row.scale_rev}
+                          </abbr>
+                        )}
+                        {row.harness || row.harness_sha
+                          ? ` · harness ${[row.harness, row.harness_sha?.slice(0, 8)].filter(Boolean).join(" @ ")}`
+                          : ""}
+                      </small>
+                      {row.public_note && (
+                        <small className="mb-note">{row.public_note}</small>
+                      )}
+                    </div>
+                  </details>
                 </td>
                 <td>{row.author ?? row.owner}</td>
                 {columns.map((column) => {
