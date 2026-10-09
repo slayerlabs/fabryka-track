@@ -59,7 +59,7 @@ Plain text rejects `<`, `>` and control or formatting characters; the page rende
 
 - `verified` (badge "verified ✓"): a trusted owner's track run whose `harness_sha` is a listed harness revision. External models are never verified.
 - `measured` (badge "measured by Fabryka"): any other row from a trusted owner that did not declare itself `reported`. Default claim for track runs; external rows must claim `measured` or `reported` explicitly.
-- `reported` (badge "self-reported (different protocol)"): every row from an account outside the trusted list, whatever it claims, and rows declared `reported` (which must name their protocol in `harness`). The page can hide these rows.
+- `reported` (badge "self-reported"): every row from an account outside the trusted list, whatever it claims, and rows declared `reported` (which must name their protocol in `harness`). This describes who submitted the metrics, not whether their scoring protocol differs. Inspect the harness and scale revision before comparing results. The page can hide these rows.
 
 Ranking ignores the badge:
 
