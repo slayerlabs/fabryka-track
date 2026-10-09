@@ -85,8 +85,10 @@ test("each pre-check rule has a plain message", () => {
     [{ position: 3, rule: "required", field: "text" }, "Record 3 has no text."],
     [{ position: 3, rule: "non_blank", field: "text" }, "Record 3 has a blank text."],
     [{ position: 3, rule: "field_or_parameter", field: "license" }, "Record 3 has no license. Set License in the form or add license to every record."],
-    [{ position: 3, rule: "field_or_parameter", field: "author" }, "Record 3 has no author. Set author in the form or add author to every record."],
+    [{ position: 3, rule: "field_or_parameter", field: "author" }, "Record 3 has no author. Set Author in the form or add author to every record."],
     [{ position: 3, rule: "required_when_parameter", field: "source_ref" }, "Record 3 has no source_ref, which every record needs when 'Records carry their own provenance' is checked."],
+    [{ position: 3, rule: "override_needs_field", field: "license" }, "Record 3 has its own license, different from the form's License, but no source_ref. Add source_ref to the record, or leave license out of the record to use the form's."],
+    [{ position: 3, rule: "override_needs_field", field: "author" }, "Record 3 has its own author, different from the form's Author, but no source_ref. Add source_ref to the record, or leave author out of the record to use the form's."],
     [{ position: 0, rule: "parquet_column", field: "text" }, "The Parquet file has no text column."],
   ];
   for (const [rejection, message] of cases) assert.equal(rejectionMessage(rejected(rejection)), message + TAIL);

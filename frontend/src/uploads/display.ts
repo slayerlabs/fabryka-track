@@ -62,7 +62,7 @@ export function failureHint(job: Pick<UploadJob, "processing_state" | "failure_c
 
 const REJECTION_TAIL = " No record in the first part of the file passed, so the upload was stopped before processing.";
 
-const FORM_LABELS: Record<string, string> = { license: "License" };
+const FORM_LABELS: Record<string, string> = { license: "License", author: "Author" };
 
 function rejectionReason({ position, rule, field }: Rejection) {
   switch (rule) {
@@ -76,6 +76,8 @@ function rejectionReason({ position, rule, field }: Rejection) {
       return `Record ${position} has no ${field}. Set ${FORM_LABELS[field ?? ""] ?? field} in the form or add ${field} to every record.`;
     case "required_when_parameter":
       return `Record ${position} has no ${field}, which every record needs when 'Records carry their own provenance' is checked.`;
+    case "override_needs_field":
+      return `Record ${position} has its own ${field}, different from the form's ${FORM_LABELS[field ?? ""] ?? field}, but no source_ref. Add source_ref to the record, or leave ${field} out of the record to use the form's.`;
     case "parquet_column":
       return `The Parquet file has no ${field} column.`;
   }
