@@ -83,10 +83,10 @@ test("each pre-check rule has a plain message", () => {
   const cases = [
     [{ position: 3, rule: "json_object", field: null }, "Record 3 is not a JSON object."],
     [{ position: 3, rule: "required", field: "text" }, "Record 3 has no text."],
-    [{ position: 3, rule: "non_blank", field: "text" }, "Record 3 has an empty text."],
+    [{ position: 3, rule: "non_blank", field: "text" }, "Record 3 has a blank text."],
     [{ position: 3, rule: "field_or_parameter", field: "license" }, "Record 3 has no license. Set License in the form or add license to every record."],
     [{ position: 3, rule: "field_or_parameter", field: "author" }, "Record 3 has no author. Set author in the form or add author to every record."],
-    [{ position: 3, rule: "required_when_parameter", field: "source_ref" }, "Record 3 has no source_ref, which every record needs when per-record provenance is on."],
+    [{ position: 3, rule: "required_when_parameter", field: "source_ref" }, "Record 3 has no source_ref, which every record needs when 'Records carry their own provenance' is checked."],
     [{ position: 0, rule: "parquet_column", field: "text" }, "The Parquet file has no text column."],
   ];
   for (const [rejection, message] of cases) assert.equal(rejectionMessage(rejected(rejection)), message + TAIL);
@@ -94,7 +94,11 @@ test("each pre-check rule has a plain message", () => {
 
 test("an unknown rule or a missing rejection falls back", () => {
   assert.equal(rejectionMessage(rejected({ position: 2, rule: "new_rule", field: "id" })), "Record 2 did not pass the new_rule check on id." + TAIL);
+  assert.equal(rejectionMessage(rejected({ position: 0, rule: "x", field: null })), "A record did not pass the x check." + TAIL);
+  assert.equal(rejectionMessage(rejected({ position: 4, rule: "x", field: null })), "Record 4 did not pass the x check." + TAIL);
+  assert.equal(rejectionMessage(rejected({ position: 0, rule: "x", field: "id" })), "A record did not pass the x check on id." + TAIL);
   assert.equal(rejectionMessage(rejected(null)), "The first records did not pass the pre-check." + TAIL);
+  assert.equal(rejectionMessage(rejected(undefined)), "The first records did not pass the pre-check." + TAIL);
 });
 
 test("the list says the records were invalid", () => {
@@ -103,4 +107,11 @@ test("the list says the records were invalid", () => {
 
 test("other jobs have no rejection message", () => {
   assert.equal(rejectionMessage({ processing_state: "failed", failure_code: "input_corrupt", client_phase: "closed" }), null);
+});
+
+test("only a rejection for invalid records carries a message", () => {
+  const other = { processing_state: "rejected", failure_code: "quota_exceeded", client_phase: "closed" };
+  assert.equal(rejectionMessage(other), null);
+  assert.equal(jobOutcome(other), "Rejected");
+  assert.equal(rejectionMessage({ processing_state: "failed", failure_code: "records_invalid", client_phase: "closed" }), null);
 });

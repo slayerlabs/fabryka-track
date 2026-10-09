@@ -19,7 +19,7 @@ const PHASE_LABELS: Record<string, string> = {
   rejected: "Rejected",
 };
 
-type JobState = Pick<UploadJob, "client_phase" | "processing_state" | "publication_state" | "failure_code">;
+type JobState = Pick<UploadJob, "client_phase" | "processing_state" | "publication_state" | "failure_code" | "rejection">;
 
 export function humanize(code?: string | null) {
   if (!code) return "—";
@@ -68,18 +68,19 @@ function rejectionReason({ position, rule, field }: Rejection) {
     case "required":
       return `Record ${position} has no ${field}.`;
     case "non_blank":
-      return `Record ${position} has an empty ${field}.`;
+      return `Record ${position} has a blank ${field}.`;
     case "field_or_parameter":
-      return `Record ${position} has no ${field}. Set ${field && FORM_LABELS[field] || field} in the form or add ${field} to every record.`;
+      return `Record ${position} has no ${field}. Set ${FORM_LABELS[field ?? ""] ?? field} in the form or add ${field} to every record.`;
     case "required_when_parameter":
-      return `Record ${position} has no ${field}, which every record needs when per-record provenance is on.`;
+      return `Record ${position} has no ${field}, which every record needs when 'Records carry their own provenance' is checked.`;
     case "parquet_column":
       return `The Parquet file has no ${field} column.`;
   }
-  return `Record ${position} did not pass the ${rule} check on ${field}.`;
+  const subject = position > 0 ? `Record ${position}` : "A record";
+  return `${subject} did not pass the ${rule} check${field ? ` on ${field}` : ""}.`;
 }
 
-export function rejectionMessage(job: JobState & { rejection?: Rejection | null }) {
+export function rejectionMessage(job: JobState) {
   if (job.processing_state !== "rejected" || job.failure_code !== "records_invalid") return null;
   const reason = job.rejection ? rejectionReason(job.rejection) : "The first records did not pass the pre-check.";
   return reason + REJECTION_TAIL;
