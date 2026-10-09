@@ -48,6 +48,7 @@ export function validateUpload(state: UploadFormState): { errors: UploadErrors; 
     errors.source =
       "Use up to 128 lowercase letters, digits and underscores, starting with a letter or digit.";
   if (!isCalendarDate(state.added)) errors.added = "Enter the date the data was added (YYYY-MM-DD).";
+  if (!state.license.trim()) errors.license = "Enter the license of the data, for example CC-BY-4.0.";
   if (state.mask_names !== "yes" && state.mask_names !== "no")
     errors.mask_names = "Choose whether personal names should be masked.";
   if (!state.declaration) errors.declaration = "Accept the declaration to continue.";

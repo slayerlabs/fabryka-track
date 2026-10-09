@@ -67,3 +67,11 @@ test("describeJob gathers the job interpretation the pages show", async () => {
   assert.equal(running.updatedAt, undefined);
   assert.equal(describeJob({ job_id: "j", client_phase: "brand_new" }).phase, "brand_new");
 });
+
+test("a job whose every record was refused explains the usual causes", async () => {
+  const { failureHint } = await import("../frontend/src/uploads/display.ts");
+  assert.match(failureHint({ processing_state: "failed", failure_code: "input_corrupt" }), /No record was accepted/);
+  assert.match(failureHint({ processing_state: "failed", failure_code: "input_corrupt" }), /source_ref/);
+  assert.equal(failureHint({ processing_state: "failed", failure_code: "provider_transient" }), null);
+  assert.equal(failureHint({ processing_state: "passed", failure_code: null }), null);
+});

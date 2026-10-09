@@ -52,6 +52,11 @@ export function jobOutcome(job: JobState) {
   return job.client_phase === "expired" ? "Expired" : "—";
 }
 
+export function failureHint(job: Pick<UploadJob, "processing_state" | "failure_code">) {
+  if (job.processing_state !== "failed" || job.failure_code !== "input_corrupt") return null;
+  return "No record was accepted. Check that every line has an id and a text, that the license is set, and that each record has its own source_ref when records carry their own provenance.";
+}
+
 export const showsReport = (job: JobState) => job.publication_state === "published";
 
 export const diagnosticOnly = (job: JobState) => showsReport(job) && job.processing_state === "failed_qa";
