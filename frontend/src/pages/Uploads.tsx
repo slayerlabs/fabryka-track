@@ -2,12 +2,12 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useGetIdentity } from "@refinedev/core";
 import { Link, useNavigate, useParams } from "react-router";
 import {
-  DECLARATION_TEXT,
   MAX_UPLOAD_LABEL,
   validateUpload,
   type UploadErrors,
   type UploadFormState,
 } from "../uploads/form";
+import { FieldError, MetadataFields } from "../uploads/metadata";
 import { uploadFile, type UploadProgress } from "../uploads/uploader";
 import { bindingLabel, describeJob, failureHint, humanize, keepPolling, modeLabel, rejectionMessage, stoppedMessage } from "../uploads/display";
 import { checksOpen, summarizeReport } from "../uploads/report";
@@ -37,7 +37,7 @@ function when(value?: string | null) {
   return value ? new Date(value).toLocaleString() : "—";
 }
 
-function size(bytes?: number | null) {
+export function size(bytes?: number | null) {
   if (bytes === null || bytes === undefined) return "—";
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MiB`;
@@ -49,22 +49,6 @@ const PROGRESS_LABELS: Record<UploadProgress["phase"], string> = {
   uploading: "Uploading",
   confirming: "Confirming upload",
 };
-
-const TEXT_FIELDS = [
-  {
-    key: "license",
-    label: "License",
-    placeholder: "CC-BY-4.0",
-    hint: "Applies to every record that does not carry its own license.",
-  },
-  { key: "author", label: "Author (optional)", placeholder: undefined, hint: undefined },
-  { key: "source_ref", label: "Source reference (optional)", placeholder: "https://", hint: undefined },
-] as const;
-
-const MASK_CHOICES = [
-  { value: "yes", label: "Yes, mask names" },
-  { value: "no", label: "No, keep names" },
-] as const;
 
 const emptyForm = (): UploadFormState => ({
   pipeline: "",
@@ -79,21 +63,13 @@ const emptyForm = (): UploadFormState => ({
   declaration: false,
 });
 
-function FieldError({ text }: { text?: string }) {
-  return text ? (
-    <small className="error" role="alert">
-      {text}
-    </small>
-  ) : null;
-}
-
-interface Pipelines {
+export interface Pipelines {
   list: UploadPipeline[];
   loaded: boolean;
   error: string;
 }
 
-function usePipelines(): Pipelines {
+export function usePipelines(): Pipelines {
   const [value, setValue] = useState<Pipelines>({ list: [], loaded: false, error: "" });
   useEffect(() => {
     const controller = new AbortController();
@@ -209,84 +185,12 @@ function NewUploadForm({ pipelines }: { pipelines: Pipelines }) {
           <small className="muted">The format is taken from the file extension.</small>
           <FieldError text={errors.file} />
         </label>
-        <div className="fields">
-          <label className="field">
-            <span>Source</span>
-            <input
-              value={state.source}
-              disabled={busy}
-              placeholder="my_source"
-              onChange={(event) => set("source", event.target.value)}
-            />
-            <small className="muted">Lowercase letters, digits and underscores.</small>
-            <FieldError text={errors.source} />
-          </label>
-          <label className="field">
-            <span>Added</span>
-            <input
-              type="date"
-              value={state.added}
-              disabled={busy}
-              onChange={(event) => set("added", event.target.value)}
-            />
-            <FieldError text={errors.added} />
-          </label>
-          {TEXT_FIELDS.map(({ key, label, placeholder, hint }) => (
-            <label className="field" key={key}>
-              <span>{label}</span>
-              <input
-                value={state[key]}
-                disabled={busy}
-                placeholder={placeholder}
-                onChange={(event) => set(key, event.target.value)}
-              />
-              {hint && <small className="muted">{hint}</small>}
-              <FieldError text={errors[key]} />
-            </label>
-          ))}
-          <div className="field">
-            <span>Provenance</span>
-            <label>
-              <input
-                type="checkbox"
-                checked={state.per_record_provenance}
-                disabled={busy}
-                onChange={(event) => set("per_record_provenance", event.target.checked)}
-              />{" "}
-              Records carry their own provenance
-            </label>
-            <small className="muted">When checked, every record must have its own source_ref.</small>
-          </div>
-        </div>
-        <div className="field" role="radiogroup" aria-labelledby="mask-names-label">
-          <span id="mask-names-label">Mask personal names?</span>
-          {MASK_CHOICES.map(({ value, label }) => (
-            <label key={value}>
-              <input
-                type="radio"
-                name="mask_names"
-                disabled={busy}
-                checked={state.mask_names === value}
-                onChange={() => set("mask_names", value)}
-              />{" "}
-              {label}{" "}
-            </label>
-          ))}
-          <FieldError text={errors.mask_names} />
-        </div>
-        <div className="field">
-          <span>Declaration</span>
-          <label>
-            <input
-              type="checkbox"
-              checked={state.declaration}
-              disabled={busy}
-              onChange={(event) => set("declaration", event.target.checked)}
-            />{" "}
-            {DECLARATION_TEXT}
-          </label>
-          <FieldError text={errors.declaration} />
-        </div>
+        <MetadataFields
+          values={state}
+          errors={errors}
+          disabled={busy}
+          onChange={(update) => setState((current) => ({ ...current, ...update }))}
+        />
         {error && (
           <p className="error" role="alert">
             {error}
@@ -391,6 +295,10 @@ function UploadsWorkspace() {
         <p className="muted">
           Send a Dynaword file to the data pipeline, follow its validation and download the
           report and result.
+        </p>
+        <p className="muted">
+          <Link to="/uploads/new">Start a guided upload</Link> step by step, or use the
+          single-view form below.
         </p>
       </section>
       <NewUploadForm pipelines={pipelines} />
