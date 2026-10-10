@@ -37,7 +37,7 @@ function when(value?: string | null) {
   return value ? new Date(value).toLocaleString() : "—";
 }
 
-function size(bytes?: number | null) {
+export function size(bytes?: number | null) {
   if (bytes === null || bytes === undefined) return "—";
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MiB`;

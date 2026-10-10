@@ -3,11 +3,16 @@ import { useNavigate } from "react-router";
 import { validateUpload, type UploadErrors, type UploadFormState } from "../uploads/form.ts";
 import { FieldError, MetadataFields, type MetadataValues } from "../uploads/metadata.tsx";
 import { precheckFile, type PrecheckReport } from "../uploads/precheck.ts";
+import { size } from "./Uploads.tsx";
 import { WizardDraftContext } from "./UploadWizard.tsx";
 
 function reportRows(report: PrecheckReport) {
   return (
-    <dl>
+    <>
+      <p className="muted">
+        {report.format ?? "unknown format"} · {size(report.size)}
+      </p>
+      <dl>
       {report.findings.map((finding) => (
         <div key={finding.rule}>
           <dt>
@@ -19,7 +24,8 @@ function reportRows(report: PrecheckReport) {
           </dd>
         </div>
       ))}
-    </dl>
+      </dl>
+    </>
   );
 }
 
@@ -61,6 +67,7 @@ export function StepFileCheck({ pipeline }: { pipeline: string }) {
     const id = ++runId.current;
     const controller = new AbortController();
     abort.current = controller;
+    setReport(null);
     setChecking(true);
     try {
       const result = await precheckFile(file, controller.signal);
