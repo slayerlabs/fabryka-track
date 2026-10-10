@@ -33,7 +33,7 @@ function message(error: unknown) {
   return error instanceof Error ? error.message : "Something went wrong. Try again.";
 }
 
-function when(value?: string | null) {
+export function when(value?: string | null) {
   return value ? new Date(value).toLocaleString() : "—";
 }
 

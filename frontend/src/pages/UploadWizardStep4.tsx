@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router";
 import { describeJob, humanize } from "../uploads/display.ts";
 import { getReport, getUpload, type UploadJob, type UploadReport } from "../uploads/api.ts";
@@ -12,7 +12,7 @@ import {
   STAT_LABELS,
 } from "../uploads/report.ts";
 import { CountBars, type BarEntry } from "../uploads/charts.tsx";
-import { ReportSummary, ResultDownload } from "./Uploads.tsx";
+import { ReportSummary, ResultDownload, size, when } from "./Uploads.tsx";
 
 function message(error: unknown) {
   return error instanceof Error ? error.message : "Something went wrong. Try again.";
@@ -22,13 +22,17 @@ function labeled(
   values: Record<string, number | null | undefined> | undefined,
   labels: Record<string, string>,
   prefix = "",
+  lowercase = false,
 ): BarEntry[] {
   if (!values) return [];
   const rank = (name: string) => Object.keys(labels).indexOf(name);
   return Object.entries(values)
     .filter((entry): entry is [string, number] => typeof entry[1] === "number")
     .sort(([a], [b]) => rank(a) - rank(b))
-    .map(([name, value]) => ({ label: `${prefix}${labels[name] ?? name}`, value }));
+    .map(([name, value]) => {
+      const text = labels[name] ?? name;
+      return { label: `${prefix}${lowercase ? text.toLowerCase() : text}`, value };
+    });
 }
 
 function Card({ title, children }: { title: string; children: ReactNode }) {
@@ -88,27 +92,37 @@ export function StepResults({ jobId }: { jobId: string | null }) {
   if (!job || !report) return <p className="muted">Loading results…</p>;
 
   const described = describeJob(job);
-  const checks = report.report?.qa?.checks ?? [];
+  const checks = useMemo(() => report.report?.qa?.checks ?? [], [report]);
   const failed = checks.filter((check) => check.status === "failed").length;
   const funnel = report.report?.report?.funnel;
   const stats = report.report?.qa?.stats;
   const masked = report.report?.report?.pii_masked;
   const counters = report.report?.counters;
 
-  const flow: BarEntry[] = [
-    ...(typeof funnel?.rows_in === "number" ? [{ label: "Records in", value: funnel.rows_in }] : []),
-    ...labeled(funnel?.rejected, REJECT_REASON_LABELS, "Rejected: "),
-    ...labeled(funnel?.removed, STAGE_LABELS, "Removed: "),
-    ...(typeof funnel?.rows_out === "number" ? [{ label: "Records out", value: funnel.rows_out }] : []),
-  ];
-  const checkBars: BarEntry[] = checks
-    .filter((check): check is typeof check & { count: number } => typeof check.count === "number")
-    .map((check) => ({ label: check.name ?? "check", value: check.count }));
-  const maskedBars: BarEntry[] = [
-    ...labeled(masked, PII_LABELS),
-    ...(typeof masked?.records === "number" ? [{ label: "Records with a mask", value: masked.records }] : []),
-  ];
-  const statBars: BarEntry[] = labeled(stats, STAT_LABELS);
+  const flow: BarEntry[] = useMemo(
+    () => [
+      ...(typeof funnel?.rows_in === "number" ? [{ label: "Records in", value: funnel.rows_in }] : []),
+      ...labeled(funnel?.rejected, REJECT_REASON_LABELS, "Rejected: "),
+      ...labeled(funnel?.removed, STAGE_LABELS, "Removed: ", true),
+      ...(typeof funnel?.rows_out === "number" ? [{ label: "Records out", value: funnel.rows_out }] : []),
+    ],
+    [funnel],
+  );
+  const checkBars: BarEntry[] = useMemo(
+    () =>
+      checks
+        .filter((check): check is typeof check & { count: number } => typeof check.count === "number")
+        .map((check) => ({ label: check.name ?? "check", value: check.count })),
+    [checks],
+  );
+  const maskedBars: BarEntry[] = useMemo(
+    () => [
+      ...labeled(masked, PII_LABELS),
+      ...(typeof masked?.records === "number" ? [{ label: "Records with a mask", value: masked.records }] : []),
+    ],
+    [masked],
+  );
+  const statBars: BarEntry[] = useMemo(() => labeled(stats, STAT_LABELS), [stats]);
 
   return (
     <>
@@ -124,8 +138,23 @@ export function StepResults({ jobId }: { jobId: string | null }) {
           ? `${count(funnel?.rows_in ?? 0)} in · ${count(funnel?.rows_out ?? 0)} out`
           : `${count(report.report?.rows_in ?? 0)} in · ${count(report.report?.rows_out ?? 0)} out`}
       </Card>
+      <Card title="Upload">
+        {job.pipeline} · {typeof job.encoded_bytes === "number" ? size(job.encoded_bytes) : "—"} ·{" "}
+        <code>{job.input_sha256 ?? "—"}</code> · {when(job.upload_started_at)}
+      </Card>
       <Card title="Quality checks">
         {checks.length === 0 ? "No checks reported." : `${failed} of ${checks.length} failed`}
+      </Card>
+      <Card title="Duplicates & conflicts">
+        {typeof stats?.exact_duplicate_pairs === "number" ||
+        typeof stats?.near_duplicate_pairs === "number" ||
+        typeof stats?.license_review_records === "number"
+          ? `${typeof stats?.exact_duplicate_pairs === "number" ? count(stats.exact_duplicate_pairs) : "—"} exact · ${
+              typeof stats?.near_duplicate_pairs === "number" ? count(stats.near_duplicate_pairs) : "—"
+            } near · ${
+              typeof stats?.license_review_records === "number" ? count(stats.license_review_records) : "—"
+            } for licence review`
+          : "No duplicate or conflict counts reported."}
       </Card>
       <Card title="Processing">
         {typeof counters?.elapsed_ms === "number" ? duration(counters.elapsed_ms) : "—"}
@@ -140,7 +169,9 @@ export function StepResults({ jobId }: { jobId: string | null }) {
       {maskedBars.length > 0 && (
         <CountBars title="Personal data masked" entries={maskedBars} ariaLabel="Masked personal data chart" />
       )}
-      {statBars.length > 0 && <CountBars title="What happened" entries={statBars} ariaLabel="Statistics chart" />}
+      {statBars.length > 0 && (
+        <CountBars title="What happened to the data" entries={statBars} ariaLabel="Statistics chart" />
+      )}
       <section className="panel">
         <h2>Report</h2>
         <ReportSummary id={job.job_id} />
