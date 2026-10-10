@@ -5,6 +5,7 @@ import type { MetadataValues } from "../uploads/metadata.tsx";
 import type { UploadPipeline } from "../uploads/api";
 import { usePipelines, type Pipelines } from "./Uploads";
 import { StepFileCheck } from "./UploadWizardStep2.tsx";
+import { StepRun } from "./UploadWizardStep3.tsx";
 
 const STEPS = ["Pipeline", "File check", "Run", "Results"] as const;
 
@@ -147,6 +148,8 @@ export function UploadWizardPage() {
       </section>
       {effective === 2 ? (
         <StepFileCheck pipeline={chosen.pipeline} />
+      ) : effective === 3 ? (
+        <StepRun pipeline={chosen.pipeline} jobId={params.get("job")} />
       ) : (
         <NextStep step={effective} pipeline={chosen.pipeline} />
       )}
