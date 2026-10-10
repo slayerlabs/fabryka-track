@@ -362,7 +362,7 @@ function UploadsWorkspace() {
   );
 }
 
-function ReportSummary({ id }: { id: string }) {
+export function ReportSummary({ id }: { id: string }) {
   const [report, setReport] = useState<UploadReport | null>(null);
   const [error, setError] = useState("");
   useEffect(() => {
@@ -425,7 +425,7 @@ function ReportSummary({ id }: { id: string }) {
   );
 }
 
-function ResultDownload({ id, diagnosticFirst }: { id: string; diagnosticFirst: boolean }) {
+export function ResultDownload({ id, diagnosticFirst }: { id: string; diagnosticFirst: boolean }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [diagnostic, setDiagnostic] = useState(diagnosticFirst);

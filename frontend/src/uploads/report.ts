@@ -10,7 +10,7 @@ export interface SummarySection {
   rows: SummaryRow[];
 }
 
-const REJECT_REASON_LABELS: Record<string, string> = {
+export const REJECT_REASON_LABELS: Record<string, string> = {
   unparseable: "unparseable line",
   not_an_object: "not a JSON object",
   missing_id: "missing id",
@@ -25,19 +25,19 @@ const REJECT_REASON_LABELS: Record<string, string> = {
   missing_source_ref: "missing source_ref",
 };
 
-const STAGE_LABELS: Record<string, string> = {
+export const STAGE_LABELS: Record<string, string> = {
   quality_labels: "Too short",
   upload_dedup: "Near or exact duplicates",
   masked_exact_dedup: "Duplicates after masking",
 };
 
-const PII_LABELS: Record<string, string> = {
+export const PII_LABELS: Record<string, string> = {
   phone: "Phone numbers",
   pii: "Other personal data (PESEL, email…)",
   person: "Person names",
 };
 
-const STAT_LABELS: Record<string, string> = {
+export const STAT_LABELS: Record<string, string> = {
   token_count: "Tokens",
   exact_duplicate_pairs: "Exact duplicate pairs",
   near_duplicate_pairs: "Near-duplicate pairs",
@@ -53,16 +53,16 @@ function inOrder(counts: Record<string, number> | undefined, known: Record<strin
 
 const label = (map: Record<string, string>, name: string) => map[name] ?? name;
 
-const count = (value: number) => value.toLocaleString("en-US");
+export const count = (value: number) => value.toLocaleString("en-US");
 
-function bytes(value: number) {
+export function bytes(value: number) {
   if (value >= 1024 ** 3) return `${(value / 1024 ** 3).toFixed(1)} GB`;
   if (value >= 1024 * 1024) return `${(value / 1024 / 1024).toFixed(1)} MB`;
   if (value >= 1024) return `${(value / 1024).toFixed(1)} KB`;
   return `${count(value)} B`;
 }
 
-function duration(ms: number) {
+export function duration(ms: number) {
   if (ms < 1000) return `${ms} ms`;
   const seconds = Math.floor(ms / 1000);
   return seconds >= 60 ? `${Math.floor(seconds / 60)}m ${seconds % 60}s` : `${seconds}s`;
