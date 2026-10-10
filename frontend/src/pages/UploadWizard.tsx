@@ -6,6 +6,7 @@ import type { UploadPipeline } from "../uploads/api";
 import { usePipelines, type Pipelines } from "./Uploads";
 import { StepFileCheck } from "./UploadWizardStep2.tsx";
 import { StepRun } from "./UploadWizardStep3.tsx";
+import { StepResults } from "./UploadWizardStep4.tsx";
 
 const STEPS = ["Pipeline", "File check", "Run", "Results"] as const;
 
@@ -82,23 +83,6 @@ function PipelineCards({
   return <div className="actions">{pipelines.list.map(card)}</div>;
 }
 
-function NextStep({ step, pipeline }: { step: number; pipeline: string }) {
-  return (
-    <section className="panel">
-      <h2>
-        Step {step}: {STEPS[step - 1]}
-      </h2>
-      <p className="muted">Pipeline: {pipeline}</p>
-      <p className="muted">This step is not available yet.</p>
-      <div className="actions">
-        <Link className="secondary" to={`/uploads/new?step=1&pipeline=${encodeURIComponent(pipeline)}`}>
-          Back to step 1
-        </Link>
-      </div>
-    </section>
-  );
-}
-
 export function UploadWizardPage() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
@@ -151,7 +135,7 @@ export function UploadWizardPage() {
       ) : effective === 3 ? (
         <StepRun pipeline={chosen.pipeline} jobId={params.get("job")} />
       ) : (
-        <NextStep step={effective} pipeline={chosen.pipeline} />
+        <StepResults jobId={params.get("job")} />
       )}
     </WizardDraftContext.Provider>
   );
