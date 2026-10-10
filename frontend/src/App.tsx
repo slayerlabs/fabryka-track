@@ -23,6 +23,7 @@ import {
 } from "./pages/Public";
 import { BenchmarksPage } from "./pages/Benchmarks";
 import { UploadDetailPage, UploadsPage } from "./pages/Uploads";
+import { UploadWizardPage } from "./pages/UploadWizard";
 import { LeaderboardPage } from "./pages/Leaderboard";
 import { ModelBoardPage } from "./pages/ModelBoard";
 import { CheckpointsPage } from "./pages/Checkpoints";
@@ -242,6 +243,14 @@ function ApplicationShell() {
               element={
                 <Authenticated key="uploads" fallback={<LoginPage />}>
                   <UploadsPage />
+                </Authenticated>
+              }
+            />
+            <Route
+              path="/uploads/new"
+              element={
+                <Authenticated key="upload-wizard" fallback={<LoginPage />}>
+                  <UploadWizardPage />
                 </Authenticated>
               }
             />

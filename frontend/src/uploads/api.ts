@@ -11,6 +11,8 @@ export interface Rejection {
 export interface UploadPipeline {
   pipeline: string;
   title: string;
+  description?: string;
+  file_requirements?: string;
   parameters: Record<string, unknown>;
 }
 

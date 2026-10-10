@@ -87,13 +87,13 @@ function FieldError({ text }: { text?: string }) {
   ) : null;
 }
 
-interface Pipelines {
+export interface Pipelines {
   list: UploadPipeline[];
   loaded: boolean;
   error: string;
 }
 
-function usePipelines(): Pipelines {
+export function usePipelines(): Pipelines {
   const [value, setValue] = useState<Pipelines>({ list: [], loaded: false, error: "" });
   useEffect(() => {
     const controller = new AbortController();
@@ -391,6 +391,10 @@ function UploadsWorkspace() {
         <p className="muted">
           Send a Dynaword file to the data pipeline, follow its validation and download the
           report and result.
+        </p>
+        <p className="muted">
+          <Link to="/uploads/new">Start a guided upload</Link> step by step, or use the
+          single-view form below.
         </p>
       </section>
       <NewUploadForm pipelines={pipelines} />
