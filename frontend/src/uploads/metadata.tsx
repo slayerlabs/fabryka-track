@@ -106,7 +106,7 @@ export function MetadataFields({
               name="mask_names"
               disabled={disabled}
               checked={values.mask_names === value}
-                onChange={() => onChange({ mask_names: value })}
+              onChange={() => onChange({ mask_names: value })}
             />{" "}
             {label}{" "}
           </label>

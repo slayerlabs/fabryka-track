@@ -111,8 +111,9 @@ async function checkJsonl(file: SliceableFile, signal?: AbortSignal): Promise<Pr
   return { format: "jsonl", size: file.size, rows, findings, passed: findings.every((finding) => finding.ok) };
 }
 
-async function checkParquet(file: SliceableFile): Promise<PrecheckReport> {
+async function checkParquet(file: SliceableFile, signal?: AbortSignal): Promise<PrecheckReport> {
   const head = new Uint8Array(await file.slice(0, 4).arrayBuffer());
+  signal?.throwIfAborted();
   const tail = new Uint8Array(await file.slice(Math.max(0, file.size - 4), file.size).arrayBuffer());
   const text = new TextDecoder();
   const magic = text.decode(head) === PARQUET_MAGIC && text.decode(tail) === PARQUET_MAGIC;
@@ -155,5 +156,5 @@ export async function precheckFile(file: SliceableFile, signal?: AbortSignal): P
       passed: false,
     };
   }
-  return format === "jsonl" ? checkJsonl(file, signal) : checkParquet(file);
+  return format === "jsonl" ? checkJsonl(file, signal) : checkParquet(file, signal);
 }
