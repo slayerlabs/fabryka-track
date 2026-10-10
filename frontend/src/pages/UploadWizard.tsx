@@ -1,9 +1,33 @@
+import { createContext, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { MAX_UPLOAD_LABEL } from "../uploads/form";
+import type { MetadataValues } from "../uploads/metadata.tsx";
 import type { UploadPipeline } from "../uploads/api";
 import { usePipelines, type Pipelines } from "./Uploads";
+import { StepFileCheck } from "./UploadWizardStep2.tsx";
 
 const STEPS = ["Pipeline", "File check", "Run", "Results"] as const;
+
+export interface WizardDraft extends MetadataValues {
+  file: File | null;
+}
+
+const emptyDraft = (): WizardDraft => ({
+  file: null,
+  source: "",
+  added: new Date().toISOString().slice(0, 10),
+  license: "",
+  author: "",
+  source_ref: "",
+  per_record_provenance: false,
+  mask_names: "",
+  declaration: false,
+});
+
+export const WizardDraftContext = createContext<{
+  draft: WizardDraft;
+  patch: (update: Partial<WizardDraft>) => void;
+} | null>(null);
 
 function StepIndicator({ step }: { step: number }) {
   return (
@@ -78,6 +102,9 @@ export function UploadWizardPage() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const pipelines = usePipelines();
+  const [draft, setDraft] = useState<WizardDraft>(emptyDraft);
+  const patch = (update: Partial<WizardDraft>) => setDraft((current) => ({ ...current, ...update }));
+  const context = { draft, patch };
 
   const requested = Number.parseInt(params.get("step") ?? "1", 10);
   const step = Number.isInteger(requested) && requested >= 1 && requested <= STEPS.length ? requested : 1;
@@ -112,14 +139,18 @@ export function UploadWizardPage() {
   }
 
   if (effective > 1 && chosen) return (
-    <>
+    <WizardDraftContext.Provider value={context}>
       <section className="panel">
         <Link to="/uploads">← Data uploads</Link>
         <h1>New guided upload</h1>
         <StepIndicator step={effective} />
       </section>
-      <NextStep step={effective} pipeline={chosen.pipeline} />
-    </>
+      {effective === 2 ? (
+        <StepFileCheck pipeline={chosen.pipeline} />
+      ) : (
+        <NextStep step={effective} pipeline={chosen.pipeline} />
+      )}
+    </WizardDraftContext.Provider>
   );
 
   return (
