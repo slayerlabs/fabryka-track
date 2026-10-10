@@ -66,6 +66,32 @@ export function StepResults({ jobId }: { jobId: string | null }) {
     return () => controller.abort();
   }, [jobId]);
 
+  const checks = useMemo(() => report?.report?.qa?.checks ?? [], [report]);
+  const flow: BarEntry[] = useMemo(() => {
+    const funnel = report?.report?.report?.funnel;
+    return [
+      ...(typeof funnel?.rows_in === "number" ? [{ label: "Records in", value: funnel.rows_in }] : []),
+      ...labeled(funnel?.rejected, REJECT_REASON_LABELS, "Rejected: "),
+      ...labeled(funnel?.removed, STAGE_LABELS, "Removed: ", true),
+      ...(typeof funnel?.rows_out === "number" ? [{ label: "Records out", value: funnel.rows_out }] : []),
+    ];
+  }, [report]);
+  const checkBars: BarEntry[] = useMemo(
+    () =>
+      checks
+        .filter((check): check is typeof check & { count: number } => typeof check.count === "number")
+        .map((check) => ({ label: check.name ?? "check", value: check.count })),
+    [checks],
+  );
+  const maskedBars: BarEntry[] = useMemo(() => {
+    const masked = report?.report?.report?.pii_masked;
+    return [
+      ...labeled(masked, PII_LABELS),
+      ...(typeof masked?.records === "number" ? [{ label: "Records with a mask", value: masked.records }] : []),
+    ];
+  }, [report]);
+  const statBars: BarEntry[] = useMemo(() => labeled(report?.report?.qa?.stats, STAT_LABELS), [report]);
+
   if (!jobId) {
     return (
       <section className="panel">
@@ -92,37 +118,10 @@ export function StepResults({ jobId }: { jobId: string | null }) {
   if (!job || !report) return <p className="muted">Loading results…</p>;
 
   const described = describeJob(job);
-  const checks = useMemo(() => report.report?.qa?.checks ?? [], [report]);
   const failed = checks.filter((check) => check.status === "failed").length;
   const funnel = report.report?.report?.funnel;
   const stats = report.report?.qa?.stats;
-  const masked = report.report?.report?.pii_masked;
   const counters = report.report?.counters;
-
-  const flow: BarEntry[] = useMemo(
-    () => [
-      ...(typeof funnel?.rows_in === "number" ? [{ label: "Records in", value: funnel.rows_in }] : []),
-      ...labeled(funnel?.rejected, REJECT_REASON_LABELS, "Rejected: "),
-      ...labeled(funnel?.removed, STAGE_LABELS, "Removed: ", true),
-      ...(typeof funnel?.rows_out === "number" ? [{ label: "Records out", value: funnel.rows_out }] : []),
-    ],
-    [funnel],
-  );
-  const checkBars: BarEntry[] = useMemo(
-    () =>
-      checks
-        .filter((check): check is typeof check & { count: number } => typeof check.count === "number")
-        .map((check) => ({ label: check.name ?? "check", value: check.count })),
-    [checks],
-  );
-  const maskedBars: BarEntry[] = useMemo(
-    () => [
-      ...labeled(masked, PII_LABELS),
-      ...(typeof masked?.records === "number" ? [{ label: "Records with a mask", value: masked.records }] : []),
-    ],
-    [masked],
-  );
-  const statBars: BarEntry[] = useMemo(() => labeled(stats, STAT_LABELS), [stats]);
 
   return (
     <>
