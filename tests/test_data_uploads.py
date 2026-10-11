@@ -363,3 +363,16 @@ def test_pipelines_list_is_guarded_like_the_other_upload_routes(client, controll
     client.cookies.clear()
     assert client.get("/api/uploads/pipelines").status_code == 401
     assert len(controller.requests) == 1
+
+
+def test_attribution_proxy_forwards_kind_and_diagnostic_with_existing_identity(client, controller):
+    response = client.get(f"/api/uploads/{JOB_ID}/result?kind=attribution&diagnostic=true")
+    assert response.status_code == 200
+    sent = controller.requests[-1]
+    assert sent.url.query == b"diagnostic=true&kind=attribution"
+    assert sent.headers["X-Pipeline-User"]
+    assert client.get(f"/api/uploads/{JOB_ID}/result?kind=report").status_code == 422
+    assert len(controller.requests) == 1
+    client.cookies.clear()
+    assert client.get(f"/api/uploads/{JOB_ID}/result?kind=attribution").status_code == 401
+    assert len(controller.requests) == 1

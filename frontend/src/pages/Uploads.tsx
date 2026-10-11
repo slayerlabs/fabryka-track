@@ -265,15 +265,17 @@ export function ReportSummary({ id }: { id: string }) {
   );
 }
 
-export function ResultDownload({ id, diagnosticFirst }: { id: string; diagnosticFirst: boolean }) {
+export function ResultDownload({ id, diagnosticFirst, attribution = false }: {
+  id: string; diagnosticFirst: boolean; attribution?: boolean;
+}) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [diagnostic, setDiagnostic] = useState(diagnosticFirst);
-  async function download(asDiagnostic: boolean) {
+  async function download(asDiagnostic: boolean, kind: "result" | "attribution" = "result") {
     setBusy(true);
     setError("");
     try {
-      window.location.assign((await resultGrant(id, asDiagnostic)).url);
+      window.location.assign((await resultGrant(id, asDiagnostic, kind)).url);
     } catch (e) {
       if (apiError(e).code === "diagnostic_required") setDiagnostic(true);
       setError(message(e));
@@ -292,6 +294,11 @@ export function ResultDownload({ id, diagnosticFirst }: { id: string; diagnostic
         {!diagnosticFirst && (
           <button className="primary" disabled={busy} onClick={() => void download(false)}>
             Download result
+          </button>
+        )}
+        {attribution && (
+          <button className="secondary" disabled={busy} onClick={() => void download(diagnostic, "attribution")}>
+            Download attribution
           </button>
         )}
         {diagnostic && (

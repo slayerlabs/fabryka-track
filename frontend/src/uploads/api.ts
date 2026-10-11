@@ -32,6 +32,7 @@ export interface UploadJob {
   encoded_bytes?: number | null;
   input_sha256?: string | null;
   rejection?: Rejection | null;
+  artifacts?: { kind: string; artifact_id: string }[];
 }
 
 export interface UploadCheck {
@@ -84,8 +85,16 @@ export const cancelUpload = (id: string) =>
     body: JSON.stringify({ action_key: crypto.randomUUID() }),
   });
 
-export const resultGrant = (id: string, diagnostic: boolean) =>
-  request<{ url: string }>(`${job(id)}/result${diagnostic ? "?diagnostic=true" : ""}`);
+export const resultGrant = (id: string, diagnostic: boolean, kind: "result" | "attribution" = "result") => {
+  const params = new URLSearchParams();
+  if (diagnostic) params.set("diagnostic", "true");
+  if (kind !== "result") params.set("kind", kind);
+  const query = params.toString();
+  return request<{ url: string }>(`${job(id)}/result${query ? `?${query}` : ""}`);
+};
+
+export const hasAttribution = (job: UploadJob) =>
+  job.publication_state === "published" && job.artifacts?.some((artifact) => artifact.kind === "attribution") === true;
 
 function sleep(ms: number, signal?: AbortSignal) {
   return new Promise<void>((resolve, reject) => {

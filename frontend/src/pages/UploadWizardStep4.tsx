@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router";
 import { describeJob, failureHint, humanize, rejectionMessage } from "../uploads/display.ts";
 import { getReport, getUpload, type UploadJob, type UploadReport } from "../uploads/api.ts";
+import { hasAttribution } from "../uploads/api.ts";
 import { loadUploadResults } from "../uploads/results.ts";
 import {
   bytes,
@@ -191,7 +192,7 @@ export function StepResults({ jobId }: { jobId: string | null }) {
           <section className="panel">
             <h2>Report</h2>
             <ReportSummary id={job.job_id} />
-            <ResultDownload id={job.job_id} diagnosticFirst={described.diagnosticOnly} />
+            <ResultDownload id={job.job_id} diagnosticFirst={described.diagnosticOnly} attribution={hasAttribution(job)} />
           </section>
         </>
       )}

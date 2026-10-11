@@ -237,5 +237,11 @@ def upload_report(job_id: UUID, caller=Depends(uploader)):
 
 
 @router.get("/{job_id}/result")
-def upload_result(job_id: UUID, diagnostic: bool = False, caller=Depends(uploader)):
-    return forward(caller, "GET", f"/jobs/{job_id}/result", params={"diagnostic": "true"} if diagnostic else None)
+def upload_result(
+    job_id: UUID, diagnostic: bool = False, kind: Literal["result", "attribution"] | None = None,
+    caller=Depends(uploader),
+):
+    params = {"diagnostic": "true"} if diagnostic else {}
+    if kind is not None:
+        params["kind"] = kind
+    return forward(caller, "GET", f"/jobs/{job_id}/result", params=params or None)
