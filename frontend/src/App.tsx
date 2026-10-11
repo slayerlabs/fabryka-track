@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Authenticated, useGetIdentity } from "@refinedev/core";
 import {
   Link,
@@ -17,7 +17,6 @@ import { RunDetailPage } from "./pages/RunDetail";
 import { ComparePage } from "./pages/Compare";
 import {
   GoalsPage,
-  StatusPage,
   AgentsPage,
   TrainingGoalPage,
   PublishedBenchmarksPage,
@@ -39,6 +38,7 @@ const navigation: { label: string; links: [string, string, IconName][] }[] = [
     label: "Workspace",
     links: [
       ["/overview", "Overview", "layers"],
+      ["/agents", "Connect an agent", "users"],
       ["/new", "Training studio", "flask"],
       ["/runs", "Focused runs", "play"],
       ["/checkpoints", "Checkpoints", "layers"],
@@ -50,14 +50,11 @@ const navigation: { label: string; links: [string, string, IconName][] }[] = [
     label: "Research & resources",
     links: [
       ["/goals", "Goals", "target"],
-      ["/status", "Status", "chart"],
-      ["/agents", "Agent sign up", "users"],
       ["/benchmark-results", "Published results", "chart"],
       ["/public-runs", "Public runs", "play"],
       ["/leaderboard", "Training results", "trophy"],
       ["/models", "Model leaderboard", "trophy"],
       ["/guide", "Training guide", "book"],
-      ["https://github.com/slayerlabs/rfcs", "RFC repository", "book"],
     ],
   },
 ];
@@ -81,97 +78,165 @@ export function App() {
 
 function ApplicationShell() {
   const location = useLocation();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuButton = useRef<HTMLButtonElement>(null);
+  const closeButton = useRef<HTMLButtonElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
   const { data: identity } = useGetIdentity<Identity | null>();
   const dashboard = useDashboard(Boolean(identity));
   const memory = identity ? dashboard.data?.gpu_memory : undefined;
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [location.pathname]);
+  useEffect(() => {
+    if (!menuOpen) return;
+    closeButton.current?.focus();
+    const mobile = window.matchMedia("(max-width: 760px)");
+    const closeOnDesktop = () => {
+      if (!mobile.matches) setMenuOpen(false);
+    };
+    mobile.addEventListener("change", closeOnDesktop);
+    return () => mobile.removeEventListener("change", closeOnDesktop);
+  }, [menuOpen]);
+  function dismissMenu() {
+    setMenuOpen(false);
+    requestAnimationFrame(() => menuButton.current?.focus());
+  }
+  function handleMenuKeys(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (event.key === "Escape") {
+      dismissMenu();
+    } else if (event.key === "Tab") {
+      const focusable = panel.current?.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled])',
+      );
+      if (!focusable?.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+  }
   return (
     <>
       <div className="app-shell">
         <aside className="sidebar">
-          <Link className="brand" to="/" aria-label="Fabryka Track home">
-            <BrandLockup />
-          </Link>
-          <nav className="sidebar-nav" aria-label="Main">
-            {navigation.map((group) => (
-              <details
-                className="sidebar-group"
-                key={group.label}
-                open={
-                  group.label === "Workspace" ||
-                  group.links.some(([path]) => path === location.pathname)
-                    ? true
-                    : undefined
-                }
-              >
-                <summary className="sidebar-group-label">{group.label}</summary>
-                <div className="sidebar-links">
-                  {group.links.map(([path, label, icon]) => (
-                    <NavLink key={path} to={path} end={path === "/"}>
-                      <Icon name={icon} />
-                      <span>{label}</span>
-                      {path === "/runs" && identity && dashboard.data && (
-                        <span className="sidebar-count">
-                          {
-                            dashboard.data.runs.filter((run) => run.focused)
-                              .length
-                          }
-                        </span>
-                      )}
-                    </NavLink>
-                  ))}
-                </div>
-              </details>
-            ))}
-          </nav>
-          <div className="sidebar-spacer" />
-          {identity && (
-            <div className="gpu-status-card">
-              <div className="gpu-status-label">
-                <span
-                  className={`gpu-live-dot${memory?.active_runs ? " is-live" : ""}`}
-                />
-                GPU activity
-              </div>
-              {memory?.used_gb != null &&
-              memory.total_gb != null &&
-              memory.total_gb > 0 ? (
-                <>
-                  <div className="gpu-memory-value">
-                    <b>{memory.used_gb.toFixed(1)}</b> /{" "}
-                    {memory.total_gb.toFixed(1)} GB VRAM
-                  </div>
-                  <progress
-                    className="gpu-status-bar"
-                    value={memory.used_gb}
-                    max={memory.total_gb}
-                    aria-label="GPU memory usage"
-                  />
-                </>
-              ) : (
-                <span className="gpu-status-meta">Live VRAM not reported</span>
-              )}
-              <span className="gpu-status-meta">
-                {dashboard.error
-                  ? "GPU status unavailable"
-                  : memory
-                    ? `${memory.active_runs} active GPU run${memory.active_runs === 1 ? "" : "s"}`
-                    : "Loading GPU activity…"}
-              </span>
-            </div>
-          )}
-          <NavLink
-            className="sidebar-account"
-            to={identity ? "/account" : "/login"}
+          <div className="sidebar-header" inert={menuOpen}>
+            <Link className="brand" to="/" aria-label="Fabryka Track home">
+              <BrandLockup />
+            </Link>
+            <button
+              ref={menuButton}
+              className="sidebar-menu-toggle"
+              type="button"
+              aria-label="Open menu"
+              aria-expanded={menuOpen}
+              aria-controls="sidebar-menu"
+              onClick={() => setMenuOpen(true)}
+            >
+              <span aria-hidden="true">☰</span>
+            </button>
+          </div>
+          <div
+            ref={panel}
+            id="sidebar-menu"
+            className={`sidebar-panel${menuOpen ? " is-open" : ""}`}
+            onKeyDown={menuOpen ? handleMenuKeys : undefined}
+            role={menuOpen ? "dialog" : undefined}
+            aria-modal={menuOpen ? true : undefined}
+            aria-label={menuOpen ? "Main menu" : undefined}
           >
-            <Icon name="user" />
-            {identity?.username || "Sign in"}
-          </NavLink>
+            <div className="sidebar-panel-header">
+              <Link className="brand" to="/" aria-label="Fabryka Track home" onClick={() => setMenuOpen(false)}>
+                <BrandLockup />
+              </Link>
+              <button
+                ref={closeButton}
+                className="sidebar-menu-close"
+                type="button"
+                aria-label="Close menu"
+                onClick={dismissMenu}
+              >
+                <span aria-hidden="true">×</span>
+              </button>
+            </div>
+            <nav className="sidebar-nav" aria-label="Main">
+              {navigation.map((group) => (
+                <section className="sidebar-group" key={group.label} aria-label={group.label}>
+                  <h2 className="sidebar-group-label">{group.label}</h2>
+                  <div className="sidebar-links">
+                    {group.links.map(([path, label, icon]) => (
+                      <NavLink key={path} to={path} end={path === "/"} onClick={() => setMenuOpen(false)}>
+                        <Icon name={icon} />
+                        <span>{label}</span>
+                        {path === "/runs" && identity && dashboard.data && (
+                          <span className="sidebar-count">
+                            {
+                              dashboard.data.runs.filter((run) => run.focused)
+                                .length
+                            }
+                          </span>
+                        )}
+                      </NavLink>
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </nav>
+            <div className="sidebar-spacer" />
+            {identity && (
+              <div className="gpu-status-card">
+                <div className="gpu-status-label">
+                  <span
+                    className={`gpu-live-dot${memory?.active_runs ? " is-live" : ""}`}
+                  />
+                  GPU activity
+                </div>
+                {memory?.used_gb != null &&
+                memory.total_gb != null &&
+                memory.total_gb > 0 ? (
+                  <>
+                    <div className="gpu-memory-value">
+                      <b>{memory.used_gb.toFixed(1)}</b> /{" "}
+                      {memory.total_gb.toFixed(1)} GB VRAM
+                    </div>
+                    <progress
+                      className="gpu-status-bar"
+                      value={memory.used_gb}
+                      max={memory.total_gb}
+                      aria-label="GPU memory usage"
+                    />
+                  </>
+                ) : (
+                  <span className="gpu-status-meta">Live VRAM not reported</span>
+                )}
+                <span className="gpu-status-meta">
+                  {dashboard.error
+                    ? "GPU status unavailable"
+                    : memory
+                      ? `${memory.active_runs} active GPU run${memory.active_runs === 1 ? "" : "s"}`
+                      : "Loading GPU activity…"}
+                </span>
+              </div>
+            )}
+            <NavLink
+              className="sidebar-account"
+              to={identity ? "/account" : "/login"}
+              onClick={() => setMenuOpen(false)}
+            >
+              <Icon name="user" />
+              {identity?.username || "Sign in"}
+            </NavLink>
+          </div>
         </aside>
-        <main className="shell-main" id="app">
+        <main className="shell-main" id="app" inert={menuOpen}>
           <Routes>
             <Route path="/overview" element={<OverviewPage />} />
             <Route path="/goals" element={<GoalsPage />} />
-            <Route path="/status" element={<StatusPage />} />
             <Route path="/agents" element={<AgentsPage />} />
             <Route
               path="/goals/250m-english-base-model"
@@ -262,7 +327,7 @@ function ApplicationShell() {
           </Routes>
         </main>
       </div>
-      <footer className="app-footer">
+      <footer className="app-footer" inert={menuOpen}>
         <span>Small experiments. Clear results.</span>
         <span>Fabryka Track</span>
       </footer>

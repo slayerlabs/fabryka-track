@@ -2,7 +2,7 @@ import re
 
 
 def test_document_routes_share_loadable_frontend_assets(client):
-    paths = ['/', '/overview', '/goals', '/status', '/agents', '/goals/250m-english-base-model',
+    paths = ['/', '/overview', '/goals', '/agents', '/goals/250m-english-base-model',
              '/benchmark-results', '/leaderboard', '/models', '/runs', '/public-runs', '/new', '/guide',
              '/account', '/login', '/register', '/benchmarks', '/checkpoints',
              '/run/7caf2e37-e453-4e31-8a5d-2e4425f606d2', '/uploads',
@@ -20,6 +20,6 @@ def test_document_routes_share_loadable_frontend_assets(client):
         response = client.get(url)
         assert response.status_code == 200
         assert 'javascript' in response.headers['content-type']
-    for path in ['/missing-page', '/run/not-an-id', '/uploads/not-an-id', '/uploads/7caf2e37-e453-4e31-8a5d-2e4425f606d2,7caf2e37-e453-4e31-8a5d-2e4425f606d2', '/api/missing', '/assets/missing.js',
+    for path in ['/status', '/missing-page', '/run/not-an-id', '/uploads/not-an-id', '/uploads/7caf2e37-e453-4e31-8a5d-2e4425f606d2,7caf2e37-e453-4e31-8a5d-2e4425f606d2', '/api/missing', '/assets/missing.js',
                  '/assets/..%2Fsettings.py']:
         assert client.get(path).status_code == 404

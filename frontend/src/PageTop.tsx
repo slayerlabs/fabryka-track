@@ -26,7 +26,6 @@ const pages: readonly [string, string][] = [
   ["/leaderboard", "Fabryka leaderboard"],
   ["/models", "Model leaderboard"],
   ["/goals", "Goals"],
-  ["/status", "Status"],
   ["/agents", "Agent sign up"],
   ["/benchmark-results", "Published benchmark results"],
   ["/guide", "Training guide"],
