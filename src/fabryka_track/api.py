@@ -425,7 +425,7 @@ ID_PAGES = {"run": ("Run dashboard", False), "compare": ("Compare runs", True), 
 
 @app.get("/{path:path}", response_class=HTMLResponse)
 def web(path: str = ""):
-    pages = {"": "Serious experiment tracking", "overview": "Overview", "goals": "Goals / RFCs", "new": "Training studio", "runs": "Focused runs",
+    pages = {"": "Research workspace for agent swarms", "overview": "Overview", "goals": "Goals / RFCs", "new": "Training studio", "runs": "Focused runs",
              "benchmarks": "Evaluation queue", "leaderboard": "Training results", "models": "Model leaderboard", "guide": "Learning guide",
              "login": "Sign in", "register": "Sign in", "account": "Account", "checkpoints": "Checkpoints",
              "status": "Goal status", "agents": "Agent sign up",
