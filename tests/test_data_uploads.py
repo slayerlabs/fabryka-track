@@ -448,11 +448,17 @@ def test_a_missing_attribution_file_has_its_own_readable_state(client, controlle
     controller.reply = controller_error(404, "not_found")
     response = client.get(f"/api/uploads/{JOB_ID}/attribution")
     assert response.status_code == 404
-    assert response.json() == {"detail": "This upload has no attribution file.", "code": "no_attribution",
+    assert response.json() == {"detail": "No attribution file is available for this upload.", "code": "no_attribution",
                                "request_id": REQUEST_ID}
 
 
-@pytest.mark.parametrize("status,code", [(409, "result_pending"), (409, "no_result"), (410, "expired")])
+def test_attribution_forwards_the_diagnostic_flag(client, controller):
+    assert client.get(f"/api/uploads/{JOB_ID}/attribution?diagnostic=true").status_code == 200
+    assert client.get(f"/api/uploads/{JOB_ID}/attribution").status_code == 200
+    assert [r.url.query.decode() for r in controller.requests] == ["diagnostic=true", ""]
+
+
+@pytest.mark.parametrize("status,code", [(409, "result_pending"), (409, "no_result"), (410, "expired"), (409, "diagnostic_required")])
 def test_other_attribution_errors_use_the_shared_messages(client, controller, status, code):
     controller.reply = controller_error(status, code)
     response = client.get(f"/api/uploads/{JOB_ID}/attribution")

@@ -274,3 +274,21 @@ test("a Parquet footer that cannot be read never blocks", async () => {
     assert.equal(report.rows, null);
   }
 });
+
+test("NaN and Infinity are accepted by the server preflight, so they warn and never block", async () => {
+  for (const token of ["NaN", "Infinity", "-Infinity"]) {
+    const report = await precheckFile(jsonl(lines(5, (n) => `{"id":${n},"text":"t","score":${token}}`)), LIMIT);
+    assert.deepEqual(report.blocking, [], token);
+    assert.equal(report.warnings.length, 1, token);
+    assert.equal(report.warnings[0].count, 5);
+    assert.deepEqual(report.warnings[0].example, { position: 1, reason: "unparseable" });
+    assert.match(report.warnings[0].message, /NaN or Infinity/);
+  }
+});
+
+test("a NaN inside a string is just text and genuinely broken JSON still blocks", async () => {
+  const text = await precheckFile(jsonl(lines(3, (n) => `{"id":${n},"text":"NaN Infinity"}`)), LIMIT);
+  assert.deepEqual([text.blocking, text.warnings], [[], []]);
+  const broken = await precheckFile(jsonl(lines(3, () => '{"id":1,"text":NaN')), LIMIT);
+  assert.deepEqual(broken.blocking.map((finding) => finding.code), ["all_invalid"]);
+});

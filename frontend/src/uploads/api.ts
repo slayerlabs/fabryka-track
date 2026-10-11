@@ -104,4 +104,5 @@ export const browserUploaderDeps = (): UploaderDeps => ({
   newKey: () => crypto.randomUUID(),
 });
 
-export const attributionGrant = (id: string) => request<{ url: string }>(`${job(id)}/attribution`);
+export const attributionGrant = (id: string, diagnostic = false) =>
+  request<{ url: string }>(`${job(id)}/attribution${diagnostic ? "?diagnostic=true" : ""}`);

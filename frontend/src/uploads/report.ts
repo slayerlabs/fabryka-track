@@ -1,6 +1,6 @@
 import type { UploadReport } from "./api.ts";
 import { formatBytes } from "./bytes.ts";
-import { PII_LABELS, REJECT_LABELS, STAGE_LABELS } from "./copy.ts";
+import { PII_LABELS, REJECT_LABELS, STAGE_LABELS, STAT_LABELS } from "./copy.ts";
 
 export interface SummaryRow {
   label: string;
@@ -11,14 +11,6 @@ export interface SummarySection {
   title: string;
   rows: SummaryRow[];
 }
-
-const STAT_LABELS: Record<string, string> = {
-  token_count: "Tokens",
-  exact_duplicate_pairs: "Exact duplicate pairs",
-  near_duplicate_pairs: "Near-duplicate pairs",
-  residual_pii_records: "Records with remaining personal data",
-  license_review_records: "Records needing license review",
-};
 
 function inOrder(counts: Record<string, number> | undefined, known: Record<string, string>) {
   const entries = Object.entries(counts ?? {});

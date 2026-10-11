@@ -45,7 +45,7 @@ test("an upload still in progress on the client wins over a job that is still up
 
 test("a rejected job fails at the stage that refused it and shows nothing after as done", () => {
   assert.deepEqual(states({ job: job("rejected", "rejected", "records_invalid") }), [D, D, D, F, P, P, P]);
-  assert.deepEqual(states({ job: job("rejected", "rejected", "input_corrupt") }), [D, D, D, D, D, F, P]);
+  assert.deepEqual(states({ job: job("rejected", "rejected", "input_corrupt") }), [D, D, D, F, P, P, P]);
   assert.deepEqual(states({ job: job("finalizing", "rejected", "records_invalid") }), [D, D, D, F, P, P, P]);
 });
 
@@ -88,4 +88,14 @@ test("only complete, rejected and expired are final", () => {
 
 test("an unknown server phase shows nothing as done beyond the upload", () => {
   assert.deepEqual(states({ job: job("brand_new", "mystery") }), Array(7).fill(P));
+});
+
+test("a rejected job never shows a node after validating as done, whatever its code", () => {
+  for (const code of [null, "records_invalid", "input_corrupt"])
+    assert.deepEqual(states({ job: job("rejected", "rejected", code) }), [D, D, D, F, P, P, P], String(code));
+  assert.deepEqual(states({ job: job("complete", "failed", "input_corrupt") }), [D, D, D, D, D, F, P]);
+});
+
+test("a retired profile stops the job before it runs", () => {
+  assert.deepEqual(states({ job: job("complete", "failed", "profile_retired") }), [D, D, D, D, F, P, P]);
 });

@@ -27,7 +27,7 @@ USERNAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,95}")
 UNAVAILABLE = "Data uploads are temporarily unavailable. Try again shortly."
 REFUSED = "The data pipeline refused this request."
 MAX_BYTES = 10 * 1024 ** 3
-NO_ATTRIBUTION = "This upload has no attribution file."
+NO_ATTRIBUTION = "No attribution file is available for this upload."
 ACTION_KEY = r"^[!-~]{16,128}$"
 MESSAGES = {
     "user_limit_reached": "You already have an upload in progress. Wait for it to finish or cancel it.",
@@ -274,9 +274,10 @@ def upload_result(job_id: UUID, diagnostic: bool = False, caller=Depends(uploade
 
 
 @router.get("/{job_id}/attribution")
-def upload_attribution(job_id: UUID, caller=Depends(uploader)):
+def upload_attribution(job_id: UUID, diagnostic: bool = False, caller=Depends(uploader)):
     try:
-        return forward(caller, "GET", f"/jobs/{job_id}/attribution")
+        return forward(caller, "GET", f"/jobs/{job_id}/attribution",
+                       params={"diagnostic": "true"} if diagnostic else None)
     except ControllerError as error:
         if error.status == 404:
             raise ControllerError(404, "no_attribution", NO_ATTRIBUTION, error.request_id)

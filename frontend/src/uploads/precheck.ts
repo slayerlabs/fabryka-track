@@ -45,27 +45,39 @@ async function read(file: CheckedFile, start: number, end: number, signal?: Abor
   return bytes;
 }
 
-type Verdict = { reason: string; field: string | null } | null;
+type Verdict = { reason: string; field: string | null; lenient?: boolean } | null;
 
 const FIELD_OF: Record<string, string> = { missing_id: "id", invalid_id: "id", duplicate_id: "id", invalid_text: "text", empty_text: "text" };
 const reject = (reason: string): Verdict => ({ reason, field: FIELD_OF[reason] ?? null });
 
+// Python json, which the server preflight uses, accepts these tokens; the recipe parser does not.
+const BARE_NON_FINITE = /"(?:[^"\\]|\\.)*"|-?Infinity|NaN/g;
+
 function judge(line: Uint8Array, seen: Set<string>): Verdict {
   let record: unknown;
+  let nonFinite = false;
+  const text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
   try {
-    record = JSON.parse(new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(line));
+    const source = text.decode(line);
+    try {
+      record = JSON.parse(source);
+    } catch {
+      record = JSON.parse(source.replace(BARE_NON_FINITE, (match) => (match.startsWith('"') ? match : "null")));
+      nonFinite = true;
+    }
   } catch {
     return reject("unparseable");
   }
   if (typeof record !== "object" || record === null || Array.isArray(record)) return reject("not_an_object");
-  const { id, text } = record as Record<string, unknown>;
+  const { id, text: body } = record as Record<string, unknown>;
   if (id === null || id === undefined) return reject("missing_id");
   if (typeof id !== "string" && !(typeof id === "number" && Number.isInteger(id))) return reject("invalid_id");
   const key = String(id).trim();
   if (!key) return reject("missing_id");
   if (seen.has(key)) return reject("duplicate_id");
-  if (typeof text !== "string") return reject("invalid_text");
-  if (!text.trim()) return reject("empty_text");
+  if (typeof body !== "string") return reject("invalid_text");
+  if (!body.trim()) return reject("empty_text");
+  if (nonFinite) return { reason: "unparseable", field: null, lenient: true };
   seen.add(key);
   return null;
 }
@@ -73,13 +85,15 @@ function judge(line: Uint8Array, seen: Set<string>): Verdict {
 interface Sample {
   judged: number;
   invalid: number;
+  nonFinite: number;
+  firstNonFinite: number;
   first: { position: number; reason: string; field: string | null } | null;
   meanBytes: number;
 }
 
 function judgeSample(sample: Uint8Array, complete: boolean): Sample {
   const seen = new Set<string>();
-  const result: Sample = { judged: 0, invalid: 0, first: null, meanBytes: 0 };
+  const result: Sample = { judged: 0, invalid: 0, nonFinite: 0, firstNonFinite: 0, first: null, meanBytes: 0 };
   let start = 0;
   let consumed = 0;
   for (let position = 1; result.judged < SAMPLE_RECORDS; position++) {
@@ -90,7 +104,10 @@ function judgeSample(sample: Uint8Array, complete: boolean): Sample {
       result.judged++;
       consumed = Math.min(end + 1, sample.length);
       const verdict = judge(sample.subarray(start, end), seen);
-      if (verdict) {
+      if (verdict?.lenient) {
+        result.nonFinite++;
+        result.firstNonFinite ||= position;
+      } else if (verdict) {
         result.invalid++;
         result.first ??= { position, ...verdict };
       }
@@ -146,6 +163,14 @@ async function checkJsonl(file: CheckedFile, report: PrecheckReport, signal?: Ab
       example: { position: sample.first!.position, reason: sample.first!.reason },
     });
   }
+  if (sample.nonFinite) {
+    report.warnings.push({
+      code: "non_finite_numbers",
+      message: `${sample.nonFinite} of the first ${sample.judged} records contain NaN or Infinity values, which the recipe rejects. First: record ${sample.firstNonFinite}.`,
+      count: sample.nonFinite,
+      example: { position: sample.firstNonFinite, reason: "unparseable" },
+    });
+  }
   if (file.size <= EXACT_COUNT_LIMIT) report.rows = { count: await countRows(file, signal), exact: true };
   else if (sample.judged) report.rows = { count: Math.round(file.size / sample.meanBytes), exact: false };
   if (report.rows?.count === 0 && complete) report.warnings.push({ code: "no_records", message: "The file has no records." });
@@ -157,7 +182,7 @@ async function checkParquet(file: CheckedFile, report: PrecheckReport, signal?: 
   const head = await read(file, 0, 4, signal);
   const tail = await read(file, file.size - 8, file.size, signal);
   if (!hasMagic(head, 0) || !hasMagic(tail, 4)) return mismatch();
-  const length = new DataView(tail.buffer).getUint32(0, true);
+  const length = new DataView(tail.buffer, tail.byteOffset, tail.byteLength).getUint32(0, true);
   if (length + 12 > file.size || length > MAX_FOOTER_BYTES) return;
   let footer;
   try {

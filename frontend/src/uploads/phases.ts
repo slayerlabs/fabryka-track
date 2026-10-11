@@ -21,7 +21,7 @@ const FINALIZING = 6;
 
 const UPLOAD_NODE: Record<UploadProgress["phase"], number> = { hashing: 0, preparing: PARTS, uploading: PARTS, confirming: 2 };
 const SERVER_NODE: Record<string, number> = { validating: VALIDATING, queued: 4, running: RUNNING, provisioning: RUNNING };
-const FAILURE_NODE: Record<string, number> = { records_invalid: VALIDATING };
+const FAILURE_NODE: Record<string, number> = { records_invalid: VALIDATING, profile_retired: 4 };
 const WORKER_CODES = ["input_corrupt", "deadline", "memory_limit", "scratch_limit", "recipe_failed", "provider_transient", "lease_lost", "runtime_unsupported", "transfer_transient"];
 const FINISHED_RUN = new Set(["passed", "failed_qa"]);
 const FINAL_PHASES = new Set(["complete", "rejected", "expired"]);
@@ -33,6 +33,7 @@ function at(index: number, state: NodeState): TimelineNode[] {
 }
 
 function failedNode(job: TimelineJob, upload?: UploadProgress) {
+  if (job.processing_state === "rejected") return VALIDATING;
   const code = job.failure_code ?? "";
   const byCode = FAILURE_NODE[code] ?? (WORKER_CODES.includes(code) ? RUNNING : undefined);
   return byCode ?? (upload ? UPLOAD_NODE[upload.phase] : SERVER_NODE[job.processing_state] ?? PARTS);
