@@ -68,6 +68,7 @@ export const COPY = {
     running: "Processing",
     finalizing: "Publishing results",
   },
+  timelineStatus: { pending: "Pending", active: "In progress", done: "Done", failed: "Failed" },
   recipeStages: ["Validate records", "Remove too-short records", "Remove duplicates", "Mask personal data", "Remove duplicates created by masking", "Write the result file", "Audit the result"],
   pipelines: {
     heading: "Choose a mode",

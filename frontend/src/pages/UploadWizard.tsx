@@ -12,6 +12,7 @@ import { useFileCheck } from "../uploads/useFileCheck";
 import { usePipelines } from "../uploads/usePipelines";
 import { WizardFileStep } from "../uploads/WizardFileStep";
 import { WizardPipelineStep } from "../uploads/WizardPipelineStep";
+import { WizardProgressStep } from "../uploads/WizardProgressStep";
 import { HuggingFaceButton } from "./Account";
 
 const sameLocation = (a: WizardLocation, b: WizardLocation) =>
@@ -101,6 +102,16 @@ function UploadWizard() {
       </div>
       {at.step === 1 && (
         <WizardPipelineStep pipelines={pipelines} selected={pipelineId} onChoose={(pipeline) => go({ step: 2, pipeline })} />
+      )}
+      {at.step === 3 && (
+        <WizardProgressStep
+          jobId={at.job}
+          source={form.file && validation.form ? { file: form.file, form: validation.form } : null}
+          pipelines={pipelines.list}
+          onJobCreated={(job) => go({ step: 3, job }, true)}
+          onBusyChange={setUploading}
+          onFinished={() => go({ step: 4 })}
+        />
       )}
       {at.step === 2 && (
         <WizardFileStep

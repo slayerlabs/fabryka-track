@@ -2465,3 +2465,22 @@ footer {
 .finding-list { margin: 8px 0 0; padding-left: 20px; }
 .file-check { margin-bottom: 23px; }
 .file-check > * + * { margin-top: 12px; }
+
+.timeline { list-style: none; margin: 0 0 20px; padding: 0; }
+.timeline-node { position: relative; display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 14px; padding-bottom: 22px; color: var(--muted); }
+.timeline-node:last-child { padding-bottom: 0; }
+.timeline-node:not(:last-child)::before { content: ""; position: absolute; left: 15px; top: 32px; bottom: 2px; width: 2px; background: var(--line); }
+.timeline-node.done:not(:last-child)::before { background: var(--green); }
+.timeline-marker { display: grid; place-items: center; width: 32px; height: 32px; border: 2px solid var(--line); border-radius: 50%; background: var(--paper); font-size: 13px; font-weight: 600; }
+.timeline-node.done .timeline-marker { background: var(--green); border-color: var(--green); color: white; }
+.timeline-node.active .timeline-marker { border-color: var(--accent); background: var(--accent-tint); animation: timeline-pulse 1.4s ease-in-out infinite; }
+.timeline-node.failed .timeline-marker { background: var(--red); border-color: var(--red); color: white; }
+.timeline-node.active,
+.timeline-node.done { color: var(--ink); }
+.timeline-node.failed { color: var(--red); }
+.timeline-status { margin-left: 10px; font-size: 12px; color: var(--muted); }
+.timeline-detail { margin-top: 8px; font-size: 13px; color: var(--muted-3); }
+.timeline-detail > * + * { display: block; margin-top: 6px; }
+.recipe-stages { margin: 0; padding-left: 20px; color: var(--muted-3); line-height: 1.8; }
+@keyframes timeline-pulse { 50% { box-shadow: 0 0 0 6px var(--accent-tint); } }
+@media (prefers-reduced-motion: reduce) { .timeline-node.active .timeline-marker { animation: none; } }
