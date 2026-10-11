@@ -17,7 +17,7 @@ function reportRows(report: PrecheckReport) {
       {report.findings.map((finding) => (
         <div key={finding.rule}>
           <dt>
-            {finding.rule}: {finding.ok ? "passed" : "failed"}
+            {finding.rule}: {finding.deferred ? "server-side" : finding.ok ? "passed" : "failed"}
           </dt>
           <dd>
             {finding.detail}
@@ -91,8 +91,8 @@ export function StepFileCheck({ pipeline }: { pipeline: string }) {
       <section className="panel">
         <h2>Step 2: check the file</h2>
         <p className="muted">
-          Light checks run in your browser before anything is uploaded: format, size, row count and
-          record keys. Full validation still runs server-side after upload.
+          Local checks run in your browser before upload: format, size, row count and record keys
+          in the first 100 nonblank JSONL rows within the sample budget. Full validation runs server-side after upload.
         </p>
         <label className="field">
           <span>File</span>
