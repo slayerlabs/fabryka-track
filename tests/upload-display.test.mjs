@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { bindingLabel, diagnosticOnly, errorMessage, hasAttribution, humanize, jobOutcome, keepPolling, modeLabel, rejectionMessage, showsReport, stoppedMessage } from "../frontend/src/uploads/display.ts";
+import { bindingLabel, canCancel, diagnosticOnly, errorMessage, publishingResults, hasAttribution, humanize, jobOutcome, keepPolling, modeLabel, rejectionMessage, showsReport, stoppedMessage } from "../frontend/src/uploads/display.ts";
 
 test("machine codes read as plain words", () => {
   assert.equal(humanize("failed_qa"), "Failed qa");
@@ -131,4 +131,19 @@ test("an attribution download is offered only for a published job that lists one
 test("error messages come from Error objects and fall back to a generic sentence", () => {
   assert.equal(errorMessage(new Error("boom")), "boom");
   assert.equal(errorMessage("boom"), "Something went wrong. Try again.");
+});
+
+test("an upload can be cancelled only while it is still working", () => {
+  for (const phase of ["uploading", "validating", "queued", "running"]) assert.equal(canCancel(job("running", { client_phase: phase })), true, phase);
+  assert.equal(canCancel(job("passed", { client_phase: "finalizing" })), false);
+  assert.equal(canCancel(job("running", { client_phase: "finalizing" })), false);
+  for (const state of ["passed", "failed_qa", "failed", "cancelled", "rejected"]) assert.equal(canCancel(job(state, { client_phase: "running" })), false, state);
+  for (const phase of ["complete", "rejected", "expired"]) assert.equal(canCancel(job("running", { client_phase: phase })), false, phase);
+});
+
+test("only a finished run is being published; other finalizing jobs are just finishing up", () => {
+  assert.equal(publishingResults(job("passed")), true);
+  assert.equal(publishingResults(job("failed_qa")), true);
+  assert.equal(publishingResults(job("failed")), false);
+  assert.equal(publishingResults(job("cancelled")), false);
 });

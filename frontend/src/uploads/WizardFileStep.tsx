@@ -94,7 +94,7 @@ export function WizardFileStep({ state, errors, check, canRun, onChange, onBack,
         noValidate
       >
         <label className="field">
-          <span>File</span>
+          <span>{COPY.file.fileLabel}</span>
           <input
             type="file"
             accept=".jsonl,.parquet"
@@ -110,7 +110,12 @@ export function WizardFileStep({ state, errors, check, canRun, onChange, onBack,
         </label>
         <CheckResult check={check} />
         <MetadataFields state={state} errors={shown} disabled={false} set={set} />
-        {pending && <p className="muted">{COPY.file.missing}</p>}
+        {pending && (
+          <p className="muted">
+            {COPY.file.missingFields}{" "}
+            {Object.keys(errors).map((key) => COPY.file.fields[key as keyof typeof COPY.file.fields] ?? key).join(", ")}
+          </p>
+        )}
         <div className="actions">
           <button className="secondary" type="button" onClick={onBack}>
             {COPY.file.back}

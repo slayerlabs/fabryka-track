@@ -21,13 +21,21 @@ function Metric({ label, children }: { label: string; children: string }) {
   );
 }
 
-export function WizardResultsStep({ jobId, pipelines }: { jobId: string; pipelines: UploadPipeline[] }) {
+interface Props {
+  jobId: string;
+  pipelines: UploadPipeline[];
+  onUnfinished: () => void;
+}
+
+export function WizardResultsStep({ jobId, pipelines, onUnfinished }: Props) {
   const [load, setLoad] = useState<Load>({ status: "loading" });
   useEffect(() => {
     const controller = new AbortController();
     setLoad({ status: "loading" });
     loadUploadResults(jobId, { getUpload, getReport }, controller.signal).then(
-      (results) => setLoad({ status: "done", results }),
+      (results) => {
+        if (!controller.signal.aborted) setLoad({ status: "done", results });
+      },
       (e) => {
         if (!controller.signal.aborted) setLoad({ status: "error", message: errorMessage(e) });
       },
@@ -36,6 +44,10 @@ export function WizardResultsStep({ jobId, pipelines }: { jobId: string; pipelin
   }, [jobId]);
 
   const results = load.status === "done" ? load.results : null;
+  const unfinished = results !== null && !describeJob(results.job).terminal;
+  useEffect(() => {
+    if (unfinished) onUnfinished();
+  }, [unfinished]);
   const summary = useMemo(() => summarize(results?.report ?? null), [results]);
 
   if (load.status === "loading") return <p className="muted">{COPY.results.loading}</p>;

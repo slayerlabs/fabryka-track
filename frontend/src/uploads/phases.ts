@@ -32,23 +32,31 @@ function at(index: number, state: NodeState): TimelineNode[] {
   return KEYS.map((key, position) => ({ key, state: position < index ? "done" : position === index ? state : "pending" }));
 }
 
-function failedNode(job: TimelineJob, upload?: UploadProgress) {
+function failedNode(job: TimelineJob, upload?: UploadProgress, last?: NodeKey) {
   if (job.processing_state === "rejected") return VALIDATING;
   const code = job.failure_code ?? "";
   const byCode = FAILURE_NODE[code] ?? (WORKER_CODES.includes(code) ? RUNNING : undefined);
-  return byCode ?? (upload ? UPLOAD_NODE[upload.phase] : SERVER_NODE[job.processing_state] ?? PARTS);
+  return byCode ?? (last ? KEYS.indexOf(last) : upload ? UPLOAD_NODE[upload.phase] : SERVER_NODE[job.processing_state] ?? PARTS);
 }
 
-export function timeline({ upload, job }: { upload?: UploadProgress; job?: TimelineJob }): TimelineNode[] {
+interface TimelineInput {
+  upload?: UploadProgress;
+  job?: TimelineJob;
+  last?: NodeKey;
+  uploadFailed?: boolean;
+}
+
+export function timeline({ upload, job, last, uploadFailed }: TimelineInput): TimelineNode[] {
+  if (!job && uploadFailed && last) return at(KEYS.indexOf(last), "failed");
   if (!job) return upload ? at(UPLOAD_NODE[upload.phase], "active") : at(-1, "pending");
   const { client_phase: phase } = job;
   if (phase === "uploading") return at(upload ? UPLOAD_NODE[upload.phase] : PARTS, "active");
   if (phase in SERVER_NODE) return at(SERVER_NODE[phase], "active");
   if (phase === "finalizing" || phase === "complete") {
-    if (!FINISHED_RUN.has(job.processing_state)) return at(failedNode(job, upload), "failed");
+    if (!FINISHED_RUN.has(job.processing_state)) return at(failedNode(job, upload, last), "failed");
     return phase === "finalizing" ? at(FINALIZING, "active") : at(KEYS.length, "done");
   }
   if (phase === "expired" && FINISHED_RUN.has(job.processing_state)) return at(FINALIZING, "failed");
-  if (phase === "rejected" || phase === "expired") return at(failedNode(job, upload), "failed");
+  if (phase === "rejected" || phase === "expired") return at(failedNode(job, upload, last), "failed");
   return at(-1, "pending");
 }

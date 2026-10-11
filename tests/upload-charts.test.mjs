@@ -44,3 +44,7 @@ test("personal data bars use the report labels and skip an absent section", () =
   ]);
   assert.deepEqual(piiBars(null), []);
 });
+
+test("when nothing was masked there are no bars to draw", () => {
+  assert.deepEqual(piiBars(summarize(report(undefined, { phone: 0, pii: 0, person: 0, records: 0 })).pii), []);
+});

@@ -26,7 +26,7 @@ export function waterfallBars(funnel: Funnel | null): WaterfallBar[] {
 }
 
 export function piiBars(pii: Pii | null) {
-  if (!pii) return [];
+  if (!pii || [pii.phone, pii.pii, pii.person, pii.records].every((value) => value === 0)) return [];
   return [
     { label: COPY.labels.pii.phone, value: pii.phone },
     { label: COPY.labels.pii.pii, value: pii.pii },

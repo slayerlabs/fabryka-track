@@ -1,6 +1,6 @@
 import type { UploadJob } from "./api.ts";
 import { stoppedMessage } from "./display.ts";
-import { isFinal } from "./phases.ts";
+import { isFinal, timeline, type NodeKey } from "./phases.ts";
 import type { UploadProgress } from "./uploader.ts";
 
 export interface ProgressState {
@@ -12,7 +12,11 @@ export interface ProgressState {
   live: boolean;
   advance: boolean;
   runningSince: number | null;
+  last: NodeKey | null;
+  uploadFailed: boolean;
 }
+
+const UPLOAD_KEY: Record<UploadProgress["phase"], NodeKey> = { hashing: "hashing", preparing: "parts", uploading: "parts", confirming: "confirming" };
 
 export type ProgressAction =
   | { type: "upload-started"; total: number }
@@ -34,6 +38,8 @@ export const initialProgress: ProgressState = {
   live: false,
   advance: false,
   runningSince: null,
+  last: null,
+  uploadFailed: false,
 };
 
 function observe(state: ProgressState, job: UploadJob, now: number): ProgressState {
@@ -44,6 +50,7 @@ function observe(state: ProgressState, job: UploadJob, now: number): ProgressSta
     job,
     error: "",
     upload: job.client_phase === "uploading" ? state.upload : null,
+    last: final ? state.last : timeline({ job: toTimelineJob(job), upload: state.upload ?? undefined }).find((node) => node.state === "active")?.key ?? state.last,
     live: state.live || !final,
     advance: state.advance || (state.live && final),
     runningSince: state.runningSince ?? (job.client_phase === "running" ? (Number.isNaN(admitted) ? now : admitted) : null),
@@ -53,9 +60,9 @@ function observe(state: ProgressState, job: UploadJob, now: number): ProgressSta
 export function progressReducer(state: ProgressState, action: ProgressAction): ProgressState {
   switch (action.type) {
     case "upload-started":
-      return { ...initialProgress, uploading: true, live: true, upload: { phase: "hashing", loaded: 0, total: action.total } };
+      return { ...initialProgress, uploading: true, live: true, last: "hashing", upload: { phase: "hashing", loaded: 0, total: action.total } };
     case "upload-progress":
-      return { ...state, upload: action.progress };
+      return { ...state, upload: action.progress, last: UPLOAD_KEY[action.progress.phase] };
     case "upload-finished":
       return { ...state, uploading: false };
     case "upload-failed":
@@ -63,6 +70,7 @@ export function progressReducer(state: ProgressState, action: ProgressAction): P
         ...state,
         uploading: false,
         upload: null,
+        uploadFailed: !action.aborted,
         error: action.aborted ? stoppedMessage(state.upload?.phase ?? "hashing") : action.message,
       };
     case "polled":
@@ -78,11 +86,17 @@ export function progressReducer(state: ProgressState, action: ProgressAction): P
   }
 }
 
-export function timelineInput({ upload, job }: Pick<ProgressState, "upload" | "job">) {
+const toTimelineJob = (job: UploadJob) => ({
+  client_phase: job.client_phase,
+  processing_state: job.processing_state ?? "",
+  failure_code: job.failure_code ?? null,
+});
+
+export function timelineInput({ upload, job, last, uploadFailed }: Pick<ProgressState, "upload" | "job" | "last" | "uploadFailed">) {
   return {
     upload: upload ?? undefined,
-    job: job
-      ? { client_phase: job.client_phase, processing_state: job.processing_state ?? "", failure_code: job.failure_code ?? null }
-      : undefined,
+    job: job ? toTimelineJob(job) : undefined,
+    last: last ?? undefined,
+    uploadFailed,
   };
 }

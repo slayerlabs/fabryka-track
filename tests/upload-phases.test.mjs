@@ -99,3 +99,19 @@ test("a rejected job never shows a node after validating as done, whatever its c
 test("a retired profile stops the job before it runs", () => {
   assert.deepEqual(states({ job: job("complete", "failed", "profile_retired") }), [D, D, D, D, F, P, P]);
 });
+
+test("a cancelled job fails on the last node it was seen on, not on the first", () => {
+  const cancelled = job("rejected", "cancelled");
+  assert.deepEqual(timeline({ job: cancelled, last: "running" }).map((node) => node.state), [D, D, D, D, D, F, P]);
+  assert.deepEqual(timeline({ job: cancelled, last: "queued" }).map((node) => node.state), [D, D, D, D, F, P, P]);
+  assert.deepEqual(timeline({ job: cancelled }).map((node) => node.state), [D, F, P, P, P, P, P]);
+});
+
+test("a known failure code still wins over the last seen node", () => {
+  assert.deepEqual(states({ job: job("rejected", "rejected", "records_invalid"), last: "running" }), [D, D, D, F, P, P, P]);
+});
+
+test("a failed upload with no job marks the node it stopped on", () => {
+  assert.deepEqual(states({ uploadFailed: true, last: "parts" }), [D, F, P, P, P, P, P]);
+  assert.deepEqual(states({ uploadFailed: false, last: "parts" }), Array(7).fill(P));
+});

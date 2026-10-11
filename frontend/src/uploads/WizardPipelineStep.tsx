@@ -1,6 +1,5 @@
 import { formatBytes } from "./bytes";
 import { COPY } from "./copy";
-import { pipelineLimit } from "./form";
 import type { Pipelines } from "./usePipelines";
 
 interface Props {
@@ -30,7 +29,6 @@ export function WizardPipelineStep({ pipelines, selected, onChoose }: Props) {
           <article
             key={pipeline.pipeline}
             className={`mode-card${pipeline.pipeline === selected ? " selected" : ""}`}
-            onClick={() => onChoose(pipeline.pipeline)}
           >
             <h3>{pipeline.title}</h3>
             {pipeline.description && <p>{pipeline.description}</p>}
@@ -39,18 +37,16 @@ export function WizardPipelineStep({ pipelines, selected, onChoose }: Props) {
                 <strong>{COPY.pipelines.requirements}:</strong> {pipeline.file_requirements}
               </p>
             )}
-            <p className="muted">
-              <strong>{COPY.pipelines.limit}:</strong> {formatBytes(pipelineLimit(pipeline))}
-            </p>
+            {pipeline.max_encoded_bytes ? (
+              <p className="muted">
+                <strong>{COPY.pipelines.limit}:</strong> {formatBytes(pipeline.max_encoded_bytes)}
+              </p>
+            ) : null}
             <div className="actions">
               <button
                 className="primary"
                 type="button"
-                aria-pressed={pipeline.pipeline === selected}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onChoose(pipeline.pipeline);
-                }}
+                onClick={() => onChoose(pipeline.pipeline)}
               >
                 {COPY.pipelines.choose}
               </button>

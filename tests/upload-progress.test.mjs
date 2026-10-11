@@ -82,7 +82,25 @@ test("the running clock starts from admission, or from the first poll when that 
 });
 
 test("the timeline input combines browser progress and the polled job", () => {
-  assert.deepEqual(timelineInput(initialProgress), { upload: undefined, job: undefined });
+  assert.deepEqual(timelineInput(initialProgress), { upload: undefined, job: undefined, last: undefined, uploadFailed: false });
   const state = run([polled(job("running", { failure_code: undefined }))]);
   assert.deepEqual(timelineInput(state).job, { client_phase: "running", processing_state: "running", failure_code: null });
+});
+
+test("the last live node is remembered so a cancelled job fails where it stopped", () => {
+  const state = run([polled(job("running")), { type: "cancelled", job: job("rejected", { processing_state: "cancelled" }), now: 2 }]);
+  assert.equal(state.last, "running");
+  assert.deepEqual(timelineInput(state).last, "running");
+  assert.equal(run([polled(job("queued")), polled(job("running"))]).last, "running");
+});
+
+test("upload progress also moves the last node, and a real failure keeps it marked", () => {
+  const started = run([{ type: "upload-started", total: 10 }, { type: "upload-progress", progress: { phase: "uploading", loaded: 1, total: 10 } }]);
+  assert.equal(started.last, "parts");
+  const failed = progressReducer(started, { type: "upload-failed", message: "boom", aborted: false });
+  assert.equal(failed.uploadFailed, true);
+  assert.equal(timelineInput(failed).uploadFailed, true);
+  const stopped = progressReducer(started, { type: "upload-failed", message: "", aborted: true });
+  assert.equal(stopped.uploadFailed, false);
+  assert.equal(progressReducer(failed, { type: "upload-started", total: 1 }).uploadFailed, false);
 });

@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { piiBars, waterfallBars } from "./charts";
 import { COPY } from "./copy";
-import { humanize } from "./display";
+import { bindingLabel, humanize } from "./display";
 import { PlotlyChart, type Palette, type PlotSpec } from "./PlotlyChart";
 import type { CheckRow, Summary } from "./results";
 
@@ -12,6 +12,7 @@ function bars(
   { ink, line }: Palette,
   stacked: boolean,
 ): PlotSpec {
+  const max = Math.max(...rows.map((row) => (row.base ?? 0) + row.value));
   const labels = rows.map((row) => `${row.label} · ${count(row.value)}`);
   const visible = {
     type: "bar",
@@ -30,7 +31,7 @@ function bars(
       height: 70 + 34 * rows.length,
       margin: { l: 250, r: 20, t: 10, b: 40 },
       font: { color: ink },
-      xaxis: { title: { text: COPY.charts.axis }, tickformat: ",d", gridcolor: line, rangemode: "tozero" },
+      xaxis: { title: { text: COPY.charts.axis }, tickformat: ",d", gridcolor: line, rangemode: "tozero", ...(max <= 8 ? { dtick: 1 } : { nticks: 6 }) },
       yaxis: { autorange: "reversed", automargin: true },
     },
   };
@@ -46,7 +47,7 @@ function CheckGrid({ checks }: { checks: CheckRow[] }) {
             <strong>{check.label}</strong>
             <span>{humanize(check.status)}</span>
             <small>
-              {check.binding ? "Required" : "Advisory"}
+              {bindingLabel(check.binding)}
               {check.count !== null && ` · ${count(check.count)}`}
             </small>
           </li>
@@ -59,6 +60,7 @@ function CheckGrid({ checks }: { checks: CheckRow[] }) {
 export function ResultCharts({ summary }: { summary: Summary }) {
   const funnel = useMemo(() => waterfallBars(summary.funnel), [summary.funnel]);
   const pii = useMemo(() => piiBars(summary.pii), [summary.pii]);
+  const noPii = summary.pii !== null && pii.length === 0;
   const funnelSpec = useMemo(
     () => (palette: Palette) =>
       bars(funnel.map((bar) => ({ ...bar, color: bar.kind === "total" ? palette.accent : palette.amber })), palette, true),
@@ -70,6 +72,7 @@ export function ResultCharts({ summary }: { summary: Summary }) {
       {funnel.length > 0 && <PlotlyChart title={COPY.charts.funnel} build={funnelSpec} />}
       {summary.checks && summary.checks.length > 0 && <CheckGrid checks={summary.checks} />}
       {pii.length > 0 && <PlotlyChart title={COPY.charts.pii} build={piiSpec} />}
+      {noPii && <p className="notice">{COPY.charts.noPii}</p>}
     </div>
   );
 }

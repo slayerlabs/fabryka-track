@@ -1,7 +1,7 @@
 import { useEffect, useReducer, useRef, useState } from "react";
 import { browserUploaderDeps, cancelUpload, getUpload, type UploadPipeline } from "./api";
 import { COPY } from "./copy";
-import { describeJob, errorMessage, failureHint, keepPolling, rejectionMessage } from "./display";
+import { canCancel, describeJob, errorMessage, failureHint, keepPolling, publishingResults, rejectionMessage } from "./display";
 import type { UploadForm } from "./form";
 import { JobFacts } from "./JobFacts";
 import { isFinal, timeline } from "./phases";
@@ -74,7 +74,10 @@ export function WizardProgressStep({ jobId, source, pipelines, onJobCreated, onB
   useEffect(() => {
     onBusyChange(state.uploading);
     if (!state.uploading) return;
-    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
     window.addEventListener("beforeunload", warn);
     return () => {
       window.removeEventListener("beforeunload", warn);
@@ -131,7 +134,7 @@ export function WizardProgressStep({ jobId, source, pipelines, onJobCreated, onB
         <Timeline nodes={timeline(timelineInput(state))} upload={state.upload} elapsed={elapsed} />
         {job?.client_phase === "finalizing" && (
           <p className="notice" role="status">
-            {COPY.messages.publishing}
+            {publishingResults(job) ? COPY.messages.publishing : COPY.messages.finishing}
           </p>
         )}
         {job && finished && described && (
@@ -152,7 +155,7 @@ export function WizardProgressStep({ jobId, source, pipelines, onJobCreated, onB
               {COPY.progress.stop}
             </button>
           )}
-          {job && !finished && (
+          {job && canCancel(job) && (
             <button className="secondary" type="button" disabled={state.cancelling} onClick={() => void cancel()}>
               {state.cancelling ? COPY.progress.cancelling : COPY.progress.cancel}
             </button>

@@ -80,6 +80,9 @@ export const COPY = {
   },
   file: {
     intro: "Keep this tab open until the upload finishes; an interrupted upload cannot be resumed and has to be started again.",
+    fileLabel: "File",
+    missingFields: "Still needed:",
+    fields: { source: "Source", added: "Added", license: "License", mask_names: "Mask personal names", declaration: "Declaration", file: "File", pipeline: "Mode" },
     formatHint: "The format is taken from the file extension.",
     checking: "Checking the file…",
     checkFailed: "The file could not be checked.",
@@ -90,7 +93,6 @@ export const COPY = {
     format: "Format",
     size: "Size",
     run: "Run",
-    missing: "Some details still need your attention before you can run.",
     back: "Back",
   },
   progress: {
@@ -136,6 +138,7 @@ export const COPY = {
     rejectedPrefix: "Rejected: ",
     recordsWithMask: "Records with a mask",
     axis: "Records",
+    noPii: "No personal data was masked.",
     unavailable: "The chart library could not be loaded. Reload this page to try again.",
   },
   downloads: {
@@ -146,6 +149,7 @@ export const COPY = {
   },
   messages: {
     publishing: "Publishing results. This usually takes a moment.",
+    finishing: "Finishing up.",
     blocked: "Fix the problems below before uploading.",
     warningsOnly: "These records would be rejected, but the rest of the file can still be processed.",
     approximateRows: "approximately",

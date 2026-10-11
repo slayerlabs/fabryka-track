@@ -99,3 +99,11 @@ export const formatWhen = (value?: string | null) => (value ? new Date(value).to
 
 export const hasAttribution = (job: UploadJob) =>
   showsReport(job) && job.artifacts?.some((artifact) => artifact.kind === "attribution") === true;
+
+const PROTOCOL_TERMINAL = new Set(["passed", "failed_qa", "failed", "cancelled", "rejected"]);
+
+export const canCancel = (job: Pick<UploadJob, "client_phase" | "processing_state">) =>
+  !TERMINAL_PHASES.has(job.client_phase) && job.client_phase !== "finalizing" && !PROTOCOL_TERMINAL.has(job.processing_state ?? "");
+
+export const publishingResults = (job: Pick<UploadJob, "processing_state">) =>
+  job.processing_state === "passed" || job.processing_state === "failed_qa";

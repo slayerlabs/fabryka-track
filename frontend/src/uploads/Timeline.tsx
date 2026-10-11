@@ -32,16 +32,16 @@ export function Timeline({ nodes, upload, elapsed }: Props) {
     return null;
   };
   return (
-    <ol className="timeline">
+    <ol className="upload-timeline" aria-live="polite">
       {nodes.map(({ key, state }, index) => (
-        <li key={key} className={`timeline-node ${state}`} aria-current={state === "active" ? "step" : undefined}>
-          <span className="timeline-marker" aria-hidden="true">
+        <li key={key} className={`upload-timeline-node ${state}`} aria-current={state === "active" ? "step" : undefined}>
+          <span className="upload-timeline-marker" aria-hidden="true">
             {state === "pending" ? index + 1 : MARKER[state]}
           </span>
           <div>
             <strong>{COPY.timeline[key]}</strong>
-            <span className="timeline-status">{COPY.timelineStatus[state]}</span>
-            {state === "active" && <div className="timeline-detail">{detail(key)}</div>}
+            <span className="upload-timeline-status">{COPY.timelineStatus[state]}</span>
+            {state === "active" && <div className="upload-timeline-detail">{detail(key)}</div>}
           </div>
         </li>
       ))}

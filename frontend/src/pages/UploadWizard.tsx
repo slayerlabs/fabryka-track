@@ -49,6 +49,7 @@ function UploadWizard() {
   const pipelines = usePipelines();
   const [form, setForm] = useState<UploadFormState>(emptyForm);
   const [uploading, setUploading] = useState(false);
+  const [hadJob, setHadJob] = useState(false);
 
   const requested = parseLocation(params);
   const only = pipelines.list.length === 1 ? pipelines.list[0].pipeline : "";
@@ -67,6 +68,12 @@ function UploadWizard() {
     parametersValid: validation.form !== undefined,
   });
 
+  const hasJob = requested.job !== "";
+  if (hasJob !== hadJob) {
+    setHadJob(hasJob);
+    if (hadJob) setForm(emptyForm());
+  }
+
   const at = resolveLocation({ ...requested, pipeline: pipelineId }, { canStart });
   const settled = at.job !== "" || pipelines.loaded;
   const urlStale = !sameLocation(at, requested);
@@ -83,7 +90,7 @@ function UploadWizard() {
 
   return (
     <>
-      <div className="steps wizard-steps" aria-label="Upload steps">
+      <nav className="steps wizard-steps" aria-label="Upload steps">
         {COPY.steps.map(({ key, title }, index) => {
           const step = (index + 1) as Step;
           return (
@@ -92,15 +99,15 @@ function UploadWizard() {
               type="button"
               className={`step${step === at.step ? " active" : ""}${step < at.step ? " done" : ""}`}
               aria-current={step === at.step ? "step" : undefined}
-              disabled={!reachable(step)}
-              onClick={() => go({ step })}
+              disabled={step !== at.step && !reachable(step)}
+              onClick={() => step !== at.step && go({ step })}
             >
               <b>{step}</b>
               {title}
             </button>
           );
         })}
-      </div>
+      </nav>
       {at.step === 1 && (
         <WizardPipelineStep pipelines={pipelines} selected={pipelineId} onChoose={(pipeline) => go({ step: 2, pipeline })} />
       )}
@@ -109,12 +116,15 @@ function UploadWizard() {
           jobId={at.job}
           source={form.file && validation.form ? { file: form.file, form: validation.form } : null}
           pipelines={pipelines.list}
-          onJobCreated={(job) => go({ step: 3, job }, true)}
+          onJobCreated={(job) => {
+            setForm(emptyForm());
+            go({ step: 3, job }, true);
+          }}
           onBusyChange={setUploading}
           onFinished={() => go({ step: 4 })}
         />
       )}
-      {at.step === 4 && <WizardResultsStep jobId={at.job} pipelines={pipelines.list} />}
+      {at.step === 4 && <WizardResultsStep jobId={at.job} pipelines={pipelines.list} onUnfinished={() => go({ step: 3 }, true)} />}
       {at.step === 2 && (
         <WizardFileStep
           state={state}
