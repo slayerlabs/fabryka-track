@@ -1,7 +1,6 @@
 import { formatBytes } from "./bytes.ts";
 
 export const MAX_UPLOAD_BYTES = 512 * 1024 * 1024;
-export const MAX_UPLOAD_LABEL = `${MAX_UPLOAD_BYTES / 1024 / 1024} MiB`;
 export const pipelineLimit = (pipeline?: { max_encoded_bytes?: unknown }) => {
   const limit = pipeline?.max_encoded_bytes;
   return typeof limit === "number" && limit > 0 ? limit : MAX_UPLOAD_BYTES;

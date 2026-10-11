@@ -1,3 +1,5 @@
+import { isFinal } from "./phases.ts";
+
 export type Step = 1 | 2 | 3 | 4;
 
 export interface WizardLocation {
@@ -28,3 +30,6 @@ export function resolveLocation(at: WizardLocation, { canStart }: { canStart: bo
   if (at.step === 3 && canStart) return at;
   return { ...at, step: at.step === 1 ? 1 : 2 };
 }
+
+export const jobUrl = ({ job_id, client_phase }: { job_id: string; client_phase: string }) =>
+  wizardUrl({ step: isFinal(client_phase) ? 4 : 3, pipeline: "", job: job_id });

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseLocation, resolveLocation, wizardUrl } from "../frontend/src/uploads/location.ts";
+import { jobUrl, parseLocation, resolveLocation, wizardUrl } from "../frontend/src/uploads/location.ts";
 
 const params = (query) => new URLSearchParams(query);
 const open = { canStart: true };
@@ -42,4 +42,10 @@ test("a job id opens step 3 or 4 directly and never needs the gate or a pipeline
   assert.deepEqual(resolveLocation({ step: 3, pipeline: "", job: "j" }, closed), { step: 3, pipeline: "", job: "j" });
   assert.equal(resolveLocation({ step: 1, pipeline: "p", job: "j" }, closed).step, 3);
   assert.equal(resolveLocation({ step: 2, pipeline: "p", job: "j" }, closed).step, 3);
+});
+
+test("history rows open step 4 for finished jobs and step 3 for jobs still working", () => {
+  for (const phase of ["complete", "rejected", "expired"]) assert.equal(jobUrl({ job_id: "j", client_phase: phase }), "/uploads/new?step=4&job=j", phase);
+  for (const phase of ["uploading", "validating", "queued", "running", "finalizing"]) assert.equal(jobUrl({ job_id: "j", client_phase: phase }), "/uploads/new?step=3&job=j", phase);
+  assert.equal(jobUrl({ job_id: "a/b", client_phase: "running" }), "/uploads/new?step=3&job=a%2Fb");
 });

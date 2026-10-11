@@ -1,9 +1,6 @@
 import { useEffect, useState } from "react";
-import { useGetIdentity } from "@refinedev/core";
 import { useNavigate, useSearchParams } from "react-router";
-import { PageTop } from "../PageTop";
 import { COPY } from "../uploads/copy";
-import { errorMessage } from "../uploads/display";
 import { canStartUpload } from "../uploads/gate";
 import { pipelineLimit, validateUpload, type UploadFormState } from "../uploads/form";
 import { parseLocation, resolveLocation, wizardUrl, type Step, type WizardLocation } from "../uploads/location";
@@ -14,32 +11,16 @@ import { WizardFileStep } from "../uploads/WizardFileStep";
 import { WizardPipelineStep } from "../uploads/WizardPipelineStep";
 import { WizardResultsStep } from "../uploads/WizardResultsStep";
 import { WizardProgressStep } from "../uploads/WizardProgressStep";
-import { HuggingFaceButton } from "./Account";
+import { HuggingFaceGate } from "../uploads/HuggingFaceGate";
 
 const sameLocation = (a: WizardLocation, b: WizardLocation) =>
   a.step === b.step && a.pipeline === b.pipeline && a.job === b.job;
 
 export function UploadWizardPage() {
-  const identity = useGetIdentity<{ huggingface_username?: string | null } | null>();
-  const signedIn = !identity.isLoading && !identity.error && identity.data?.huggingface_username;
   return (
-    <>
-      <PageTop description={signedIn ? "Send a Dynaword file to the data pipeline, follow its validation and download the report and result." : undefined} />
-      {identity.isLoading ? (
-        <p className="muted">Loading…</p>
-      ) : identity.error ? (
-        <p className="error" role="alert">
-          {errorMessage(identity.error)}
-        </p>
-      ) : !identity.data?.huggingface_username ? (
-        <section className="panel">
-          <p className="notice">Sign in with Hugging Face to upload data.</p>
-          <HuggingFaceButton link />
-        </section>
-      ) : (
-        <UploadWizard />
-      )}
-    </>
+    <HuggingFaceGate description="Send a Dynaword file to the data pipeline, follow its validation and download the report and result.">
+      <UploadWizard />
+    </HuggingFaceGate>
   );
 }
 
