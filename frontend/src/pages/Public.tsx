@@ -437,7 +437,6 @@ export function TrainingGoalPage() {
   return (
     <>
       <PageTop
-        eyebrow="RFC-005"
         description="The full research specification: controlled proxy experiments, data and architecture decisions, training budgets, evaluation and delivery criteria."
         actions={
           <>
@@ -573,7 +572,6 @@ export function StatusPage() {
     <>
       <PageTop
         title="Status"
-        eyebrow="Agent workspace"
         description={
           isStatus && data && !data.active_id && data.goals.length ? (
             <>

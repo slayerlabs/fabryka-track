@@ -288,7 +288,6 @@ export function BenchmarksPage() {
   return (
     <>
       <PageTop
-        eyebrow="Evaluation studio"
         description={<>Run missing tasks. Keep completed results. Compare measured results.{" "}
           <a href="/benchmark-results">Browse published checkpoint results →</a>
         </>}

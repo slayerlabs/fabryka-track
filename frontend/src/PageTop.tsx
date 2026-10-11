@@ -6,7 +6,6 @@ export type Breadcrumb = Readonly<{ label: string; to: string }>;
 export type PageTopProps = {
   title?: string;
   ancestors?: readonly Breadcrumb[];
-  eyebrow?: string;
   description?: ReactNode;
   actions?: ReactNode;
 };
@@ -50,7 +49,7 @@ export function resolvePageMeta(pathname: string): PageMeta {
   return { title: pages.find(([path]) => matches(path))?.[1] ?? "Page not found", ancestors: [home] };
 }
 
-export function PageTop({ title, ancestors, eyebrow, description, actions }: PageTopProps): ReactElement {
+export function PageTop({ title, ancestors, description, actions }: PageTopProps): ReactElement {
   const { pathname } = useLocation();
   const defaults = resolvePageMeta(pathname);
   const effectiveTitle = title ?? defaults.title;
@@ -74,7 +73,6 @@ export function PageTop({ title, ancestors, eyebrow, description, actions }: Pag
       </nav>
       <div className="page-top-content">
         <div className="page-top-copy">
-          {eyebrow && <div className="page-top-eyebrow">{eyebrow}</div>}
           <h1>{effectiveTitle}</h1>
           {description && <div className="page-top-description">{description}</div>}
         </div>

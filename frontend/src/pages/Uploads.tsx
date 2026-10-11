@@ -319,7 +319,6 @@ export function UploadsPage() {
   return (
     <>
       <PageTop
-        eyebrow="Data pipeline"
         description={
           !identity.isLoading && !identity.error && identity.data?.huggingface_username
             ? "Send a Dynaword file to the data pipeline, follow its validation and download the report and result."

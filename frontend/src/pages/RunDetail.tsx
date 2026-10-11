@@ -219,7 +219,6 @@ function RunWorkspace({ id }: { id: string }) {
       <PageTop
         title={r.name}
         ancestors={readOnly ? publicRunAncestors : writableRunAncestors}
-        eyebrow={local ? "Training results" : "Tracked experiment"}
       />
       <div className="run-view">
       <div className="intro row">

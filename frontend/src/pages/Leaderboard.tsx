@@ -318,7 +318,6 @@ export function LeaderboardPage() {
   return (
     <>
       <PageTop
-        eyebrow="Fabryka research / Training results"
         description={
           <p>
             Explore published runs by scale and data recipe. Follow the results
