@@ -13,7 +13,8 @@ import {
   STAT_LABELS,
 } from "../uploads/report.ts";
 import { CountBars, type BarEntry } from "../uploads/charts.tsx";
-import { ReportSummary, ResultDownload, size, when } from "./Uploads.tsx";
+import { ReportSummary, ResultDownload } from "./Uploads.tsx";
+import { JobFacts } from "../uploads/job-facts.tsx";
 
 function message(error: unknown) {
   return error instanceof Error ? error.message : "Something went wrong. Try again.";
@@ -136,6 +137,7 @@ export function StepResults({ jobId }: { jobId: string | null }) {
         <p className="muted">
           Phase: {described.phase} · Outcome: {described.outcome}
         </p>
+        <JobFacts job={job} />
         {failureHint(job) && <p className="notice" role="status">{failureHint(job)}</p>}
         {rejectionMessage(job) && <p className="notice" role="status">{rejectionMessage(job)}</p>}
         {reportError && <p className="error" role="alert">{reportError}</p>}
@@ -145,10 +147,6 @@ export function StepResults({ jobId }: { jobId: string | null }) {
           </p>
         )}
       </section>
-      <Card title="Upload">
-        {job.pipeline} · {typeof job.encoded_bytes === "number" ? size(job.encoded_bytes) : "—"} ·{" "}
-        <code>{job.input_sha256 ?? "—"}</code> · {when(job.upload_started_at)}
-      </Card>
       {report && (
         <>
           <Card title="Verdict">

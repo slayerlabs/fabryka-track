@@ -12,6 +12,7 @@ import { uploadFile, type UploadProgress } from "../uploads/uploader.ts";
 import { precheckFor } from "../uploads/draft.ts";
 import { validateUpload, type UploadFormState } from "../uploads/form.ts";
 import type { MetadataValues } from "../uploads/metadata.tsx";
+import { JobFacts } from "../uploads/job-facts.tsx";
 import { WizardDraftContext } from "./UploadWizard.tsx";
 
 const POLL_MS = 5000;
@@ -238,6 +239,7 @@ export function StepRun({ pipeline, jobId }: { pipeline: string; jobId: string |
             <p className="muted">
               Phase: {described.phase} · Outcome: {described.outcome}
             </p>
+            <JobFacts job={job} />
             {failureHint(job) && (
               <p className="notice" role="status">
                 {failureHint(job)}
