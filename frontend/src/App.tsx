@@ -22,7 +22,7 @@ import {
   PublishedBenchmarksPage,
 } from "./pages/Public";
 import { BenchmarksPage } from "./pages/Benchmarks";
-import { UploadDetailPage, UploadsPage } from "./pages/Uploads";
+import { UploadDetailRedirect, UploadsPage } from "./pages/Uploads";
 import { UploadWizardPage } from "./pages/UploadWizard";
 import { LeaderboardPage } from "./pages/Leaderboard";
 import { ModelBoardPage } from "./pages/ModelBoard";
@@ -258,7 +258,7 @@ function ApplicationShell() {
               path="/uploads/:id"
               element={
                 <Authenticated key="upload" fallback={<LoginPage />}>
-                  <UploadDetailPage />
+                  <UploadDetailRedirect />
                 </Authenticated>
               }
             />

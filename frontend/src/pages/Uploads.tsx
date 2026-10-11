@@ -1,21 +1,11 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useGetIdentity } from "@refinedev/core";
-import { Link, useNavigate, useParams } from "react-router";
-import {
-  MAX_UPLOAD_LABEL,
-  validateUpload,
-  type UploadErrors,
-  type UploadFormState,
-} from "../uploads/form";
-import { FieldError, MetadataFields } from "../uploads/metadata";
-import { uploadFile, type UploadProgress } from "../uploads/uploader";
-import { bindingLabel, describeJob, failureHint, humanize, keepPolling, modeLabel, rejectionMessage, stoppedMessage } from "../uploads/display";
+import { Link, Navigate, useParams } from "react-router";
+import { bindingLabel, describeJob, humanize, modeLabel } from "../uploads/display";
 import { checksOpen, summarizeReport } from "../uploads/report";
 import { apiError } from "../provider";
 import { HuggingFaceButton } from "./Account";
 import {
-  browserUploaderDeps,
-  cancelUpload,
   getReport,
   getUpload,
   listPipelines,
@@ -43,26 +33,6 @@ export function size(bytes?: number | null) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MiB`;
 }
 
-const PROGRESS_LABELS: Record<UploadProgress["phase"], string> = {
-  hashing: "Checking file",
-  preparing: "Preparing upload",
-  uploading: "Uploading",
-  confirming: "Confirming upload",
-};
-
-const emptyForm = (): UploadFormState => ({
-  pipeline: "",
-  file: null,
-  source: "",
-  added: new Date().toISOString().slice(0, 10),
-  license: "",
-  author: "",
-  source_ref: "",
-  per_record_provenance: false,
-  mask_names: "",
-  declaration: false,
-});
-
 export interface Pipelines {
   list: UploadPipeline[];
   loaded: boolean;
@@ -84,137 +54,6 @@ export function usePipelines(): Pipelines {
     return () => controller.abort();
   }, []);
   return value;
-}
-
-function NewUploadForm({ pipelines }: { pipelines: Pipelines }) {
-  const navigate = useNavigate();
-  const [state, setState] = useState<UploadFormState>(emptyForm);
-  const [errors, setErrors] = useState<UploadErrors>({});
-  const [error, setError] = useState("");
-  const [progress, setProgress] = useState<UploadProgress | null>(null);
-  const lastPhase = useRef<UploadProgress["phase"]>("hashing");
-  const abort = useRef<AbortController | null>(null);
-  const busy = progress !== null;
-  const noModes = pipelines.loaded && !pipelines.error && pipelines.list.length === 0;
-  const onlyMode = pipelines.list.length === 1 ? pipelines.list[0].pipeline : "";
-
-  useEffect(() => {
-    if (onlyMode) setState((current) => (current.pipeline ? current : { ...current, pipeline: onlyMode }));
-  }, [onlyMode]);
-
-  useEffect(() => {
-    if (!busy) return;
-    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
-    window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
-  }, [busy]);
-  useEffect(() => () => abort.current?.abort(), []);
-
-  const set = <K extends keyof UploadFormState>(key: K, value: UploadFormState[K]) =>
-    setState((current) => ({ ...current, [key]: value }));
-
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    setError("");
-    const { file } = state;
-    const result = validateUpload(state);
-    setErrors(result.errors);
-    if (!result.form || !file) return;
-    const controller = new AbortController();
-    abort.current = controller;
-    lastPhase.current = "hashing";
-    setProgress({ phase: "hashing", loaded: 0, total: file.size });
-    try {
-      const jobId = await uploadFile(file, result.form, browserUploaderDeps(), {
-        signal: controller.signal,
-        onProgress: (next) => {
-          lastPhase.current = next.phase;
-          setProgress(next);
-        },
-      });
-      navigate(`/uploads/${encodeURIComponent(jobId)}`);
-    } catch (e) {
-      setError(controller.signal.aborted ? stoppedMessage(lastPhase.current) : message(e));
-      setProgress(null);
-    }
-  }
-
-  return (
-    <section className="panel">
-      <h2>New upload</h2>
-      <p className="muted">
-        Upload one JSONL or Parquet file of up to {MAX_UPLOAD_LABEL}. Keep this tab open until the upload
-        finishes; an interrupted upload cannot be resumed and has to be started again.
-      </p>
-      <form onSubmit={submit} noValidate>
-        <label className="field">
-          <span>Mode</span>
-          <select
-            value={state.pipeline}
-            disabled={busy || !pipelines.list.length}
-            onChange={(event) => set("pipeline", event.target.value)}
-          >
-            {pipelines.list.length !== 1 && <option value="">Choose a mode</option>}
-            {pipelines.list.map(({ pipeline, title }) => (
-              <option key={pipeline} value={pipeline}>
-                {title}
-              </option>
-            ))}
-          </select>
-          {!pipelines.loaded && <small className="muted">Loading modes…</small>}
-          {pipelines.error && (
-            <small className="error" role="alert">
-              {pipelines.error}
-            </small>
-          )}
-          {noModes && (
-            <small className="error" role="alert">
-              No upload modes are available right now.
-            </small>
-          )}
-          <FieldError text={errors.pipeline} />
-        </label>
-        <label className="field">
-          <span>File</span>
-          <input
-            type="file"
-            accept=".jsonl,.parquet"
-            disabled={busy}
-            onChange={(event) => set("file", event.target.files?.[0] ?? null)}
-          />
-          <small className="muted">The format is taken from the file extension.</small>
-          <FieldError text={errors.file} />
-        </label>
-        <MetadataFields
-          values={state}
-          errors={errors}
-          disabled={busy}
-          onChange={(update) => setState((current) => ({ ...current, ...update }))}
-        />
-        {error && (
-          <p className="error" role="alert">
-            {error}
-          </p>
-        )}
-        {progress && (
-          <p className="notice" role="status">
-            {PROGRESS_LABELS[progress.phase]} ·{" "}
-            {progress.total ? Math.floor((progress.loaded / progress.total) * 100) : 0}%
-          </p>
-        )}
-        <div className="actions">
-          <button className="primary" type="submit" disabled={busy || !pipelines.list.length}>
-            {busy ? "Uploading…" : "Upload file"}
-          </button>
-          {busy && progress.phase !== "confirming" && (
-            <button className="secondary" type="button" onClick={() => abort.current?.abort()}>
-              Stop upload
-            </button>
-          )}
-        </div>
-      </form>
-    </section>
-  );
 }
 
 export function UploadsPage() {
@@ -297,11 +136,9 @@ function UploadsWorkspace() {
           report and result.
         </p>
         <p className="muted">
-          <Link to="/uploads/new">Start a guided upload</Link> step by step, or use the
-          single-view form below.
+          <Link to="/uploads/new">Start a guided upload</Link> step by step.
         </p>
       </section>
-      <NewUploadForm pipelines={pipelines} />
       <section className="panel">
         <h2>Your uploads</h2>
         {error && (
@@ -330,10 +167,13 @@ function UploadsWorkspace() {
               <tbody>
                 {jobs.map((job) => {
                   const described = describeJob(job);
+                  const step = described.terminal ? 4 : 3;
                   return (
                     <tr key={job.job_id}>
                       <td>
-                        <Link to={`/uploads/${encodeURIComponent(job.job_id)}`}>
+                        <Link
+                          to={`/uploads/new?step=${step}&job=${encodeURIComponent(job.job_id)}&pipeline=${encodeURIComponent(job.pipeline)}`}
+                        >
                           {job.job_id.slice(0, 8)}
                         </Link>
                       </td>
@@ -464,106 +304,38 @@ export function ResultDownload({ id, diagnosticFirst }: { id: string; diagnostic
   );
 }
 
-export function UploadDetailPage() {
+export function UploadDetailRedirect() {
   const { id = "" } = useParams();
-  const [job, setJob] = useState<UploadJob | null>(null);
+  const [target, setTarget] = useState<string | null>(null);
   const [error, setError] = useState("");
-  const [cancelling, setCancelling] = useState(false);
-  const pipelines = usePipelines();
-  const described = job && describeJob(job);
 
   useEffect(() => {
     const controller = new AbortController();
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    async function refresh() {
-      try {
-        const next = await getUpload(id, controller.signal);
-        setJob(next);
-        setError("");
-        if (describeJob(next).terminal) return;
-      } catch (e) {
+    getUpload(id, controller.signal).then(
+      (job) => {
         if (controller.signal.aborted) return;
-        setError(message(e));
-        if (!keepPolling(e)) return;
-      }
-      timer = setTimeout(refresh, POLL_MS);
-    }
-    void refresh();
-    return () => {
-      controller.abort();
-      clearTimeout(timer);
-    };
+        const step = describeJob(job).terminal ? 4 : 3;
+        setTarget(
+          `/uploads/new?step=${step}&job=${encodeURIComponent(job.job_id)}&pipeline=${encodeURIComponent(job.pipeline)}`,
+        );
+      },
+      (e) => {
+        if (!controller.signal.aborted) setError(message(e));
+      },
+    );
+    return () => controller.abort();
   }, [id]);
 
-  async function cancel() {
-    if (!window.confirm("Cancel this upload? This cannot be undone.")) return;
-    setCancelling(true);
-    try {
-      setJob(await cancelUpload(id));
-    } catch (e) {
-      setError(message(e));
-    } finally {
-      setCancelling(false);
-    }
-  }
-
-  return (
-    <>
+  if (error) {
+    return (
       <section className="panel">
         <Link to="/uploads">← Data uploads</Link>
-        <h1>Upload {id.slice(0, 8)}</h1>
-        {error && (
-          <p className="error" role="alert">
-            {error}
-          </p>
-        )}
-        {!job || !described ? (
-          !error && <p className="muted">Loading upload…</p>
-        ) : (
-          <>
-            <div className="table-scroll">
-              <table>
-                <tbody>
-                  <tr><th>Mode</th><td>{modeLabel(job.pipeline, pipelines.list)}</td></tr>
-                  <tr><th>Phase</th><td>{described.phase}</td></tr>
-                  <tr><th>Outcome</th><td>{described.outcome}</td></tr>
-                  <tr><th>Size</th><td>{size(job.encoded_bytes)}</td></tr>
-                  <tr><th>SHA-256</th><td><code>{job.input_sha256 ?? "—"}</code></td></tr>
-                  <tr><th>Upload started</th><td>{when(job.upload_started_at)}</td></tr>
-                  <tr><th>Upload deadline</th><td>{when(job.upload_deadline)}</td></tr>
-                  <tr><th>Admitted</th><td>{when(job.admitted_at)}</td></tr>
-                  <tr><th>Result stored</th><td>{when(job.first_result_stored_at)}</td></tr>
-                  <tr><th>Expires</th><td>{when(job.expires_at)}</td></tr>
-                </tbody>
-              </table>
-            </div>
-            {failureHint(job) && (
-              <p className="notice" role="status">
-                {failureHint(job)}
-              </p>
-            )}
-            {rejectionMessage(job) && (
-              <p className="notice" role="status">
-                {rejectionMessage(job)}
-              </p>
-            )}
-            {!described.terminal && (
-              <div className="actions">
-                <button className="secondary" disabled={cancelling} onClick={() => void cancel()}>
-                  {cancelling ? "Cancelling…" : "Cancel upload"}
-                </button>
-              </div>
-            )}
-          </>
-        )}
+        <p className="error" role="alert">
+          {error}
+        </p>
       </section>
-      {described?.hasReport && (
-        <section className="panel">
-          <h2>Report</h2>
-          <ReportSummary id={id} />
-          <ResultDownload id={id} diagnosticFirst={described.diagnosticOnly} />
-        </section>
-      )}
-    </>
-  );
+    );
+  }
+  if (!target) return <p className="muted">Loading upload…</p>;
+  return <Navigate to={target} replace />;
 }
