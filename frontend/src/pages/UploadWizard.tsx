@@ -97,11 +97,23 @@ export function UploadWizardPage() {
   const requested = Number.parseInt(params.get("step") ?? "1", 10);
   const step = Number.isInteger(requested) && requested >= 1 && requested <= STEPS.length ? requested : 1;
   const param = params.get("pipeline") ?? "";
+  const jobId = params.get("job");
   const known = pipelines.list.some((item) => item.pipeline === param);
   const single = pipelines.loaded && !pipelines.error && pipelines.list.length === 1 ? pipelines.list[0].pipeline : "";
   const selected = param || single;
   const effective = pipelines.loaded && param && !known ? 1 : step;
   const chosen = pipelines.list.find((item) => item.pipeline === selected);
+
+  if (jobId && (step === 3 || step === 4)) return (
+    <WizardDraftContext.Provider value={context}>
+      <section className="panel">
+        <Link to="/uploads">← Data uploads</Link>
+        <h1>New guided upload</h1>
+        <StepIndicator step={step} />
+      </section>
+      {step === 3 ? <StepRun pipeline={param} jobId={jobId} /> : <StepResults jobId={jobId} />}
+    </WizardDraftContext.Provider>
+  );
 
   if (!pipelines.loaded) {
     return (
@@ -136,9 +148,9 @@ export function UploadWizardPage() {
       {effective === 2 ? (
         <StepFileCheck pipeline={chosen.pipeline} />
       ) : effective === 3 ? (
-        <StepRun pipeline={chosen.pipeline} jobId={params.get("job")} />
+        <StepRun pipeline={chosen.pipeline} jobId={jobId} />
       ) : (
-        <StepResults jobId={params.get("job")} />
+        <StepResults jobId={jobId} />
       )}
     </WizardDraftContext.Provider>
   );

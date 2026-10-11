@@ -128,7 +128,7 @@ export function StepRun({ pipeline, jobId }: { pipeline: string; jobId: string |
         if (described.terminal && wasLive.current && !advanced.current) {
           advanced.current = true;
           navigate(
-            `/uploads/new?step=4&job=${encodeURIComponent(next.job_id)}&pipeline=${encodeURIComponent(pipeline)}`,
+            `/uploads/new?step=4&job=${encodeURIComponent(next.job_id)}&pipeline=${encodeURIComponent(next.pipeline)}`,
           );
         }
         if (described.terminal) return;
@@ -144,7 +144,7 @@ export function StepRun({ pipeline, jobId }: { pipeline: string; jobId: string |
       controller.abort();
       clearTimeout(timer);
     };
-  }, [jobId, navigate, pipeline]);
+  }, [jobId, navigate]);
 
   async function start() {
     if (gated || !checked.form || !file || started.current) return;
@@ -259,7 +259,7 @@ export function StepRun({ pipeline, jobId }: { pipeline: string; jobId: string |
               <div className="actions">
                 <Link
                   className="primary"
-                  to={`/uploads/new?step=4&job=${encodeURIComponent(job.job_id)}&pipeline=${encodeURIComponent(pipeline)}`}
+                  to={`/uploads/new?step=4&job=${encodeURIComponent(job.job_id)}&pipeline=${encodeURIComponent(job.pipeline)}`}
                 >
                   Continue to results
                 </Link>
