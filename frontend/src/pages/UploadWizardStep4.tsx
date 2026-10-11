@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router";
-import { describeJob, humanize } from "../uploads/display.ts";
+import { describeJob, failureHint, humanize, rejectionMessage } from "../uploads/display.ts";
 import { getReport, getUpload, type UploadJob, type UploadReport } from "../uploads/api.ts";
+import { loadUploadResults } from "../uploads/results.ts";
 import {
   bytes,
   count,
@@ -48,16 +49,21 @@ export function StepResults({ jobId }: { jobId: string | null }) {
   const [job, setJob] = useState<UploadJob | null>(null);
   const [report, setReport] = useState<UploadReport | null>(null);
   const [error, setError] = useState("");
+  const [reportError, setReportError] = useState("");
 
   useEffect(() => {
+    setJob(null);
+    setReport(null);
+    setError("");
+    setReportError("");
     if (!jobId) return;
     const controller = new AbortController();
-    Promise.all([getUpload(jobId, controller.signal), getReport(jobId, controller.signal)]).then(
-      ([nextJob, nextReport]) => {
+    loadUploadResults(jobId, { getUpload, getReport }, controller.signal).then(
+      ({ job: nextJob, report: nextReport, reportError: nextReportError }) => {
         if (controller.signal.aborted) return;
         setJob(nextJob);
         setReport(nextReport);
-        setError("");
+        setReportError(nextReportError);
       },
       (e) => {
         if (!controller.signal.aborted) setError(message(e));
@@ -115,67 +121,82 @@ export function StepResults({ jobId }: { jobId: string | null }) {
       </section>
     );
   }
-  if (!job || !report) return <p className="muted">Loading results…</p>;
+  if (!job) return <p className="muted">Loading results…</p>;
 
   const described = describeJob(job);
   const failed = checks.filter((check) => check.status === "failed").length;
-  const funnel = report.report?.report?.funnel;
-  const stats = report.report?.qa?.stats;
-  const counters = report.report?.counters;
+  const funnel = report?.report?.report?.funnel;
+  const stats = report?.report?.qa?.stats;
+  const counters = report?.report?.counters;
 
   return (
     <>
       <section className="panel">
         <h2>Step 4: results</h2>
+        <p className="muted">
+          Phase: {described.phase} · Outcome: {described.outcome}
+        </p>
+        {failureHint(job) && <p className="notice" role="status">{failureHint(job)}</p>}
+        {rejectionMessage(job) && <p className="notice" role="status">{rejectionMessage(job)}</p>}
+        {reportError && <p className="error" role="alert">{reportError}</p>}
+        {!report && (
+          <p className="muted">
+            {job.client_phase === "expired" ? "This upload has expired." : "No report is available for this upload."}
+          </p>
+        )}
       </section>
-      <Card title="Verdict">
-        {report.verdict === "failed_qa" ? "Failed quality checks" : humanize(report.verdict)}
-        {report.failure_code && <> · {humanize(report.failure_code)}</>}
-      </Card>
-      <Card title="Records">
-        {typeof funnel?.rows_in === "number" || typeof funnel?.rows_out === "number"
-          ? `${count(funnel?.rows_in ?? 0)} in · ${count(funnel?.rows_out ?? 0)} out`
-          : `${count(report.report?.rows_in ?? 0)} in · ${count(report.report?.rows_out ?? 0)} out`}
-      </Card>
       <Card title="Upload">
         {job.pipeline} · {typeof job.encoded_bytes === "number" ? size(job.encoded_bytes) : "—"} ·{" "}
         <code>{job.input_sha256 ?? "—"}</code> · {when(job.upload_started_at)}
       </Card>
-      <Card title="Quality checks">
-        {checks.length === 0 ? "No checks reported." : `${failed} of ${checks.length} failed`}
-      </Card>
-      <Card title="Duplicates & conflicts">
-        {typeof stats?.exact_duplicate_pairs === "number" ||
-        typeof stats?.near_duplicate_pairs === "number" ||
-        typeof stats?.license_review_records === "number"
-          ? `${typeof stats?.exact_duplicate_pairs === "number" ? count(stats.exact_duplicate_pairs) : "—"} exact · ${
-              typeof stats?.near_duplicate_pairs === "number" ? count(stats.near_duplicate_pairs) : "—"
-            } near · ${
-              typeof stats?.license_review_records === "number" ? count(stats.license_review_records) : "—"
-            } for licence review`
-          : "No duplicate or conflict counts reported."}
-      </Card>
-      <Card title="Processing">
-        {typeof counters?.elapsed_ms === "number" ? duration(counters.elapsed_ms) : "—"}
-        {typeof counters?.input_bytes === "number" || typeof counters?.output_bytes === "number"
-          ? ` · in ${typeof counters?.input_bytes === "number" ? bytes(counters.input_bytes) : "—"} / out ${
-              typeof counters?.output_bytes === "number" ? bytes(counters.output_bytes) : "—"
-            }`
-          : ""}
-      </Card>
-      {flow.length > 0 && <CountBars title="Records flow" entries={flow} ariaLabel="Records flow chart" />}
-      {checkBars.length > 0 && <CountBars title="Check counts" entries={checkBars} ariaLabel="Check counts chart" />}
-      {maskedBars.length > 0 && (
-        <CountBars title="Personal data masked" entries={maskedBars} ariaLabel="Masked personal data chart" />
+      {report && (
+        <>
+          <Card title="Verdict">
+            {report.verdict === "failed_qa" ? "Failed quality checks" : humanize(report.verdict)}
+            {report.failure_code && <> · {humanize(report.failure_code)}</>}
+          </Card>
+          <Card title="Records">
+            {typeof funnel?.rows_in === "number" || typeof funnel?.rows_out === "number"
+              ? `${count(funnel?.rows_in ?? 0)} in · ${count(funnel?.rows_out ?? 0)} out`
+              : `${count(report.report?.rows_in ?? 0)} in · ${count(report.report?.rows_out ?? 0)} out`}
+          </Card>
+          <Card title="Quality checks">
+            {checks.length === 0 ? "No checks reported." : `${failed} of ${checks.length} failed`}
+          </Card>
+          <Card title="Duplicates & conflicts">
+            {typeof stats?.exact_duplicate_pairs === "number" ||
+            typeof stats?.near_duplicate_pairs === "number" ||
+            typeof stats?.license_review_records === "number"
+              ? `${typeof stats?.exact_duplicate_pairs === "number" ? count(stats.exact_duplicate_pairs) : "—"} exact · ${
+                  typeof stats?.near_duplicate_pairs === "number" ? count(stats.near_duplicate_pairs) : "—"
+                } near · ${
+                  typeof stats?.license_review_records === "number" ? count(stats.license_review_records) : "—"
+                } for licence review`
+              : "No duplicate or conflict counts reported."}
+          </Card>
+          <Card title="Processing">
+            {typeof counters?.elapsed_ms === "number" ? duration(counters.elapsed_ms) : "—"}
+            {typeof counters?.input_bytes === "number" || typeof counters?.output_bytes === "number"
+              ? ` · in ${typeof counters?.input_bytes === "number" ? bytes(counters.input_bytes) : "—"} / out ${
+                  typeof counters?.output_bytes === "number" ? bytes(counters.output_bytes) : "—"
+                }`
+              : ""}
+          </Card>
+          {flow.length > 0 && <CountBars title="Records flow" entries={flow} ariaLabel="Records flow chart" />}
+          {checkBars.length > 0 && <CountBars title="Check counts" entries={checkBars} ariaLabel="Check counts chart" />}
+          {maskedBars.length > 0 && (
+            <CountBars title="Personal data masked" entries={maskedBars} ariaLabel="Masked personal data chart" />
+          )}
+          {statBars.length > 0 && (
+            <CountBars title="What happened to the data" entries={statBars} ariaLabel="Statistics chart" />
+          )}
+          <section className="panel">
+            <h2>Report</h2>
+            <ReportSummary id={job.job_id} />
+            <ResultDownload id={job.job_id} diagnosticFirst={described.diagnosticOnly} />
+          </section>
+        </>
       )}
-      {statBars.length > 0 && (
-        <CountBars title="What happened to the data" entries={statBars} ariaLabel="Statistics chart" />
-      )}
-      <section className="panel">
-        <h2>Report</h2>
-        <ReportSummary id={job.job_id} />
-        <ResultDownload id={job.job_id} diagnosticFirst={described.diagnosticOnly} />
-      </section>
     </>
   );
 }
