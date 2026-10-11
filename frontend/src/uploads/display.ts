@@ -1,5 +1,6 @@
 import type { UploadJob, UploadPipeline } from "./api.ts";
 import { rejectionMessage as rejectionSentence } from "./rejection.ts";
+import { isFinal } from "./phases.ts";
 import type { UploadProgress } from "./uploader.ts";
 import { apiError } from "../provider.ts";
 
@@ -7,7 +8,6 @@ export const TRANSFER_READY = "ready";
 export const TRANSFER_CLOSED = "closed";
 export const PROCESSING_UPLOADING = "uploading";
 export const CLOSED_PHASES = new Set(["expired", "rejected"]);
-export const TERMINAL_PHASES = new Set(["complete", ...CLOSED_PHASES]);
 
 const PHASE_LABELS: Record<string, string> = {
   uploading: "Uploading",
@@ -77,7 +77,7 @@ export function describeJob(job: UploadJob) {
   return {
     phase: PHASE_LABELS[job.client_phase] ?? job.client_phase,
     outcome: jobOutcome(job),
-    terminal: TERMINAL_PHASES.has(job.client_phase),
+    terminal: isFinal(job.client_phase),
     hasReport: showsReport(job),
     diagnosticOnly: diagnosticOnly(job),
     updatedAt: [job.first_result_stored_at, job.admitted_at, job.upload_started_at]
@@ -103,7 +103,7 @@ export const hasAttribution = (job: UploadJob) =>
 const PROTOCOL_TERMINAL = new Set(["passed", "failed_qa", "failed", "cancelled", "rejected"]);
 
 export const canCancel = (job: Pick<UploadJob, "client_phase" | "processing_state">) =>
-  !TERMINAL_PHASES.has(job.client_phase) && job.client_phase !== "finalizing" && !PROTOCOL_TERMINAL.has(job.processing_state ?? "");
+  !isFinal(job.client_phase) && job.client_phase !== "finalizing" && !PROTOCOL_TERMINAL.has(job.processing_state ?? "");
 
 export const publishingResults = (job: Pick<UploadJob, "processing_state">) =>
   job.processing_state === "passed" || job.processing_state === "failed_qa";

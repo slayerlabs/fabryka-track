@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router";
 import { COPY } from "../uploads/copy";
 import { canStartUpload } from "../uploads/gate";
 import { pipelineLimit, validateUpload, type UploadFormState } from "../uploads/form";
-import { parseLocation, resolveLocation, wizardUrl, type Step, type WizardLocation } from "../uploads/location";
+import { parseLocation, resolveLocation, wizardTitle, wizardUrl, type Step, type WizardLocation } from "../uploads/location";
 import { emptyForm } from "../uploads/MetadataFields";
 import { useFileCheck } from "../uploads/useFileCheck";
 import { usePipelines } from "../uploads/usePipelines";
@@ -17,8 +17,10 @@ const sameLocation = (a: WizardLocation, b: WizardLocation) =>
   a.step === b.step && a.pipeline === b.pipeline && a.job === b.job;
 
 export function UploadWizardPage() {
+  const [params] = useSearchParams();
+  const job = parseLocation(params).job;
   return (
-    <HuggingFaceGate description="Send a Dynaword file to the data pipeline, follow its validation and download the report and result.">
+    <HuggingFaceGate title={wizardTitle(job)} description={COPY.wizard.description}>
       <UploadWizard />
     </HuggingFaceGate>
   );

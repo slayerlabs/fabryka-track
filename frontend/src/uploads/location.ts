@@ -33,3 +33,5 @@ export function resolveLocation(at: WizardLocation, { canStart }: { canStart: bo
 
 export const jobUrl = ({ job_id, client_phase }: { job_id: string; client_phase: string }) =>
   wizardUrl({ step: isFinal(client_phase) ? 4 : 3, pipeline: "", job: job_id });
+
+export const wizardTitle = (job: string) => (job ? `Upload ${job.slice(0, 8)}` : "New upload");

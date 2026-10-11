@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { apiError } from "../provider";
 import { attributionGrant, resultGrant, type UploadReport } from "./api";
-import { COPY } from "./copy";
+import { CHECK_LABELS, COPY } from "./copy";
 import { bindingLabel, errorMessage, humanize } from "./display";
 import { checksOpen, summarizeReport } from "./report";
 
@@ -42,7 +42,7 @@ export function ReportDetails({ report }: { report: UploadReport }) {
               <tbody>
                 {checks.map((check, index) => (
                   <tr key={`${check.name}-${index}`}>
-                    <td>{check.name ?? "—"}</td>
+                    <td>{(check.name && CHECK_LABELS[check.name]) ?? check.name ?? "—"}</td>
                     <td>{bindingLabel(check.binding)}</td>
                     <td>{humanize(check.status)}</td>
                     <td>{check.count ?? "—"}</td>

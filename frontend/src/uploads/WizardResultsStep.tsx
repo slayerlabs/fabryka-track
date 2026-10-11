@@ -115,7 +115,7 @@ export function WizardResultsStep({ jobId, pipelines, onUnfinished }: Props) {
         <JobFacts job={job} pipelines={pipelines} />
         <div className="actions">
           <Link className="secondary" to="/uploads">
-            {COPY.results.history}
+            {COPY.history.back}
           </Link>
           <Link className="primary" to="/uploads/new">
             {COPY.results.newUpload}

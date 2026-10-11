@@ -26,32 +26,26 @@ export function WizardPipelineStep({ pipelines, selected, onChoose }: Props) {
       )}
       <div className="mode-cards">
         {pipelines.list.map((pipeline) => (
-          <article
+          <button
             key={pipeline.pipeline}
+            type="button"
             className={`mode-card${pipeline.pipeline === selected ? " selected" : ""}`}
+            onClick={() => onChoose(pipeline.pipeline)}
           >
-            <h3>{pipeline.title}</h3>
-            {pipeline.description && <p>{pipeline.description}</p>}
+            <strong className="mode-card-title">{pipeline.title}</strong>
+            {pipeline.description && <span>{pipeline.description}</span>}
             {pipeline.file_requirements && (
-              <p className="muted">
-                <strong>{COPY.pipelines.requirements}:</strong> {pipeline.file_requirements}
-              </p>
+              <span className="muted">
+                <b>{COPY.pipelines.requirements}:</b> {pipeline.file_requirements}
+              </span>
             )}
             {pipeline.max_encoded_bytes ? (
-              <p className="muted">
-                <strong>{COPY.pipelines.limit}:</strong> {formatBytes(pipeline.max_encoded_bytes)}
-              </p>
+              <span className="muted">
+                <b>{COPY.pipelines.limit}:</b> {formatBytes(pipeline.max_encoded_bytes)}
+              </span>
             ) : null}
-            <div className="actions">
-              <button
-                className="primary"
-                type="button"
-                onClick={() => onChoose(pipeline.pipeline)}
-              >
-                {COPY.pipelines.choose}
-              </button>
-            </div>
-          </article>
+            <span className="mode-card-choose">{COPY.pipelines.choose}</span>
+          </button>
         ))}
       </div>
     </section>

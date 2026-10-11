@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { jobUrl, parseLocation, resolveLocation, wizardUrl } from "../frontend/src/uploads/location.ts";
+import { jobUrl, parseLocation, wizardTitle, resolveLocation, wizardUrl } from "../frontend/src/uploads/location.ts";
 
 const params = (query) => new URLSearchParams(query);
 const open = { canStart: true };
@@ -48,4 +48,9 @@ test("history rows open step 4 for finished jobs and step 3 for jobs still worki
   for (const phase of ["complete", "rejected", "expired"]) assert.equal(jobUrl({ job_id: "j", client_phase: phase }), "/uploads/new?step=4&job=j", phase);
   for (const phase of ["uploading", "validating", "queued", "running", "finalizing"]) assert.equal(jobUrl({ job_id: "j", client_phase: phase }), "/uploads/new?step=3&job=j", phase);
   assert.equal(jobUrl({ job_id: "a/b", client_phase: "running" }), "/uploads/new?step=3&job=a%2Fb");
+});
+
+test("the page title names the upload once a job id is present", () => {
+  assert.equal(wizardTitle(""), "New upload");
+  assert.equal(wizardTitle("7caf2e37-e453-4e31-8a5d-2e4425f606d2"), "Upload 7caf2e37");
 });

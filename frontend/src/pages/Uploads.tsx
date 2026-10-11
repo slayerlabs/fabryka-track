@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, Navigate, useParams } from "react-router";
+import { formatBytes } from "../uploads/bytes";
+import { COPY } from "../uploads/copy";
 import { describeJob, errorMessage as message, formatWhen as when, modeLabel } from "../uploads/display";
 import { HuggingFaceGate } from "../uploads/HuggingFaceGate";
 import { jobUrl } from "../uploads/location";
@@ -9,15 +11,16 @@ import { getUpload, listUploads, type UploadJob } from "../uploads/api";
 const POLL_MS = 5000;
 const PAGE_SIZE = 20;
 
-function size(bytes?: number | null) {
-  if (bytes === null || bytes === undefined) return "—";
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
-  return `${(bytes / 1024 / 1024).toFixed(1)} MiB`;
-}
-
 export function UploadsPage() {
   return (
-    <HuggingFaceGate description="Send a Dynaword file to the data pipeline, follow its validation and download the report and result.">
+    <HuggingFaceGate
+      description={COPY.history.description}
+      actions={
+        <Link className="primary" to="/uploads/new">
+          {COPY.results.newUpload}
+        </Link>
+      }
+    >
       <UploadsWorkspace />
     </HuggingFaceGate>
   );
@@ -52,10 +55,10 @@ function UploadRedirect() {
         <p className="error" role="alert">
           {error}
         </p>
-        <Link to="/uploads">Back to your uploads</Link>
+        <Link to="/uploads">{COPY.history.back}</Link>
       </section>
     );
-  return <p className="muted">Loading upload…</p>;
+  return <p className="muted">{COPY.progress.loading}</p>;
 }
 
 function UploadsWorkspace() {
@@ -110,33 +113,28 @@ function UploadsWorkspace() {
   return (
     <>
       <section className="panel">
-        <div className="actions">
-          <h2>Your uploads</h2>
-          <Link className="primary" to="/uploads/new">
-            New upload
-          </Link>
-        </div>
+        <h2>{COPY.history.heading}</h2>
         {error && (
           <p className="error" role="alert">
             {error}
           </p>
         )}
         {!loaded ? (
-          <p className="muted">Loading uploads…</p>
+          <p className="muted">{COPY.history.loading}</p>
         ) : jobs.length === 0 ? (
-          <p className="muted">No uploads yet.</p>
+          <p className="muted">{COPY.history.empty}</p>
         ) : (
           <div className="table-scroll">
             <table>
               <thead>
                 <tr>
-                  <th>Upload</th>
-                  <th>Mode</th>
-                  <th>Phase</th>
-                  <th>Outcome</th>
-                  <th>Size</th>
-                  <th>Started</th>
-                  <th>Updated</th>
+                  <th>{COPY.history.columns.upload}</th>
+                  <th>{COPY.history.columns.mode}</th>
+                  <th>{COPY.history.columns.phase}</th>
+                  <th>{COPY.history.columns.outcome}</th>
+                  <th>{COPY.history.columns.size}</th>
+                  <th>{COPY.history.columns.started}</th>
+                  <th>{COPY.history.columns.updated}</th>
                 </tr>
               </thead>
               <tbody>
@@ -152,7 +150,7 @@ function UploadsWorkspace() {
                       <td>{modeLabel(job.pipeline, pipelines.list)}</td>
                       <td>{described.phase}</td>
                       <td>{described.outcome}</td>
-                      <td>{size(job.encoded_bytes)}</td>
+                      <td>{job.encoded_bytes == null ? "—" : formatBytes(job.encoded_bytes)}</td>
                       <td>{when(job.upload_started_at)}</td>
                       <td>{when(described.updatedAt)}</td>
                     </tr>
@@ -165,7 +163,7 @@ function UploadsWorkspace() {
         {cursor && (
           <div className="actions">
             <button className="secondary" disabled={loadingMore} onClick={() => void loadMore(cursor)}>
-              Load more
+              {COPY.history.loadMore}
             </button>
           </div>
         )}

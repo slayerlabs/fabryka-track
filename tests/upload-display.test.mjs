@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { bindingLabel, canCancel, diagnosticOnly, errorMessage, publishingResults, hasAttribution, humanize, jobOutcome, keepPolling, modeLabel, rejectionMessage, showsReport, stoppedMessage } from "../frontend/src/uploads/display.ts";
+import { isFinal } from "../frontend/src/uploads/phases.ts";
+import { bindingLabel, canCancel, describeJob, diagnosticOnly, errorMessage, publishingResults, hasAttribution, humanize, jobOutcome, keepPolling, modeLabel, rejectionMessage, showsReport, stoppedMessage } from "../frontend/src/uploads/display.ts";
 
 test("machine codes read as plain words", () => {
   assert.equal(humanize("failed_qa"), "Failed qa");
@@ -146,4 +147,9 @@ test("only a finished run is being published; other finalizing jobs are just fin
   assert.equal(publishingResults(job("failed_qa")), true);
   assert.equal(publishingResults(job("failed")), false);
   assert.equal(publishingResults(job("cancelled")), false);
+});
+
+test("the history terminal flag and the wizard's final phases are the same set", () => {
+  for (const phase of ["uploading", "validating", "queued", "running", "finalizing", "complete", "rejected", "expired", "unknown"])
+    assert.equal(describeJob(job("passed", { client_phase: phase })).terminal, isFinal(phase), phase);
 });
