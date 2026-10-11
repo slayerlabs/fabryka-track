@@ -1,0 +1,29 @@
+.brand-lockup {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+
+.brand-lockup img {
+  display: block;
+  width: 32px;
+  height: 32px;
+  flex: none;
+}
+
+.brand-lockup-wordmark {
+  color: #1a1512;
+  font: 700 20px/1.1 var(--sans);
+  letter-spacing: -0.045em;
+}
+
+.brand-lockup-wordmark span {
+  color: #b33b00;
+  font-weight: 600;
+}
+
+@media (max-width: 1100px) and (min-width: 761px) {
+  .brand-lockup img { width: 28px; height: 28px; }
+  .brand-lockup-wordmark { font-size: 17px; }
+}

@@ -1,6 +1,7 @@
 import researchVillage from "../assets/research-village.jpg";
 import { Link } from "react-router";
 import { OverviewPage } from "./Overview";
+import { BrandLockup } from "../BrandLockup";
 import "../landing.css";
 
 export function LandingPage() {
@@ -10,7 +11,7 @@ export function LandingPage() {
       <img className="landing-art" src={researchVillage} alt="Illustrated coastal village with open workshops and two researchers studying plants beside the water." fetchPriority="high" width="2048" height="1143" />
       <div className="landing-shade" aria-hidden="true" />
       <nav className="landing-nav" aria-label="Main navigation">
-        <Link className="landing-brand" to="/">fabryka<span>/ track</span></Link>
+        <Link className="landing-brand-lockup" to="/" aria-label="Fabryka Track home"><BrandLockup /></Link>
         <div className="landing-nav-links"><a href="#our-research">Our runs</a><a href="#why-track">Why Track</a><a href="#research-cycle">The workspace</a><Link to="/benchmark-results">Results</Link></div>
         <Link className="landing-nav-cta" to="/overview">Open Track ↗</Link>
       </nav>

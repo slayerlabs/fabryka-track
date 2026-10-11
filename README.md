@@ -44,6 +44,10 @@ breadcrumbs, one page heading, optional description/actions and the browser titl
 Add new route defaults to `resolvePageMeta`; views with fetched titles override them
 only after the data loads. The illustrated `/` landing keeps its separate hero.
 
+The shell and landing navigation share `BrandLockup`: the official factory symbol
+from [Fabryka's design system](https://github.com/slayerlabs/ui-design/tree/main/Fabryka%20Design%20System-2/assets)
+beside the inline “fabryka / track” wordmark. Preserve the symbol's proportions.
+
 Frontend checks: `npm --prefix frontend run build` and
 `node --experimental-strip-types --test tests/*.test.mjs`. Browser smoke checks
 must cover authenticated training/run workflows as well as anonymous public pages.
