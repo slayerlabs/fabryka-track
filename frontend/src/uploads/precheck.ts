@@ -1,4 +1,4 @@
-import { MAX_UPLOAD_BYTES, MAX_UPLOAD_LABEL, formatFor } from "./form.ts";
+import { MAX_UPLOAD_BYTES, uploadLimitLabel, formatFor } from "./form.ts";
 import type { SliceableFile } from "./uploader.ts";
 
 export interface PrecheckFinding {
@@ -160,7 +160,7 @@ async function checkParquet(file: SliceableFile, signal?: AbortSignal): Promise<
   };
 }
 
-export async function precheckFile(file: SliceableFile, signal?: AbortSignal): Promise<PrecheckReport> {
+export async function precheckFile(file: SliceableFile, signal?: AbortSignal, maxBytes = MAX_UPLOAD_BYTES): Promise<PrecheckReport> {
   const format = formatFor(file.name);
   if (!format) {
     return {
@@ -178,11 +178,11 @@ export async function precheckFile(file: SliceableFile, signal?: AbortSignal): P
       passed: false,
     };
   }
-  if (file.size > MAX_UPLOAD_BYTES) {
+  if (file.size > Math.min(maxBytes, MAX_UPLOAD_BYTES)) {
     return {
       format,
       size: file.size,
-      findings: [{ rule: "size", ok: false, detail: `The file is larger than ${MAX_UPLOAD_LABEL}.` }],
+      findings: [{ rule: "size", ok: false, detail: `The file is larger than ${uploadLimitLabel(Math.min(maxBytes, MAX_UPLOAD_BYTES))}.` }],
       passed: false,
     };
   }

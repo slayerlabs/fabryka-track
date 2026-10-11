@@ -13,6 +13,7 @@ export interface UploadPipeline {
   title: string;
   description?: string;
   file_requirements?: string;
+  max_encoded_bytes?: number;
   parameters: Record<string, unknown>;
 }
 

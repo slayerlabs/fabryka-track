@@ -26,7 +26,7 @@ SUBJECT = re.compile(r"[A-Za-z0-9_-]{1,64}")
 USERNAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,95}")
 UNAVAILABLE = "Data uploads are temporarily unavailable. Try again shortly."
 REFUSED = "The data pipeline refused this request."
-MAX_BYTES = 512 * 1024 * 1024
+MAX_BYTES = 10 * 1024 * 1024 * 1024
 ACTION_KEY = r"^[!-~]{16,128}$"
 MESSAGES = {
     "user_limit_reached": "You already have an upload in progress. Wait for it to finish or cancel it.",

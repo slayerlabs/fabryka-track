@@ -1,6 +1,6 @@
 import { createContext, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
-import { MAX_UPLOAD_LABEL } from "../uploads/form";
+import { uploadLimit, uploadLimitLabel } from "../uploads/form";
 import type { MetadataValues } from "../uploads/metadata.tsx";
 import type { FilePrecheck } from "../uploads/draft.ts";
 import type { UploadPipeline } from "../uploads/api";
@@ -14,11 +14,13 @@ const STEPS = ["Pipeline", "File check", "Run", "Results"] as const;
 export interface WizardDraft extends MetadataValues {
   file: File | null;
   precheck: FilePrecheck | null;
+  precheckScope: { pipeline: string; maxBytes: number } | null;
 }
 
 const emptyDraft = (): WizardDraft => ({
   file: null,
   precheck: null,
+  precheckScope: null,
   source: "",
   added: new Date().toISOString().slice(0, 10),
   license: "",
@@ -80,7 +82,7 @@ function PipelineCards({
       <strong>{item.title}</strong>
       {item.description && <span className="muted">{item.description}</span>}
       {item.file_requirements && <span className="muted">{item.file_requirements}</span>}
-      <span className="muted">JSONL or Parquet files up to {MAX_UPLOAD_LABEL}.</span>
+      <span className="muted">JSONL or Parquet files up to {uploadLimitLabel(uploadLimit(item.max_encoded_bytes))}.</span>
     </button>
   );
   return <div className="actions">{pipelines.list.map(card)}</div>;
@@ -111,7 +113,7 @@ export function UploadWizardPage() {
         <h1>New guided upload</h1>
         <StepIndicator step={step} />
       </section>
-      {step === 3 ? <StepRun pipeline={param} jobId={jobId} /> : <StepResults jobId={jobId} />}
+      {step === 3 ? <StepRun pipeline={param} jobId={jobId} maxBytes={uploadLimit(undefined)} /> : <StepResults jobId={jobId} />}
     </WizardDraftContext.Provider>
   );
 
@@ -146,9 +148,9 @@ export function UploadWizardPage() {
         <StepIndicator step={effective} />
       </section>
       {effective === 2 ? (
-        <StepFileCheck pipeline={chosen.pipeline} />
+        <StepFileCheck pipeline={chosen.pipeline} maxBytes={uploadLimit(chosen.max_encoded_bytes)} />
       ) : effective === 3 ? (
-        <StepRun pipeline={chosen.pipeline} jobId={jobId} />
+        <StepRun pipeline={chosen.pipeline} jobId={jobId} maxBytes={uploadLimit(chosen.max_encoded_bytes)} />
       ) : (
         <StepResults jobId={jobId} />
       )}

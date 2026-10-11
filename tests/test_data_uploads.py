@@ -376,3 +376,41 @@ def test_attribution_proxy_forwards_kind_and_diagnostic_with_existing_identity(c
     client.cookies.clear()
     assert client.get(f"/api/uploads/{JOB_ID}/result?kind=attribution").status_code == 401
     assert len(controller.requests) == 1
+
+
+@pytest.mark.parametrize("format", ["jsonl", "parquet"])
+@pytest.mark.parametrize("size", [10 * 1024 ** 3, 10 * 1024 ** 3 + 1])
+def test_large_create_boundary(client, controller, format, size):
+    body = create_body(input={"format": format, "encoded_bytes": size, "sha256": "a" * 64, "filename": f"data.{format}"})
+    response = client.post("/api/uploads", json=body)
+    if size > 10 * 1024 ** 3:
+        assert response.status_code == 422
+        assert controller.requests == []
+    else:
+        assert response.status_code == 201
+        sent = controller.requests[0]
+        assert json.loads(sent.content)["input"] == body["input"]
+        assert json.loads(sent.content)["declaration"] == body["declaration"]
+        assert sent.headers["idempotency-key"] == ACTION_KEY
+        assert sent.headers["x-pipeline-user"] == "fixture-tester"
+        assert "authorization" in sent.headers
+
+
+@pytest.mark.parametrize("size", [10 * 1024 ** 3, 10 * 1024 ** 3 + 1])
+def test_large_confirm_boundary(client, controller, size):
+    body = {"action_key": ACTION_KEY, "encoded_bytes": size, "input_sha256": "a" * 64,
+            "parts": [{"part_number": n, "etag": f'"etag-{n}"'} for n in range(1, 1281)]}
+    response = client.post(f"/api/uploads/{JOB_ID}/confirm", json=body)
+    if size > 10 * 1024 ** 3:
+        assert response.status_code == 422
+        assert controller.requests == []
+    else:
+        assert response.status_code == 200
+        sent = controller.requests[0]
+        payload = json.loads(sent.content)
+        assert payload["encoded_bytes"] == size
+        assert payload["input_sha256"] == body["input_sha256"]
+        assert payload["parts"] == body["parts"]
+        assert len(sent.content) < 100_000
+        assert sent.headers["idempotency-key"] == ACTION_KEY
+        assert sent.headers["x-pipeline-user"] == "fixture-tester"

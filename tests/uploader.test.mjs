@@ -284,3 +284,41 @@ test("a non-retryable grant error stops the upload with its own message", async 
   assert.equal(track.calls.filter((c) => c.path.endsWith("/parts") && c.failed).length, 1);
   assert.equal(track.puts.length, 0);
 });
+
+
+test("10 GiB orchestration uses 1280 bounded parts (stub hash, no capacity or SHA proof)", async () => {
+  const size = 10 * 1024 ** 3;
+  const slices = [];
+  const chunk = new Uint8Array(8 * MiB);
+  const file = { name: "large.jsonl", size,
+    slice(start, end) {
+      slices.push([start, end]);
+      const blob = new Blob();
+      Object.defineProperty(blob, "size", { value: end - start });
+      blob.arrayBuffer = async () => chunk.buffer;
+      return blob;
+    } };
+  const track = fakeTrack({ readyAfter: 0 });
+  const puts = [];
+  const progress = [];
+  const fetch = async (url, init) => {
+    puts.push(init.body.size);
+    return new Response(null, { status: 200, headers: { ETag: `"etag-${puts.length}"` } });
+  };
+  const createHash = () => ({ update() {}, digest() { return "a".repeat(64); } });
+  assert.equal(await uploadFile(file, form, deps(track, { fetch, createHash }), {
+    onProgress: (p) => progress.push(p),
+  }), JOB);
+  assert.equal(puts.length, 1280);
+  assert.ok(puts.every((n) => n === 8 * MiB));
+  assert.equal(track.calls.filter((c) => c.path.endsWith("/parts")).length, 1280);
+  const confirm = track.calls.at(-1).body;
+  assert.deepEqual(confirm.parts, Array.from({ length: 1280 }, (_, i) => ({ part_number: i + 1, etag: `"etag-${i + 1}"` })));
+  assert.equal(confirm.encoded_bytes, size);
+  assert.equal(track.calls[0].body.input.encoded_bytes, size);
+  assert.ok(!("decoded_bytes" in track.calls[0].body.input));
+  assert.ok(!("decoded_bytes" in confirm));
+  assert.ok(slices.every(([start, end]) => end - start <= 8 * MiB));
+  for (const phase of ["hashing", "uploading", "confirming"])
+    assert.deepEqual(progress.findLast((p) => p.phase === phase), { phase, loaded: size, total: size });
+});

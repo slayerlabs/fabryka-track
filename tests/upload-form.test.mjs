@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DECLARATION_TEXT, DECLARATION_VERSION, validateUpload } from "../frontend/src/uploads/form.ts";
+import { DECLARATION_TEXT, DECLARATION_VERSION, MAX_UPLOAD_LABEL, uploadLimit, validateUpload } from "../frontend/src/uploads/form.ts";
 
 const valid = {
   pipeline: "dynaword-upload",
@@ -57,12 +57,21 @@ test("the declaration must be accepted", () => {
   assert.ok(validateUpload({ ...valid, declaration: false }).errors.declaration);
 });
 
-test("the file must be a non-empty JSONL or Parquet file of at most 512 MiB", () => {
+test("JSONL and Parquet accept nonempty files through 10 GiB", () => {
   assert.ok(validateUpload({ ...valid, file: null }).errors.file);
   assert.ok(validateUpload({ ...valid, file: { name: "data.csv", size: 10 } }).errors.file);
-  assert.ok(validateUpload({ ...valid, file: { name: "data.jsonl", size: 0 } }).errors.file);
-  assert.ok(validateUpload({ ...valid, file: { name: "data.jsonl", size: 512 * 1024 * 1024 + 1 } }).errors.file);
-  assert.equal(validateUpload({ ...valid, file: { name: "data.jsonl", size: 512 * 1024 * 1024 } }).errors.file, undefined);
+  for (const extension of ["jsonl", "parquet"])
+    for (const size of [0, 512 * 1024 ** 2, 512 * 1024 ** 2 + 1, 10 * 1024 ** 3, 10 * 1024 ** 3 + 1]) {
+      const error = validateUpload({ ...valid, file: { name: `data.${extension}`, size } }).errors.file;
+      assert.equal(Boolean(error), size === 0 || size > 10 * 1024 ** 3, `${extension}: ${size}`);
+      if (size > 10 * 1024 ** 3) assert.match(error, /10 GiB/);
+    }
+});
+
+test("profile limits reject 513 MiB while the platform permits it", () => {
+  const state = { ...valid, file: { name: "data.jsonl", size: 513 * 1024 ** 2 } };
+  assert.ok(validateUpload(state, 512 * 1024 ** 2).errors.file);
+  assert.equal(validateUpload(state, 10 * 1024 ** 3).errors.file, undefined);
 });
 
 test("the declaration uses the same spelling as the license field", () => {
@@ -74,4 +83,14 @@ test("a license is required, since records without one are all rejected", () => 
   for (const license of ["", "   "])
     assert.match(validateUpload({ ...valid, license }).errors.license, /license/i, JSON.stringify(license));
   assert.equal(validateUpload({ ...valid, license: "CC-BY-4.0" }).errors.license, undefined);
+});
+
+
+test("catalog limits have a conservative fallback and a platform ceiling", () => {
+  for (const value of [undefined, null, NaN, Infinity, 0, -1, 1.5, "10737418240"])
+    assert.equal(uploadLimit(value), 512 * 1024 ** 2);
+  for (const value of [512 * 1024 ** 2, 10 * 1024 ** 3]) assert.equal(uploadLimit(value), value);
+  assert.equal(uploadLimit(10 * 1024 ** 3 + 1), 10 * 1024 ** 3);
+  assert.equal(MAX_UPLOAD_LABEL, "10 GiB");
+  assert.ok(validateUpload({ ...valid, file: { name: "x.jsonl", size: 10 * 1024 ** 3 + 1 } }, 20 * 1024 ** 3).errors.file);
 });

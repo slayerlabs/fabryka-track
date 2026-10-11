@@ -146,3 +146,34 @@ test("Parquet deeper checks are deferred while its magic check still gates succe
     assert.equal(report.findings.find((finding) => finding.rule === 'depth')?.deferred, true);
   }
 });
+
+
+test("profile size refusal happens before reading; the large profile accepts the same Parquet declaration", async () => {
+  let reads = 0;
+  const file = { name: "large.parquet", size: 513 * 1024 ** 2,
+    slice() { reads++; return new Blob(["PAR1"]); } };
+  const refused = await precheckFile(file, undefined, 512 * 1024 ** 2);
+  assert.equal(refused.passed, false);
+  assert.match(refused.findings[0].detail, /512 MiB/);
+  assert.equal(reads, 0);
+  assert.equal((await precheckFile(file, undefined, 10 * 1024 ** 3)).passed, true);
+  assert.equal(reads, 2);
+});
+
+test("a declared 10 GiB JSONL starts bounded real reads and aborts after three chunks", async () => {
+  const controller = new AbortController();
+  const reads = [];
+  const file = { name: "large.jsonl", size: 10 * 1024 ** 3,
+    slice(start, end) {
+      reads.push([start, end]);
+      return { async arrayBuffer() {
+        const bytes = new Uint8Array(end - start).fill(32);
+        bytes.set(encoder.encode(good + "\n"));
+        if (reads.length === 3) controller.abort();
+        return bytes.buffer;
+      } };
+    } };
+  await assert.rejects(precheckFile(file, controller.signal), { name: "AbortError" });
+  assert.equal(reads.length, 3);
+  assert.ok(reads.every(([start, end]) => end - start <= CHUNK));
+});

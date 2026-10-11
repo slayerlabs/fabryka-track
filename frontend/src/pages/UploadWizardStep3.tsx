@@ -66,7 +66,7 @@ function Timeline({ index, terminal }: { index: number; terminal: boolean }) {
   );
 }
 
-export function StepRun({ pipeline, jobId }: { pipeline: string; jobId: string | null }) {
+export function StepRun({ pipeline, jobId, maxBytes }: { pipeline: string; jobId: string | null; maxBytes: number }) {
   const draft = useContext(WizardDraftContext);
   const navigate = useNavigate();
   const [job, setJob] = useState<UploadJob | null>(null);
@@ -103,9 +103,10 @@ export function StepRun({ pipeline, jobId }: { pipeline: string; jobId: string |
     declaration: draft.draft.declaration,
   };
   const formState: UploadFormState = { pipeline, file, ...meta };
-  const checked = validateUpload(formState);
+  const checked = validateUpload(formState, maxBytes);
   const gated =
-    !file || Object.keys(checked.errors).length > 0 || precheckFor(file, draft.draft.precheck)?.passed !== true;
+    !file || Object.keys(checked.errors).length > 0 || precheckFor(file, draft.draft.precheck)?.passed !== true ||
+    draft.draft.precheckScope?.pipeline !== pipeline || draft.draft.precheckScope.maxBytes !== maxBytes;
 
   useEffect(() => {
     setJob(null);
