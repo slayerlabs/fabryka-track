@@ -1,0 +1,107 @@
+export const REJECT_LABELS: Record<string, string> = {
+  unparseable: "unparseable line",
+  not_an_object: "not a JSON object",
+  missing_id: "missing id",
+  invalid_id: "invalid id",
+  duplicate_id: "duplicate id",
+  invalid_text: "invalid text",
+  empty_text: "empty text",
+  source_mismatch: "source mismatch",
+  invalid_field_type: "invalid field type",
+  invalid_date: "invalid date",
+  missing_license: "missing license",
+  missing_source_ref: "missing source_ref",
+  source_ref_unresolved: "unresolved source_ref",
+};
+
+export const STAGE_LABELS: Record<string, string> = {
+  quality_labels: "Too short",
+  upload_dedup: "Near or exact duplicates",
+  masked_exact_dedup: "Duplicates after masking",
+};
+
+export const PII_LABELS: Record<string, string> = {
+  phone: "Phone numbers",
+  pii: "Other personal data (PESEL, email…)",
+  person: "Person names",
+};
+
+export const STAT_LABELS: Record<string, string> = {
+  rows: "Rows",
+  token_count: "Tokens",
+  exact_duplicate_pairs: "Exact duplicate pairs",
+  near_duplicate_pairs: "Near-duplicate pairs",
+  masking_only_duplicate_pairs: "Duplicate pairs created by masking",
+  residual_pii_records: "Records with remaining personal data",
+  license_review_records: "Records needing license review",
+};
+
+export const CHECK_LABELS: Record<string, string> = {
+  schema: "Result schema",
+  record: "Record format",
+  token_count: "Token count",
+  record_balance: "Record balance",
+  rejection_share: "Share of rejected records",
+  exact_duplicate: "Exact duplicates",
+  near_duplicate: "Near duplicates",
+  residual_pii: "Remaining personal data",
+  empty_result: "Non-empty result",
+  metadata_conflict: "Metadata conflicts",
+  attribution_coverage: "Attribution coverage",
+  masking_only_duplicate: "Duplicates created by masking",
+  license_needs_legal_review: "Licenses needing legal review",
+};
+
+export const COPY = {
+  steps: [
+    { key: "mode", title: "Choose a mode" },
+    { key: "file", title: "File and details" },
+    { key: "progress", title: "Progress" },
+    { key: "results", title: "Results" },
+  ],
+  timeline: {
+    hashing: "Reading the file",
+    parts: "Uploading",
+    confirming: "Confirming upload",
+    validating: "Checking the first records",
+    queued: "Waiting for a worker",
+    running: "Processing",
+    finalizing: "Publishing results",
+  },
+  recipeStages: ["Validate records", "Remove too-short records", "Remove duplicates", "Mask personal data", "Remove duplicates created by masking", "Audit the result"],
+  verdicts: {
+    passed: "Passed",
+    failed_qa: "Failed quality checks",
+  },
+  cards: {
+    verdict: "Verdict",
+    rows: "Records in → out",
+    checks: "Required checks passed",
+    tokens: "Tokens",
+  },
+  charts: {
+    funnel: "What happened to the records",
+    checks: "Quality checks",
+    pii: "Personal data masked",
+  },
+  downloads: {
+    result: "Download result",
+    diagnostic: "Download diagnostic result",
+    attribution: "Download attribution",
+    noAttribution: "This upload has no attribution file.",
+  },
+  messages: {
+    publishing: "Publishing results. This usually takes a moment.",
+    blocked: "Fix the problems below before uploading.",
+    warningsOnly: "These records would be rejected, but the rest of the file can still be processed.",
+    approximateRows: "approximately",
+    noReport: "This upload has no report.",
+  },
+  labels: {
+    reject: REJECT_LABELS,
+    stage: STAGE_LABELS,
+    pii: PII_LABELS,
+    stat: STAT_LABELS,
+    check: CHECK_LABELS,
+  },
+};

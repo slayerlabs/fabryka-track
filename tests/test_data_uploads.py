@@ -183,6 +183,7 @@ CONFIRM = {"parts": [{"part_number": 1, "etag": '"abc"'}, {"part_number": 2, "et
     ("get", f"/api/uploads/{JOB_ID}", None, ("GET", f"/jobs/v1/jobs/{JOB_ID}", "", None, None)),
     ("get", f"/api/uploads/{JOB_ID}/report", None, ("GET", f"/jobs/v1/jobs/{JOB_ID}/report", "", None, None)),
     ("get", f"/api/uploads/{JOB_ID}/result", None, ("GET", f"/jobs/v1/jobs/{JOB_ID}/result", "", None, None)),
+    ("get", f"/api/uploads/{JOB_ID}/attribution", None, ("GET", f"/jobs/v1/jobs/{JOB_ID}/attribution", "", None, None)),
     ("get", f"/api/uploads/{JOB_ID}/result?diagnostic=true", None,
      ("GET", f"/jobs/v1/jobs/{JOB_ID}/result", "diagnostic=true", None, None)),
     ("get", "/api/uploads?cursor=abc", None, ("GET", "/jobs/v1/jobs", "limit=20&cursor=abc", None, None)),
@@ -197,6 +198,7 @@ def test_routes_forward_to_matching_controller_calls(client, controller, method,
 
 
 def test_job_id_must_be_a_uuid(client, controller):
+    assert client.get("/api/uploads/not-a-uuid/attribution").status_code == 422
     assert client.get("/api/uploads/..%2F..%2Fadmin").status_code in (404, 422)
     assert client.get("/api/uploads/not-a-job/report").status_code == 422
     assert controller.requests == []
@@ -362,4 +364,110 @@ def test_pipelines_list_is_guarded_like_the_other_upload_routes(client, controll
     assert client.get("/api/uploads/pipelines").status_code == 403
     client.cookies.clear()
     assert client.get("/api/uploads/pipelines").status_code == 401
+    assert len(controller.requests) == 1
+
+
+GIB = 1024 ** 3
+MIB = 1024 ** 2
+
+
+def sized_body(encoded_bytes):
+    body = create_body()
+    body["input"] = {**body["input"], "encoded_bytes": encoded_bytes}
+    return body
+
+
+def confirm_body(encoded_bytes):
+    return {"action_key": ACTION_KEY, "parts": [{"part_number": 1, "etag": '"abc"'}],
+            "encoded_bytes": encoded_bytes, "input_sha256": "a" * 64}
+
+
+@pytest.mark.parametrize("encoded_bytes", [513 * MIB, 10 * GIB])
+def test_create_and_confirm_accept_sizes_up_to_the_wire_maximum(client, controller, encoded_bytes):
+    assert client.post("/api/uploads", json=sized_body(encoded_bytes)).status_code == 201
+    assert client.post(f"/api/uploads/{JOB_ID}/confirm", json=confirm_body(encoded_bytes)).status_code == 200
+    assert json.loads(controller.requests[0].content)["input"]["encoded_bytes"] == encoded_bytes
+    assert json.loads(controller.requests[1].content)["encoded_bytes"] == encoded_bytes
+
+
+@pytest.mark.parametrize("encoded_bytes", [0, 10 * GIB + 1])
+def test_sizes_outside_the_wire_range_never_reach_the_controller(client, controller, encoded_bytes):
+    assert client.post("/api/uploads", json=sized_body(encoded_bytes)).status_code == 422
+    assert client.post(f"/api/uploads/{JOB_ID}/confirm", json=confirm_body(encoded_bytes)).status_code == 422
+    assert controller.requests == []
+
+
+def pipelines_reply(max_encoded_bytes, create=controller_error(422, "invalid_request")):
+    def reply(request):
+        if request.url.path == "/jobs/v1/pipelines":
+            return httpx.Response(200, json={"protocol": "job-v1", "pipelines": [
+                {"pipeline": "dynaword-upload", "title": "Dynaword", "description": "", "file_requirements": "",
+                 "parameters": {}, "max_encoded_bytes": max_encoded_bytes}]})
+        return create(request)
+    return reply
+
+
+def test_a_file_above_the_profile_limit_gets_a_readable_size_message(client, controller):
+    controller.reply = pipelines_reply(512 * MIB)
+    response = client.post("/api/uploads", json=sized_body(513 * MIB))
+    assert response.status_code == 422
+    assert response.json() == {
+        "detail": "The file is 513.0 MiB, which is larger than the 512.0 MiB this mode accepts.",
+        "code": "file_too_large", "request_id": REQUEST_ID}
+    assert [r.url.path for r in controller.requests] == ["/jobs/v1/jobs", "/jobs/v1/pipelines"]
+
+
+def test_a_refused_create_within_the_profile_limit_keeps_the_generic_message(client, controller):
+    controller.reply = pipelines_reply(10 * GIB)
+    response = client.post("/api/uploads", json=sized_body(513 * MIB))
+    assert response.json() == {"detail": data_uploads.MESSAGES["invalid_request"], "code": "invalid_request",
+                               "request_id": REQUEST_ID}
+
+
+def test_a_refused_create_when_the_limit_cannot_be_looked_up_keeps_the_generic_message(client, controller):
+    controller.reply = controller_error(422, "invalid_request")
+    response = client.post("/api/uploads", json=sized_body(513 * MIB))
+    assert response.json()["code"] == "invalid_request"
+    assert response.json()["detail"] == data_uploads.MESSAGES["invalid_request"]
+
+
+def test_other_create_errors_do_not_trigger_the_limit_lookup(client, controller):
+    controller.reply = controller_error(429, "quota_exceeded")
+    assert client.post("/api/uploads", json=sized_body(513 * MIB)).status_code == 429
+    assert len(controller.requests) == 1
+
+
+def test_attribution_returns_the_controller_grant(client, controller):
+    grant = {"protocol": "job-v1", "url": "https://files.test/attribution.jsonl", "diagnostic": False}
+    controller.reply = lambda request: httpx.Response(200, json=grant)
+    response = client.get(f"/api/uploads/{JOB_ID}/attribution")
+    assert (response.status_code, response.json()) == (200, grant)
+
+
+def test_a_missing_attribution_file_has_its_own_readable_state(client, controller):
+    controller.reply = controller_error(404, "not_found")
+    response = client.get(f"/api/uploads/{JOB_ID}/attribution")
+    assert response.status_code == 404
+    assert response.json() == {"detail": "This upload has no attribution file.", "code": "no_attribution",
+                               "request_id": REQUEST_ID}
+
+
+@pytest.mark.parametrize("status,code", [(409, "result_pending"), (409, "no_result"), (410, "expired")])
+def test_other_attribution_errors_use_the_shared_messages(client, controller, status, code):
+    controller.reply = controller_error(status, code)
+    response = client.get(f"/api/uploads/{JOB_ID}/attribution")
+    assert (response.status_code, response.json()["detail"]) == (status, data_uploads.MESSAGES[code])
+
+
+def test_attribution_is_guarded_like_the_other_upload_routes(client, controller):
+    controller.reply = controller_error(401, "unauthorized")
+    response = client.get(f"/api/uploads/{JOB_ID}/attribution")
+    assert (response.status_code, response.json()["detail"]) == (502, data_uploads.UNAVAILABLE)
+    controller.reply = None
+    sent = controller.requests[0]
+    assert sent.headers["x-pipeline-user"] == "fixture-tester"
+    drop_hf_identity()
+    assert client.get(f"/api/uploads/{JOB_ID}/attribution").status_code == 403
+    client.cookies.clear()
+    assert client.get(f"/api/uploads/{JOB_ID}/attribution").status_code == 401
     assert len(controller.requests) == 1

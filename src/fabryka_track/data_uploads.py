@@ -26,7 +26,8 @@ SUBJECT = re.compile(r"[A-Za-z0-9_-]{1,64}")
 USERNAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,95}")
 UNAVAILABLE = "Data uploads are temporarily unavailable. Try again shortly."
 REFUSED = "The data pipeline refused this request."
-MAX_BYTES = 512 * 1024 * 1024
+MAX_BYTES = 10 * 1024 ** 3
+NO_ATTRIBUTION = "This upload has no attribution file."
 ACTION_KEY = r"^[!-~]{16,128}$"
 MESSAGES = {
     "user_limit_reached": "You already have an upload in progress. Wait for it to finish or cancel it.",
@@ -202,12 +203,43 @@ def list_pipelines(caller=Depends(uploader)):
     return forward(caller, "GET", "/pipelines")
 
 
+def size_label(n):
+    for unit in ("KiB", "MiB"):
+        n /= 1024
+        if n < 1024:
+            break
+    else:
+        n /= 1024
+        unit = "GiB"
+    return f"{n:.1f} {unit}"
+
+
+def oversize_error(caller, body, refusal):
+    # The controller answers a too-large file with the same bare invalid_request as any other bad create.
+    try:
+        _, listing = call(caller, "GET", "/pipelines")
+    except ControllerError:
+        return refusal
+    limit = next((entry.get("max_encoded_bytes") for entry in listing.get("pipelines", [])
+                  if isinstance(entry, dict) and entry.get("pipeline") == body.pipeline), None)
+    size = body.input.encoded_bytes
+    if type(limit) is not int or size <= limit:
+        return refusal
+    return ControllerError(422, "file_too_large", f"The file is {size_label(size)}, which is larger than the "
+                           f"{size_label(limit)} this mode accepts.", refusal.request_id)
+
+
 @router.post("")
 def create_upload(body: CreateUpload, caller=Depends(uploader)):
     payload = {"protocol": PROTOCOL, "pipeline": body.pipeline, "input": body.input.model_dump(),
                "parameters": body.parameters.model_dump(exclude_none=True),
                "declaration": {"version": body.declaration.version, "accepted": True}}
-    return forward(caller, "POST", "/jobs", json=payload, action_key=body.action_key)
+    try:
+        return forward(caller, "POST", "/jobs", json=payload, action_key=body.action_key)
+    except ControllerError as error:
+        if error.status == 422 and error.code == "invalid_request":
+            raise oversize_error(caller, body, error)
+        raise
 
 
 @router.post("/{job_id}/parts")
@@ -239,3 +271,13 @@ def upload_report(job_id: UUID, caller=Depends(uploader)):
 @router.get("/{job_id}/result")
 def upload_result(job_id: UUID, diagnostic: bool = False, caller=Depends(uploader)):
     return forward(caller, "GET", f"/jobs/{job_id}/result", params={"diagnostic": "true"} if diagnostic else None)
+
+
+@router.get("/{job_id}/attribution")
+def upload_attribution(job_id: UUID, caller=Depends(uploader)):
+    try:
+        return forward(caller, "GET", f"/jobs/{job_id}/attribution")
+    except ControllerError as error:
+        if error.status == 404:
+            raise ControllerError(404, "no_attribution", NO_ATTRIBUTION, error.request_id)
+        raise

@@ -46,7 +46,7 @@ export interface UploadReport {
     rows_in?: number | null;
     rows_out?: number | null;
     counters?: { elapsed_ms?: number | null; input_bytes?: number | null; output_bytes?: number | null };
-    qa?: { checks?: UploadCheck[]; stats?: Record<string, number | null> };
+    qa?: { checks?: UploadCheck[]; stats?: Record<string, number | null> } | null;
     report?: {
       funnel?: {
         rows_in?: number | null;
@@ -103,3 +103,5 @@ export const browserUploaderDeps = (): UploaderDeps => ({
   createHash: () => new Sha256(),
   newKey: () => crypto.randomUUID(),
 });
+
+export const attributionGrant = (id: string) => request<{ url: string }>(`${job(id)}/attribution`);

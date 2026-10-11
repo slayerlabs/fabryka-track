@@ -79,16 +79,11 @@ test("a job whose every record was refused explains the usual causes", async () 
 const rejected = (rejection) => ({ processing_state: "rejected", failure_code: "records_invalid", client_phase: "closed", rejection });
 const TAIL = " No record in the first part of the file passed, so the upload was stopped before processing.";
 
-test("each pre-check rule has a plain message", () => {
+test("a rejected job shows the specific sentence for its reason", () => {
   const cases = [
-    [{ position: 3, rule: "json_object", field: null }, "Record 3 is not a JSON object."],
-    [{ position: 3, rule: "required", field: "text" }, "Record 3 has no text."],
-    [{ position: 3, rule: "non_blank", field: "text" }, "Record 3 has a blank text."],
-    [{ position: 3, rule: "field_or_parameter", field: "license" }, "Record 3 has no license. Set License in the form or add license to every record."],
-    [{ position: 3, rule: "field_or_parameter", field: "author" }, "Record 3 has no author. Set Author in the form or add author to every record."],
-    [{ position: 3, rule: "required_when_parameter", field: "source_ref" }, "Record 3 has no source_ref, which every record needs when 'Records carry their own provenance' is checked."],
-    [{ position: 3, rule: "override_needs_field", field: "license" }, "Record 3 has its own license but no source_ref; a license that differs from the form's License needs one. Add source_ref to the record, or leave license out of the record to use the form's."],
-    [{ position: 3, rule: "override_needs_field", field: "author" }, "Record 3 has its own author but no source_ref; a author that differs from the form's Author needs one. Add source_ref to the record, or leave author out of the record to use the form's."],
+    [{ position: 3, rule: "not_an_object", field: null }, "Record 3 is not a JSON object."],
+    [{ position: 3, rule: "missing_id", field: "id" }, "Record 3 has no id."],
+    [{ position: 3, rule: "empty_text", field: "text" }, "Record 3 has a blank text."],
     [{ position: 0, rule: "parquet_column", field: "text" }, "The Parquet file has no text column."],
   ];
   for (const [rejection, message] of cases) assert.equal(rejectionMessage(rejected(rejection)), message + TAIL);
