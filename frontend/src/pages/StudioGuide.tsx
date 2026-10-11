@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
+import { PageTop } from "../PageTop";
 import { learningExamples } from "./StudioData";
 
 interface GuidePlotly {
@@ -97,15 +98,17 @@ function ExampleChart({
 export function GuidePage() {
   const [filter, setFilter] = useState("all");
   return (
-    <section lang="en" className="learning-guide">
-      <div className="intro">
-        <div className="eyebrow">Example library</div>
-        <h1>How to read model training</h1>
-        <p className="muted">
-          The lowest training loss does not always mean the best model. Compare
-          it with validation and inspect the data.
-        </p>
-      </div>
+    <>
+      <PageTop
+        eyebrow="Example library"
+        description={
+          <p>
+            The lowest training loss does not always mean the best model. Compare
+            it with validation and inspect the data.
+          </p>
+        }
+      />
+      <section lang="en" className="learning-guide">
       <details
         className="panel guide-notes metric-help"
         open
@@ -263,5 +266,6 @@ export function GuidePage() {
         </p>
       </section>
     </section>
+    </>
   );
 }

@@ -13,6 +13,7 @@ import {
   validationBests,
 } from "./FocusedMetrics";
 import { Icon } from "../Icons";
+import { PageTop } from "../PageTop";
 
 type QueueItem = {
   id: string;
@@ -317,16 +318,9 @@ export function RunsPage() {
   );
   const forkRun = forkRunId ? view.byId.get(forkRunId) : undefined;
   return (
-    <div className="runs-dashboard focused-dashboard">
-      <header className="runs-header">
-        <div>
-          <h1>Focused runs</h1>
-          <p className="runs-subtitle">
-            One baseline, deliberate forks, measurable progress. Target:
-            sub-150M parameters and lower WikiText-2 BYTE_PPL.
-          </p>
-        </div>
-      </header>
+    <>
+      <PageTop description="One baseline, deliberate forks, measurable progress. Target: sub-150M parameters and lower WikiText-2 BYTE_PPL." />
+      <div className="runs-dashboard focused-dashboard">
       <RunError
         error={dashboard.error}
         retry={() => void dashboard.refetch()}
@@ -930,6 +924,7 @@ export function RunsPage() {
           onClose={() => setForkRunId(null)}
         />
       )}
-    </div>
+      </div>
+    </>
   );
 }

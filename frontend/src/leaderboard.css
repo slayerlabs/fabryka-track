@@ -8,30 +8,12 @@
   max-width: 1400px;
   margin: auto;
 }
-.leaderboard-page .lb-intro {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-  margin-bottom: 32px;
-}
 .lb-eyebrow {
   display: block;
   font: 11px var(--mono);
   text-transform: uppercase;
   letter-spacing: 1.3px;
   color: var(--lb-muted);
-}
-.leaderboard-page h1 {
-  font: 500 clamp(28px, 3vw, 40px)/1.15 var(--sans);
-  letter-spacing: -1.5px;
-  margin: 12px 0;
-}
-.lb-intro p {
-  color: var(--lb-muted);
-  margin: 0;
-  max-width: 620px;
-  font-size: 14px;
 }
 .leaderboard-page .secondary {
   white-space: nowrap;
@@ -482,9 +464,6 @@
   font-size: 12px;
 }
 @media (max-width: 800px) {
-  .lb-intro {
-    flex-wrap: wrap;
-  }
   .lb-stats > div {
     padding: 15px 12px;
   }

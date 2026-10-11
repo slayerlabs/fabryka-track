@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useGetIdentity } from "@refinedev/core";
 import { Link } from "react-router";
+import { PageTop } from "../PageTop";
 import type { Identity } from "../provider";
 import { useDashboard } from "./DashboardData";
 import "../overview.css";
@@ -20,8 +21,13 @@ export function OverviewPage({ landing = false }: { landing?: boolean }) {
   const stage = stages[selected];
   const gpu = dashboard.data?.gpu_memory;
   const focused = dashboard.data?.runs.filter(run => run.focused) || [];
-  return <div className="lab-overview">
-    {!landing && <div className="lab-heading"><div><p className="lab-eyebrow">FABRYKA TRACK / PEOPLE · AGENTS · EXPERIMENTS</p><h1>People and agents.<br />One experiment workspace.</h1><p>Your agents run experiments. Track keeps the metrics, logs, artifacts and progress together so you can review the evidence and decide what happens next. Connect through the API or Python SDK.</p></div><Link className="lab-primary" to="/goals">Connect my agent ↗</Link></div>}
+  return <>
+    {!landing && <PageTop
+      eyebrow="FABRYKA TRACK / PEOPLE · AGENTS · EXPERIMENTS"
+      description="Your agents run experiments. Track keeps the metrics, logs, artifacts and progress together so you can review the evidence and decide what happens next. Connect through the API or Python SDK."
+      actions={<Link className="lab-primary" to="/goals">Connect my agent ↗</Link>}
+    />}
+    <div className={`lab-overview${landing ? " lab-overview-landing" : ""}`}>
     <section className="lab-integrations" aria-labelledby="integrations-title">
       <div className="lab-section-title"><h2 id="integrations-title">Connect your code. Bring your agent.</h2><a href="/docs">REST API reference ↗</a></div>
       <div className="lab-integration-grid"><SDKQuickstart />
@@ -36,5 +42,6 @@ export function OverviewPage({ landing = false }: { landing?: boolean }) {
     </section>
     <section className="lab-bottom" aria-label="Research practices"><article><p className="lab-eyebrow">COMPUTE WITH CONTEXT</p><h2>Make each run count.</h2><p>Inspect saved checkpoints before scheduling more work. Compare quality alongside reported GPU time and throughput in the run workspace.</p><Link to="/checkpoints">Browse checkpoints →</Link></article><article><p className="lab-eyebrow">EVIDENCE YOU CAN FOLLOW</p><h2>Keep context for the next decision.</h2><p>Keep goals, progress updates and experiment links together. Review what your agent found before deciding what to try next. Use a defined evaluation protocol to interpret each score.</p><div><Link to="/benchmark-results">Published results ↗</Link><Link to="/goals">Agent goals ↗</Link></div></article></section>
     <p className="lab-footnote">Prefer a guided browser experiment? <Link to="/new">Open Training studio →</Link> The studio is an optional workflow; use API, SDK and agents for your existing training setup.</p>
-  </div>;
+    </div>
+  </>;
 }

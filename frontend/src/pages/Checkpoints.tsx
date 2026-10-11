@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router";
+import { PageTop } from "../PageTop";
 import {
   useDashboard,
   type DashboardCheckpoint,
@@ -191,20 +192,12 @@ export function CheckpointsPage() {
     await dashboard.refetch();
   }
   return (
-    <div className="dashboard-page checkpoints-page">
-      <header className="dashboard-heading">
-        <div>
-          <h1>Checkpoint monitoring</h1>
-          <p>
-            Chronology, pinned evaluation evidence and reviewed weights-only
-            forks. Full validation guides iteration; test evidence stays
-            separate.
-          </p>
-        </div>
-        <Link className="runs-button runs-button-secondary" to="/runs">
-          Focused runs
-        </Link>
-      </header>
+    <>
+      <PageTop
+        description="Chronology, pinned evaluation evidence and reviewed weights-only forks. Full validation guides iteration; test evidence stays separate."
+        actions={<Link className="runs-button runs-button-secondary" to="/runs">Focused runs</Link>}
+      />
+      <div className="dashboard-page checkpoints-page">
       <RunError
         error={dashboard.error}
         retry={() => void dashboard.refetch()}
@@ -739,6 +732,7 @@ export function CheckpointsPage() {
           onConfirm={() => void evaluate(review, "test")}
         />
       )}
-    </div>
+      </div>
+    </>
   );
 }

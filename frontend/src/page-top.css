@@ -1,0 +1,60 @@
+.shell-main .page-top {
+  display: block;
+  height: auto;
+  min-height: 0;
+  padding: 0 0 26px;
+  margin: 0 0 30px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: none;
+  color: var(--ink);
+}
+
+.page-top .page-top-breadcrumbs {
+  display: block;
+  margin-bottom: 18px;
+}
+
+.page-top-breadcrumbs ol {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font: 500 13px/1.5 var(--sans);
+  color: var(--muted);
+}
+
+.page-top-breadcrumbs li { display: inline-flex; align-items: center; min-width: 0; overflow-wrap: anywhere; }
+.page-top-breadcrumbs a {
+  display: inline;
+  padding: 0;
+  color: var(--accent);
+  text-decoration: none;
+}
+.page-top-breadcrumbs a:hover { text-decoration: underline; }
+.page-top-breadcrumbs a:focus-visible, .page-top-actions a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.page-top-separator { margin: 0 10px; color: var(--muted); }
+
+.page-top-content { display: flex; align-items: end; justify-content: space-between; gap: 24px; }
+.page-top-copy { min-width: 0; }
+.page-top-eyebrow { margin-bottom: 8px; font: 600 12px/1.4 var(--sans); color: var(--muted); }
+.page-top h1 {
+  margin: 0;
+  font: 600 clamp(29px, 3vw, 42px)/1.13 var(--sans);
+  letter-spacing: -0.035em;
+  overflow-wrap: anywhere;
+}
+.page-top-description { max-width: 72ch; margin-top: 12px; color: var(--muted); line-height: 1.6; }
+.page-top-description p { margin: 0; }
+.page-top-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; flex-shrink: 0; }
+
+@media (max-width: 1100px) {
+  .page-top-content { display: block; }
+  .page-top-actions { margin-top: 18px; }
+}

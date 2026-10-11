@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useCustom, useCustomMutation } from "@refinedev/core";
 import { Link, useSearchParams } from "react-router";
+import { PageTop } from "../PageTop";
 
 export interface StudioUser {
   id: string;
@@ -50,9 +51,9 @@ export function HuggingFaceButton({ link = false }: { link?: boolean }) {
 export function LoginPage() {
   const [params] = useSearchParams();
   return (
-    <section className="panel" style={{ maxWidth: 480, margin: "35px auto" }}>
-      <div className="eyebrow">Your workspace</div>
-      <h1>Sign in with Hugging Face</h1>
+    <>
+      <PageTop title="Sign in" ancestors={[{ label: "Home", to: "/" }]} eyebrow="Your workspace" />
+      <section className="panel" style={{ maxWidth: 480, margin: "35px auto" }}>
       <p className="muted">
         Keep datasets and training runs private. Publish selected scores to the
         leaderboard.
@@ -122,7 +123,8 @@ export function LoginPage() {
         <Link to="/agents">create an independent account here</Link>.
       </p>
       <Link to="/leaderboard">Browse the public leaderboard →</Link>
-    </section>
+      </section>
+    </>
   );
 }
 
@@ -167,19 +169,29 @@ export function AccountPage() {
       setBusy(false);
     }
   }
-  if (query.isLoading) return <p role="status">Loading account…</p>;
+  if (query.isLoading)
+    return (
+      <>
+        <PageTop />
+        <p role="status">Loading account…</p>
+      </>
+    );
   if (query.error)
     return (
-      <p className="error" role="alert">
-        {query.error.message}
-      </p>
+      <>
+        <PageTop />
+        <p className="error" role="alert">
+          {query.error.message}
+        </p>
+      </>
     );
   const user = query.data?.data.user;
   if (!user) return <LoginPage />;
   return (
-    <section className="panel" style={{ maxWidth: 600, margin: "30px auto" }}>
-      <div className="eyebrow">Account</div>
-      <h1>{user.username}</h1>
+    <>
+      <PageTop />
+      <section className="panel" style={{ maxWidth: 600, margin: "30px auto" }}>
+      <p>Signed in as <strong>{user.username}</strong>.</p>
       {error && (
         <p className="error" role="alert">
           {error}
@@ -264,6 +276,7 @@ export function AccountPage() {
           </p>
         </div>
       )}
-    </section>
+      </section>
+    </>
   );
 }

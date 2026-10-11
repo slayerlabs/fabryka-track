@@ -29,6 +29,7 @@ import { CheckpointsPage } from "./pages/Checkpoints";
 import { useDashboard } from "./pages/DashboardData";
 import { Icon, type IconName } from "./Icons";
 import { OverviewPage } from "./pages/Overview";
+import { PageTop } from "./PageTop";
 import { LandingPage } from "./pages/Landing";
 
 const navigation: { label: string; links: [string, string, IconName][] }[] = [
@@ -61,23 +62,8 @@ const navigation: { label: string; links: [string, string, IconName][] }[] = [
 export function App() {
   const location = useLocation();
   useEffect(() => {
-    const name =
-      navigation
-        .flatMap((group) => group.links)
-        .find(([path]) => path === location.pathname)?.[1] ||
-      (location.pathname.startsWith("/run/")
-        ? "Run dashboard"
-        : location.pathname.startsWith("/uploads")
-          ? "Data uploads"
-          : location.pathname.startsWith("/compare/")
-            ? "Compare runs"
-            : location.pathname.startsWith("/goals/")
-              ? "250M English base model"
-              : "Account");
-    document.title =
-      location.pathname === "/"
-        ? "Serious experiment tracking · Fabryka Track"
-        : `${name} · Fabryka Track`;
+    if (location.pathname === "/")
+      document.title = "Serious experiment tracking · Fabryka Track";
     if (location.hash)
       requestAnimationFrame(() =>
         document
@@ -264,10 +250,12 @@ function ApplicationShell() {
             <Route
               path="*"
               element={
-                <section className="panel">
-                  <h1>Page not found</h1>
-                  <Link to="/goals">Return to goals</Link>
-                </section>
+                <>
+                  <PageTop />
+                  <section className="panel">
+                    <Link to="/goals">Return to goals</Link>
+                  </section>
+                </>
               }
             />
           </Routes>

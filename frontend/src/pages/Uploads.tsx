@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useGetIdentity } from "@refinedev/core";
 import { Link, useNavigate, useParams } from "react-router";
+import { PageTop } from "../PageTop";
 import {
   DECLARATION_TEXT,
   MAX_UPLOAD_LABEL,
@@ -315,23 +316,32 @@ function NewUploadForm({ pipelines }: { pipelines: Pipelines }) {
 
 export function UploadsPage() {
   const identity = useGetIdentity<{ huggingface_username?: string | null } | null>();
-  if (identity.isLoading) return <p className="muted">Loading…</p>;
-  if (identity.error)
-    return (
-      <p className="error" role="alert">
-        {message(identity.error)}
-      </p>
-    );
-  if (!identity.data?.huggingface_username)
-    return (
-      <section className="panel">
-        <div className="eyebrow">Data pipeline</div>
-        <h1>Data uploads</h1>
-        <p className="notice">Sign in with Hugging Face to upload data.</p>
-        <HuggingFaceButton link />
-      </section>
-    );
-  return <UploadsWorkspace />;
+  return (
+    <>
+      <PageTop
+        eyebrow="Data pipeline"
+        description={
+          !identity.isLoading && !identity.error && identity.data?.huggingface_username
+            ? "Send a Dynaword file to the data pipeline, follow its validation and download the report and result."
+            : undefined
+        }
+      />
+      {identity.isLoading ? (
+        <p className="muted">Loading…</p>
+      ) : identity.error ? (
+        <p className="error" role="alert">
+          {message(identity.error)}
+        </p>
+      ) : !identity.data?.huggingface_username ? (
+        <section className="panel">
+          <p className="notice">Sign in with Hugging Face to upload data.</p>
+          <HuggingFaceButton link />
+        </section>
+      ) : (
+        <UploadsWorkspace />
+      )}
+    </>
+  );
 }
 
 function UploadsWorkspace() {
@@ -385,14 +395,6 @@ function UploadsWorkspace() {
 
   return (
     <>
-      <section className="panel">
-        <div className="eyebrow">Data pipeline</div>
-        <h1>Data uploads</h1>
-        <p className="muted">
-          Send a Dynaword file to the data pipeline, follow its validation and download the
-          report and result.
-        </p>
-      </section>
       <NewUploadForm pipelines={pipelines} />
       <section className="panel">
         <h2>Your uploads</h2>
@@ -558,6 +560,10 @@ function ResultDownload({ id, diagnosticFirst }: { id: string; diagnosticFirst: 
 
 export function UploadDetailPage() {
   const { id = "" } = useParams();
+  return <UploadDetail key={id} id={id} />;
+}
+
+function UploadDetail({ id }: { id: string }) {
   const [job, setJob] = useState<UploadJob | null>(null);
   const [error, setError] = useState("");
   const [cancelling, setCancelling] = useState(false);
@@ -601,9 +607,11 @@ export function UploadDetailPage() {
 
   return (
     <>
+      <PageTop
+        title={`Upload ${id.slice(0, 8)}`}
+        ancestors={[{ label: "Home", to: "/" }, { label: "Data uploads", to: "/uploads" }]}
+      />
       <section className="panel">
-        <Link to="/uploads">← Data uploads</Link>
-        <h1>Upload {id.slice(0, 8)}</h1>
         {error && (
           <p className="error" role="alert">
             {error}

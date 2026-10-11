@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router";
+import { PageTop } from "../PageTop";
 import { RunChart, palette } from "./RunChart";
 import {
   activeRun,
@@ -43,22 +44,16 @@ function Comparison({ ids, metric }: { ids: string[]; metric: string | null }) {
   );
   const configKeys = ["model", "batch_size", "learning_rate", "seed"];
   return (
-    <div className="compare-view">
-      <div className="compare-heading">
-        <div>
-          <Link to="/runs" className="muted">
-            ← All runs
+    <>
+      <PageTop
+        description={`${runs.length} ${runs.length === 1 ? "run" : "runs"} · ${keys.length} ${keys.length === 1 ? "metric" : "metrics"} · hover across charts to inspect the same step`}
+        actions={
+          <Link to="/runs" className="secondary">
+            Change selection
           </Link>
-          <h1>Compare experiments</h1>
-          <small className="muted">
-            {runs.length} runs · {keys.length} metrics · hover across charts to
-            inspect the same step
-          </small>
-        </div>
-        <Link to="/runs" className="secondary">
-          Change selection
-        </Link>
-      </div>
+        }
+      />
+      <div className="compare-view">
       <RunError error={query.error} retry={() => void query.refetch()} />
       {query.isLoading && <p role="status">Loading comparison…</p>}
       <div className="compare-tabs" role="tablist">
@@ -223,6 +218,7 @@ function Comparison({ ids, metric }: { ids: string[]; metric: string | null }) {
         Validation scores depend on the dataset split. Compare quality only
         across matching evaluation protocols.
       </p>
-    </div>
+      </div>
+    </>
   );
 }

@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { useCustom } from "@refinedev/core";
 import { request } from "../provider";
+import { PageTop } from "../PageTop";
 import {
   comparisonGroups,
   format,
@@ -371,34 +372,37 @@ export function PublishedBenchmarksPage() {
   const state = campaign.query.data?.data;
   return (
     <div className="public-benchmarks">
-      <section className="intro">
-        <div className="eyebrow">Public model evaluations</div>
-        <h1>Published benchmark results</h1>
-        <p className="muted">
-          Recorded evaluations of saved checkpoints from public Track runs.
-          Inspect the scores, the metric used and the evidence behind each
-          result.
-        </p>
-        <div className="actions">
-          <a className="primary" href="#results">
-            Explore results ↓
-          </a>
-          <a className="secondary" href="/benchmarks">
-            Evaluate your model →
-          </a>
-        </div>
-        {Boolean(state?.total) && (
-          <p className="muted" role="status">
-            Full benchmark campaign: {state?.states.finished} / {state?.total}{" "}
-            checkpoints complete · {state?.states.running} running ·{" "}
-            {state?.states.queued} queued
-            {state?.states.failed
-              ? " · " + state.states.failed + " failed"
-              : ""}
-            . Jobs use our existing GPU when it is available.
+      <PageTop
+        eyebrow="Public model evaluations"
+        description={
+          <p>
+            Recorded evaluations of saved checkpoints from public Track runs.
+            Inspect the scores, the metric used and the evidence behind each
+            result.
           </p>
-        )}
-      </section>
+        }
+        actions={
+          <>
+            <a className="primary" href="#results">
+              Explore results ↓
+            </a>
+            <a className="secondary" href="/benchmarks">
+              Evaluate your model →
+            </a>
+          </>
+        }
+      />
+      {Boolean(state?.total) && (
+        <p className="muted" role="status">
+          Full benchmark campaign: {state?.states.finished} / {state?.total}{" "}
+          checkpoints complete · {state?.states.running} running ·{" "}
+          {state?.states.queued} queued
+          {state?.states.failed
+            ? " · " + state.states.failed + " failed"
+            : ""}
+          . Jobs use our existing GPU when it is available.
+        </p>
+      )}
       {reportsQuery.query.isLoading ? (
         <p role="status">Loading published results…</p>
       ) : reportsQuery.query.isError ? (
