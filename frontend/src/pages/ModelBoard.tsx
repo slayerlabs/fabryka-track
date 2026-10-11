@@ -330,7 +330,6 @@ export function ModelBoardPage() {
   return (
     <>
       <PageTop
-        eyebrow="Fabryka research / Model leaderboard"
         description={
           <p>
             Each row is the checkpoint its owner marked as the result, scored

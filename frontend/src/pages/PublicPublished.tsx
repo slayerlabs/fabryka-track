@@ -373,7 +373,6 @@ export function PublishedBenchmarksPage() {
   return (
     <div className="public-benchmarks">
       <PageTop
-        eyebrow="Public model evaluations"
         description={
           <p>
             Recorded evaluations of saved checkpoints from public Track runs.

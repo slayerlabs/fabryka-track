@@ -100,7 +100,6 @@ export function GuidePage() {
   return (
     <>
       <PageTop
-        eyebrow="Example library"
         description={
           <p>
             The lowest training loss does not always mean the best model. Compare

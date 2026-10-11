@@ -52,7 +52,7 @@ export function LoginPage() {
   const [params] = useSearchParams();
   return (
     <>
-      <PageTop title="Sign in" ancestors={[{ label: "Home", to: "/" }]} eyebrow="Your workspace" />
+      <PageTop title="Sign in" ancestors={[{ label: "Home", to: "/" }]} />
       <section className="panel" style={{ maxWidth: 480, margin: "35px auto" }}>
       <p className="muted">
         Keep datasets and training runs private. Publish selected scores to the
