@@ -29,6 +29,7 @@ import { CheckpointsPage } from "./pages/Checkpoints";
 import { useDashboard } from "./pages/DashboardData";
 import { Icon, type IconName } from "./Icons";
 import { OverviewPage } from "./pages/Overview";
+import { BrandLockup } from "./BrandLockup";
 import { PageTop } from "./PageTop";
 import { LandingPage } from "./pages/Landing";
 
@@ -85,11 +86,8 @@ function ApplicationShell() {
     <>
       <div className="app-shell">
         <aside className="sidebar">
-          <Link className="brand" to="/">
-            <span className="brand-mark">f</span>
-            <span className="brand-name">
-              fabryka<span>/ track</span>
-            </span>
+          <Link className="brand" to="/" aria-label="Fabryka Track home">
+            <BrandLockup />
           </Link>
           <nav className="sidebar-nav" aria-label="Main">
             {navigation.map((group) => (
