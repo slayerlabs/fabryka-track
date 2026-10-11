@@ -66,7 +66,7 @@ export function App() {
   const location = useLocation();
   useEffect(() => {
     if (location.pathname === "/")
-      document.title = "Serious experiment tracking · Fabryka Track";
+      document.title = "Research workspace for agent swarms · Fabryka Track";
     if (location.hash)
       requestAnimationFrame(() =>
         document
