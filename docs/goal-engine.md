@@ -1,14 +1,15 @@
 # Goal engine: Track control plane and remote runtime
 
-`/goal` accepts one active goal per signed-in account. `/status` shows the durable
-status timeline, engine heartbeat, blocker/resume controls and links to private
-Track runs. Goals are not public leaderboard entries. API processes never execute
-goal text. The runtime runs on a separate operator-controlled machine.
+`/goal` links to the canonical RFC. The authenticated goal API accepts one active
+goal per account and stores its event timeline, engine heartbeat, blocker/resume
+controls and links to private Track runs. Goals are not public leaderboard entries.
+API processes never execute goal text. The runtime runs on a separate
+operator-controlled machine.
 
 ## Runtime-neutral protocol
 
-Create a goal-engine credential under **Connect an engine** on `/goal`. It is
-shown once, stored hashed on the server and scoped to goal claim/progress only.
+Create a goal-engine credential through the authenticated goal API. It is shown
+once, stored hashed on the server and scoped to goal claim/progress only.
 It cannot use the general account or training APIs. Use a separate existing Track
 account API key if your runtime needs to launch training or upload artifacts;
 keep that credential in the runtime's secret store, not goal text or status.
@@ -116,14 +117,14 @@ to the adapter via its input object. Do not detach untracked local processes.
 paths, runtime name and command for that machine. Installing it is separate from
 deploying the Track website; no local Codex process is started by API deployment.
 
-## API/UI and verification
+## API and verification
 
-Browser APIs: authenticated `GET/POST /api/goals`, `GET /api/goals/{id}?after=N`
+Authenticated goal APIs: `GET/POST /api/goals`, `GET /api/goals/{id}?after=N`
 and `POST /api/goals/{id}/control` with `stop` or `resume` and optional blocker
-response. Status is polled every three seconds; event cursors support reconnect
-without duplicate display. Owner history is capped at the newest 50 goals; the
-detail API retains and pages the full event history. Goals and worker tables are
-additive migrations, so older Track releases can be restored without data loss.
+response. Event cursors support reconnect without duplicate display. Owner
+history is capped at the newest 50 goals; the detail API retains and pages the
+full event history. Goals and worker tables are additive migrations, so older
+Track releases can be restored without data loss.
 
 Tests cover account isolation, credential scope, competing claims/creation,
 stop/completion races, expired leases, resume fencing, replayed events, private
@@ -133,6 +134,6 @@ Track integration, invalid adapter results, bounded continuation and process sto
 python -m pytest tests/test_goals.py tests/test_goal_engine.py
 ```
 
-A runtime is connected only when `/status` reports a recent heartbeat. Serving the
-pages or passing an API smoke test does not prove that a production agent is
-executing goals. Provision and verify the selected remote adapter separately.
+A runtime is connected only when the goal API reports a recent heartbeat.
+Passing an API smoke test does not prove that a production agent is executing
+goals. Provision and verify the selected remote adapter separately.

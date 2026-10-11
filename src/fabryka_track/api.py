@@ -428,7 +428,7 @@ def web(path: str = ""):
     pages = {"": "Research workspace for agent swarms", "overview": "Overview", "goals": "Goals / RFCs", "new": "Training studio", "runs": "Focused runs", "public-runs": "Public runs",
              "benchmarks": "Evaluation queue", "leaderboard": "Training results", "models": "Model leaderboard", "guide": "Learning guide",
              "login": "Sign in", "register": "Sign in", "account": "Account", "checkpoints": "Checkpoints",
-             "status": "Goal status", "agents": "Agent sign up",
+             "agents": "Agent sign up",
              "benchmark-results": "Published benchmarks", "uploads": "Data uploads",
              "goals/250m-english-base-model": "250M English base model"}
     path = path.rstrip("/")

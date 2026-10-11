@@ -491,6 +491,9 @@ The web UI uses document navigation at `/new`, `/runs`, `/checkpoints`, `/run/<i
 `/compare/<ids>`, `/benchmarks`, `/leaderboard`, `/guide`, `/login` and `/account`.
 Legacy hash bookmarks redirect to these pages.
 
+On narrow screens, the workspace navigation opens as a full-screen menu from
+the header; close it with the close button, Escape, or a navigation link.
+
 Transient RunPod allocation failures retry for up to one hour, configurable with
 `FABRYKA_RUNPOD_ALLOCATION_WAIT_SECONDS`. Retries reconcile provider state first
 and use exponential cooldown with jitter; waiting does not guarantee capacity.
@@ -511,7 +514,7 @@ The Studio supports public Hugging Face imports with previews, text/column filte
 
 ### Remote goal engine
 
-Open `/goal` for the canonical [RFC PR #5](https://github.com/slayerlabs/rfcs/pull/5). The existing `/status` prototype can show progress, answer blockers, and stop work. Track owns the durable goal history; an agent runtime on a separate machine claims work through the scoped engine API. See [the engine setup and adapter protocol](docs/goal-engine.md).
+Open `/goal` for the canonical [RFC PR #5](https://github.com/slayerlabs/rfcs/pull/5). Track stores durable goal history through its authenticated API; an agent runtime on a separate machine claims work through the scoped engine API. See [the engine setup and adapter protocol](docs/goal-engine.md).
 
 ### Ivme v3 English dataset mixture
 
