@@ -95,18 +95,23 @@ queues only the remainder. Smoke results are never substituted for full results.
 
 ## Runs dashboard and forks
 
-`/runs` defaults to explicitly focused baseline/fork families. **All runs / archive**
-retains every owned run; nothing is deleted by archiving. New training runs persist
-focus, and queued/running/stopping runs keep their entire family visible. Existing
-inactive runs are not selected arbitrarily. Focus is a workspace choice, not a
-training concurrency limit. `PATCH /api/runs/{id}/focus` accepts
+`/runs` defaults to explicitly focused, non-archived baseline/fork families.
+**All runs + archive** includes every owned run, including individually archived
+runs and families removed from focus. **Archived runs only** is an optional filter
+in that scope; switching back to focused clears it. Focus is independent of an
+individual run's archived state. New training runs persist focus, and
+queued/running/stopping runs keep their entire family visible. Existing inactive
+runs are not selected arbitrarily. Focus is a workspace choice, not a training
+concurrency limit. `PATCH /api/runs/{id}/focus` accepts
 `{"focused": true|false}` for any owned member and updates the whole family;
-archiving an active family returns 409.
+removing an active family from focus returns 409.
 
-Status, date and search filters apply to the table and summary cards. Select 2–10
-visible runs for comparison charts. Families retain their root identity if filters
-hide a parent. Forks show changes in user-controlled settings, not source-artifact
-metadata. The primary target is sub-150M models and lower WikiText-2 BYTE_PPL:
+Status, date and search filters apply to the current scope's table and summary
+cards. The scope switch and visible run count sit above the list; clearing filters
+keeps the selected scope. Select 2–10 visible runs for comparison charts. Families
+retain their root identity if filters hide a parent. Forks show changes in
+user-controlled settings, not source-artifact metadata. The primary target is
+sub-150M models and lower WikiText-2 BYTE_PPL:
 https://huggingface.co/spaces/Glint-Research/Tiny-ML-Leaderboard
 
 Quality summaries use finished **full validation** evaluations with the same

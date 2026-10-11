@@ -19,6 +19,7 @@ const pages: readonly [string, string][] = [
   ["/overview", "Overview"],
   ["/new", "Training studio"],
   ["/runs", "Focused runs"],
+  ["/public-runs", "Public runs"],
   ["/checkpoints", "Checkpoints"],
   ["/benchmarks", "Evaluation queue"],
   ["/uploads", "Data uploads"],

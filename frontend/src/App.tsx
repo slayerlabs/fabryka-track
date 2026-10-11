@@ -12,6 +12,7 @@ import type { Identity } from "./provider";
 import { StudioPage, GuidePage } from "./pages/Studio";
 import { LoginPage, AccountPage } from "./pages/Account";
 import { RunsPage } from "./pages/Runs";
+import { PublicRunsPage } from "./pages/PublicRuns";
 import { RunDetailPage } from "./pages/RunDetail";
 import { ComparePage } from "./pages/Compare";
 import {
@@ -52,6 +53,7 @@ const navigation: { label: string; links: [string, string, IconName][] }[] = [
       ["/status", "Status", "chart"],
       ["/agents", "Agent sign up", "users"],
       ["/benchmark-results", "Published results", "chart"],
+      ["/public-runs", "Public runs", "play"],
       ["/leaderboard", "Training results", "trophy"],
       ["/models", "Model leaderboard", "trophy"],
       ["/guide", "Training guide", "book"],
@@ -179,6 +181,7 @@ function ApplicationShell() {
               path="/benchmark-results"
               element={<PublishedBenchmarksPage />}
             />
+            <Route path="/public-runs" element={<PublicRunsPage />} />
             <Route path="/leaderboard" element={<LeaderboardPage />} />
             <Route path="/models" element={<ModelBoardPage />} />
             <Route path="/guide" element={<GuidePage />} />

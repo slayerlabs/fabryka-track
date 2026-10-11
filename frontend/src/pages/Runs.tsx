@@ -236,8 +236,6 @@ function CheckpointDialog({
 export function RunsPage() {
   const navigate = useNavigate();
   const dashboard = useDashboard();
-  const publicRuns = useRunQuery<{ id: string; name: string; state: string }[]>("/api/public/runs", 10000);
-  const [publicSearch, setPublicSearch] = useState("");
   const queue = useRunQuery<Queue>("/api/benchmarks/queue", 5000);
   const action = useRunAction();
   const focusAction = useRunAction();
@@ -259,8 +257,9 @@ export function RunsPage() {
     const query = search.trim().toLowerCase();
     const scope = allRuns.filter(
       (run) =>
-        (showArchived ? run.archived : !run.archived) &&
-        (workspace === "all" || run.focused) &&
+        (workspace === "all"
+          ? !showArchived || run.archived === true
+          : run.focused && !run.archived) &&
         (dateScope === "all" || Date.parse(run.started_at) >= cutoff) &&
         [run.name, run.project, run.experiment, run.id].some((value) =>
           value.toLowerCase().includes(query),
@@ -305,6 +304,11 @@ export function RunsPage() {
       ).size,
     };
   }, [data, dateScope, search, status, workspace, showArchived]);
+  const hasFilters =
+    search.trim() !== "" ||
+    status !== "all" ||
+    dateScope !== "all" ||
+    (workspace === "all" && showArchived);
   useEffect(() => {
     setSelected((previous) => {
       const next = new Set(
@@ -342,22 +346,6 @@ export function RunsPage() {
           protocol is recorded separately and evaluated on its own pinned board.
         </p>
         <div className="focus-workspace-controls">
-          <div className="focus-toggle" aria-label="Workspace scope">
-            <button
-              type="button"
-              aria-pressed={workspace === "focused"}
-              onClick={() => setWorkspace("focused")}
-            >
-              Focused families
-            </button>
-            <button
-              type="button"
-              aria-pressed={workspace === "all"}
-              onClick={() => setWorkspace("all")}
-            >
-              All runs / archive
-            </button>
-          </div>
           <Link className="runs-button runs-button-primary" to="/new">
             Create training run
           </Link>
@@ -394,14 +382,16 @@ export function RunsPage() {
             <option value="30">Last 30 days</option>
           </select>
         </label>
-        <button
-          type="button"
-          className="runs-button runs-button-secondary"
-          aria-pressed={showArchived}
-          onClick={() => setShowArchived((value) => !value)}
-        >
-          {showArchived ? "Showing archived" : "Show archived"}
-        </button>
+        {workspace === "all" && (
+          <button
+            type="button"
+            className="runs-button runs-button-secondary"
+            aria-pressed={showArchived}
+            onClick={() => setShowArchived((value) => !value)}
+          >
+            Archived runs only
+          </button>
+        )}
         <button
           type="button"
           className="runs-button runs-button-secondary runs-compare"
@@ -476,11 +466,28 @@ export function RunsPage() {
       </section>
       <section className="runs-table-panel" aria-label="Training families">
         <div className="runs-table-toolbar">
-          <strong>
-            {workspace === "focused"
-              ? "Focused families"
-              : "All runs / archive"}
-          </strong>
+          <div className="focus-toggle" role="group" aria-label="Workspace scope">
+            <button
+              type="button"
+              aria-pressed={workspace === "focused"}
+              onClick={() => {
+                setWorkspace("focused");
+                setShowArchived(false);
+              }}
+            >
+              Focused families
+            </button>
+            <button
+              type="button"
+              aria-pressed={workspace === "all"}
+              onClick={() => setWorkspace("all")}
+            >
+              All runs + archive
+            </button>
+          </div>
+          <span className="runs-visible-count" role="status" aria-live="polite">
+            {data ? `${view.visible.length} ${view.visible.length === 1 ? "run" : "runs"} shown` : "Loading runs…"}
+          </span>
           <label className="runs-search">
             <Icon name="search" />
             <span className="runs-sr-only">Search runs</span>
@@ -530,18 +537,25 @@ export function RunsPage() {
             </div>
           ) : data && !view.visible.length ? (
             <div className="runs-empty">
-              <p>No runs match these filters.</p>
-              <button
-                type="button"
-                className="runs-button runs-button-secondary"
-                onClick={() => {
-                  setSearch("");
-                  setStatus("all");
-                  setDateScope("all");
-                }}
-              >
-                Clear filters
-              </button>
+              <p>
+                {hasFilters
+                  ? `No runs match the current filters in ${workspace === "focused" ? "Focused families" : "All runs + archive"}.`
+                  : "No non-archived runs in focused families. Switch to All runs + archive to find your runs."}
+              </p>
+              {hasFilters && (
+                <button
+                  type="button"
+                  className="runs-button runs-button-secondary"
+                  onClick={() => {
+                    setSearch("");
+                    setStatus("all");
+                    setDateScope("all");
+                    setShowArchived(false);
+                  }}
+                >
+                  Clear filters
+                </button>
+              )}
             </div>
           ) : (
             data && (
@@ -553,10 +567,10 @@ export function RunsPage() {
                     </th>
                     <th scope="col">Baseline / fork</th>
                     <th scope="col">Status</th>
-                    <th scope="col">Val loss</th>
                     <th scope="col">WikiText-2 BYTE_PPL</th>
-                    <th scope="col">Training / GPU</th>
                     <th scope="col">Actions</th>
+                    <th scope="col">Val loss</th>
+                    <th scope="col">Training / GPU</th>
                   </tr>
                 </thead>
                 {view.groups.map((group) => (
@@ -568,11 +582,11 @@ export function RunsPage() {
                             {group.name}
                             <small>
                               Baseline + forks · {group.family.length} runs
-                              {group.focused ? " · focused" : " · archived"}
+                              {group.focused ? " · focused" : " · not focused"}
                             </small>
                             {group.active && group.focused && (
                               <small>
-                                Archive available after active runs finish
+                                Remove from focus after active runs finish
                               </small>
                             )}
                           </span>
@@ -585,7 +599,7 @@ export function RunsPage() {
                             }
                             title={
                               group.focused && group.active
-                                ? "Queued, running or stopping families cannot be archived"
+                                ? "Queued, running or stopping families cannot be removed from focus"
                                 : "Focus applies to this entire baseline and fork family"
                             }
                             onClick={async () => {
@@ -597,13 +611,13 @@ export function RunsPage() {
                               if (result)
                                 setMessage(
                                   group.focused
-                                    ? "Family archived. Recover it in All runs / archive."
+                                    ? "Family removed from focus. Find it in All runs + archive."
                                     : "Family focused.",
                                 );
                               await dashboard.refetch();
                             }}
                           >
-                            {group.focused ? "Archive family" : "Focus family"}
+                            {group.focused ? "Remove from focus" : "Focus family"}
                           </button>
                         </div>
                       </th>
@@ -706,7 +720,8 @@ export function RunsPage() {
                               </div>
                             </div>
                           </th>
-                          <td>
+                          <td className="runs-status-cell">
+                            <span className="runs-mobile-label">Status</span>
                             <span
                               className={`runs-status runs-status-${statusOf(run.state)}`}
                             >
@@ -719,13 +734,8 @@ export function RunsPage() {
                                 : statusOf(run.state)}
                             </span>
                           </td>
-                          <td>
-                            <div className="runs-loss">
-                              <span>{fmt(loss, 4)}</span>
-                              <LossSparkline history={run.val_loss_history} />
-                            </div>
-                          </td>
-                          <td>
+                          <td className="runs-quality-cell">
+                            <span className="runs-mobile-label">Best validation score</span>
                             <div className="focus-quality">
                               {scores.length ? (
                                 scores.map(({ checkpoint, evaluation }) => (
@@ -755,10 +765,8 @@ export function RunsPage() {
                               </Link>
                             </div>
                           </td>
-                          <td>
-                            <RunMonitoring run={run} />
-                          </td>
-                          <td>
+                          <td className="runs-actions-cell">
+                            <span className="runs-mobile-label">Actions</span>
                             <div className="runs-row-actions">
                               <Link
                                 className="runs-open"
@@ -815,6 +823,17 @@ export function RunsPage() {
                               </button>
                             </div>
                           </td>
+                          <td className="runs-loss-cell">
+                            <span className="runs-mobile-label">Val loss</span>
+                            <div className="runs-loss">
+                              <span>{fmt(loss, 4)}</span>
+                              <LossSparkline history={run.val_loss_history} />
+                            </div>
+                          </td>
+                          <td className="runs-monitoring-cell">
+                            <span className="runs-mobile-label">Training / GPU</span>
+                            <RunMonitoring run={run} />
+                          </td>
                         </tr>
                       );
                     })}
@@ -842,20 +861,6 @@ export function RunsPage() {
             </span>
           </div>
         )}
-      </section>
-      <section className="runs-panel" aria-labelledby="public-runs-title">
-        <h2 id="public-runs-title">Public runs</h2>
-        <p>Explore everyone's runs, including training in progress. Runs are public by default.</p>
-        <input aria-label="Search public runs" placeholder="Search public runs" value={publicSearch}
-          onChange={(event) => setPublicSearch(event.target.value)} />
-        <RunError error={publicRuns.error} retry={() => void publicRuns.refetch()} />
-        {publicRuns.isLoading && <p role="status">Loading public runs…</p>}
-        <ul>
-          {publicRuns.data?.filter((run) => run.name.toLowerCase().includes(publicSearch.toLowerCase())).map((run) => (
-            <li key={run.id}><Link to={`/run/${encodeURIComponent(run.id)}`}>{run.name}</Link> · {run.state}</li>
-          ))}
-        </ul>
-        {publicRuns.data?.length === 0 && <p>No public runs yet.</p>}
       </section>
       <details className="runs-benchmark-queue">
         <summary>
