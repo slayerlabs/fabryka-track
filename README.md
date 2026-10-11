@@ -39,6 +39,11 @@ authored RFC content. `scripts/render_training_goal.py` regenerates the RFC cont
 `scripts/update_corpus_catalog.py` updates the catalog imported from
 `docs/corpus-samples.json`. Neither script rewrites an executable HTML application.
 
+Internal React routes render their own `PageTop` (`frontend/src/PageTop.tsx`) for
+breadcrumbs, one page heading, optional description/actions and the browser title.
+Add new route defaults to `resolvePageMeta`; views with fetched titles override them
+only after the data loads. The illustrated `/` landing keeps its separate hero.
+
 Frontend checks: `npm --prefix frontend run build` and
 `node --experimental-strip-types --test tests/*.test.mjs`. Browser smoke checks
 must cover authenticated training/run workflows as well as anonymous public pages.

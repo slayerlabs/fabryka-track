@@ -3,8 +3,8 @@
 }
 .public-goals {
   max-width: 1000px;
-  margin: 48px auto;
-  padding: 0 28px 60px;
+  margin: 0;
+  padding: 0 0 60px;
 }
 .public-goals header {
   margin-bottom: 42px;
@@ -201,37 +201,23 @@
 .public-training-goal * {
   box-sizing: border-box;
 }
-.public-training-goal {
-  margin: 0;
-}
 .public-training-goal a {
   color: var(--accent);
 }
-.public-training-goal {
-  max-width: 1060px;
-  margin: 0 auto;
-  padding: 36px 28px 70px;
-}
-.public-training-goal nav {
+.public-training-context {
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
-  gap: 12px 22px;
-  margin: 20px 0 32px;
-}
-.public-training-goal header {
-  padding-bottom: 22px;
-  border-bottom: 1px dashed var(--line);
+  gap: 10px 18px;
   margin-bottom: 28px;
 }
-.public-training-goal .label {
-  font-size: 12px;
+.public-training-related {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 16px;
   color: var(--muted);
-}
-.public-training-goal h1 {
-  margin: 12px 0 18px;
-}
-.public-training-goal .intro {
-  max-width: 78ch;
+  font-size: 12px;
 }
 .public-training-goal .actions {
   display: flex;
@@ -257,18 +243,18 @@
   line-height: 1.85;
   overflow-wrap: anywhere;
 }
-.public-training-goal article > h1 {
+.public-training-goal article > h2 {
   font-size: 20px;
   line-height: 1.5;
 }
-.public-training-goal article h2 {
+.public-training-goal article h3 {
   margin: 44px 0 16px;
   padding-top: 20px;
   border-top: 1px dashed var(--line);
   font-size: 20px;
   scroll-margin-top: 20px;
 }
-.public-training-goal article h3 {
+.public-training-goal article h4 {
   margin-top: 30px;
   font-size: 16px;
   scroll-margin-top: 20px;
@@ -325,13 +311,10 @@
   font-size: 12px;
 }
 @media (max-width: 650px) {
-  .public-training-goal {
-    padding: 22px 18px 40px;
-  }
   .public-training-goal article {
     font-size: 13px;
   }
-  .public-training-goal article h2 {
+  .public-training-goal article h3 {
     font-size: 18px;
   }
   .public-training-goal article td,
@@ -339,12 +322,6 @@
     min-width: 125px;
     padding: 9px;
   }
-}
-
-.public-training-goal {
-  padding: 0;
-  margin: 0;
-  max-width: none;
 }
 
 .public-status * {
@@ -555,25 +532,14 @@
   box-sizing: border-box;
 }
 .public-benchmarks {
-  margin: 0;
+  max-width: 1220px;
+  margin: 0 auto;
 }
 .public-benchmarks a {
   color: inherit;
 }
-.public-benchmarks header,
-.public-benchmarks nav {
-  display: flex;
-}
-.public-benchmarks,
-.public-benchmarks footer {
-  max-width: 1220px;
-  margin: auto;
-  padding: 32px 30px;
-}
-.public-benchmarks h1 {
-  max-width: 800px;
-  margin: 12px 0 18px;
-  font-size: clamp(28px, 4vw, 46px);
+.public-benchmarks .page-top-breadcrumbs a {
+  color: var(--accent);
 }
 .public-benchmarks h2 {
   margin-top: 0;
@@ -584,18 +550,6 @@
 .public-benchmarks .muted,
 .public-benchmarks small {
   color: var(--muted);
-}
-.public-benchmarks .intro {
-  padding: 14px 0 30px;
-}
-.public-benchmarks .intro p {
-  font-size: 15px;
-}
-.public-benchmarks .actions {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin: 20px 0;
 }
 .public-benchmarks .primary,
 .public-benchmarks .secondary {
@@ -817,19 +771,11 @@
   margin-top: 14px;
 }
 .public-benchmarks footer {
+  margin-top: 32px;
+  padding-bottom: 32px;
   font-size: 11px;
 }
 @media (max-width: 650px) {
-  .public-benchmarks,
-  .public-benchmarks footer {
-    padding: 25px 18px;
-  }
-  .public-benchmarks .intro {
-    padding-top: 0;
-  }
-  .public-benchmarks .intro p {
-    font-size: 13px;
-  }
   .public-benchmarks .filters,
   .public-benchmarks .chart-controls {
     grid-template-columns: 1fr;
@@ -873,10 +819,4 @@
   .public-benchmarks .panel {
     padding: 18px;
   }
-}
-
-.public-benchmarks {
-  padding: 0;
-  margin: 0;
-  max-width: none;
 }

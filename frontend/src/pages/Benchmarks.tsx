@@ -5,6 +5,7 @@ import { request } from "../provider";
 import guide from "./BenchmarkGuide.html?raw";
 import { compareBenchmarkValues, type BenchmarkSort } from "./BenchmarkSort";
 import { TinyMLDetails, tinyMLMetrics, tinyMLValue, formatTinyML, isTinyML, type TinyMLMeasurement } from "./TinyMLMetrics";
+import { PageTop } from "../PageTop";
 interface TaskResult extends TinyMLMeasurement {
   bpb?: number;
   nll?: number;
@@ -286,21 +287,13 @@ export function BenchmarksPage() {
   ];
   return (
     <>
-      <div className="compare-heading">
-        <div>
-          <div className="eyebrow">Evaluation studio</div>
-          <h1>Benchmarks</h1>
-          <p className="muted">
-            Run missing tasks. Keep completed results. Compare measured results.{" "}
-            <a href="/benchmark-results">
-              Browse published checkpoint results →
-            </a>
-          </p>
-        </div>
-        <a className="secondary" href="/runs">
-          My runs →
-        </a>
-      </div>
+      <PageTop
+        eyebrow="Evaluation studio"
+        description={<>Run missing tasks. Keep completed results. Compare measured results.{" "}
+          <a href="/benchmark-results">Browse published checkpoint results →</a>
+        </>}
+        actions={<a className="secondary" href="/runs">My runs →</a>}
+      />
       <TinyMLBoard />
       <div dangerouslySetInnerHTML={{ __html: guide }} />
       {failure && (

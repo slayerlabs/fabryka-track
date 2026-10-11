@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useCustom } from "@refinedev/core";
 import { Link, useNavigate } from "react-router";
+import { PageTop } from "../PageTop";
 import { compact, format } from "./leaderboard-data";
 import {
   NATURAL_DIRECTION,
@@ -327,26 +328,28 @@ export function ModelBoardPage() {
       return next;
     });
   return (
-    <div className="leaderboard-page model-board">
-      <div className="lb-intro">
-        <div>
-          <div className="lb-eyebrow">Fabryka research / Model leaderboard</div>
-          <h1>One final checkpoint per model.</h1>
+    <>
+      <PageTop
+        eyebrow="Fabryka research / Model leaderboard"
+        description={
           <p>
             Each row is the checkpoint its owner marked as the result, scored
             at exactly that training step, or the latest checkpoint the track
             evaluated itself.
           </p>
-        </div>
-        <a
-          className="secondary"
-          href={DOCS_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Add a model ↗
-        </a>
-      </div>
+        }
+        actions={
+          <a
+            className="secondary"
+            href={DOCS_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Add a model ↗
+          </a>
+        }
+      />
+      <div className="leaderboard-page model-board">
       {query.isError ? (
         <div className="lb-empty" role="alert">
           <h2>Results could not be loaded.</h2>
@@ -513,5 +516,6 @@ export function ModelBoardPage() {
         </>
       )}
     </div>
+    </>
   );
 }

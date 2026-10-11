@@ -858,23 +858,6 @@ progress {
     grid-template-columns: 28px minmax(60px, 1fr) 28px 100px;
   }
 }
-main:has(.studio-intro) {
-  padding-top: 20px;
-}
-.studio-intro {
-  margin-bottom: 8px;
-}
-.studio-intro .eyebrow {
-  display: none;
-}
-.studio-intro h1 {
-  font-size: 28px;
-  margin: 0 0 6px;
-}
-.studio-intro p {
-  font-size: 13px;
-  margin: 0;
-}
 .studio-steps {
   margin: 12px 0 18px;
 }
@@ -969,7 +952,7 @@ main:has(.studio-intro) {
     padding: 10px 16px;
     box-shadow: 0 -2px 12px #0001;
   }
-  main:has(.studio-intro) {
+  .shell-main:has(#studio-next:not(:empty)) {
     padding-bottom: 85px;
   }
 }
@@ -1254,7 +1237,6 @@ main:has(.studio-intro) {
 }
 .run-view {
   max-width: 1480px;
-  padding-top: 24px;
 }
 .run-view .charts,
 .comparison-board {
@@ -1281,20 +1263,6 @@ main:has(.studio-intro) {
 }
 .compare-view {
   max-width: 1760px;
-  padding: 24px;
-}
-.compare-heading {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
-.compare-heading h1 {
-  font-family: inherit;
-  font-size: 27px;
-  font-weight: 650;
-  letter-spacing: -0.04em;
-  margin: 5px 0;
 }
 .compare-tabs {
   display: flex;
@@ -1450,9 +1418,6 @@ main:has(.studio-intro) {
   .compare-sidebar header input {
     display: none;
   }
-  .compare-view {
-    padding: 16px;
-  }
   .metric-explorer {
     align-items: start;
     flex-direction: column;
@@ -1542,9 +1507,6 @@ main:has(.studio-intro) {
   min-width: 0;
   max-width: 100%;
   overflow-wrap: anywhere;
-}
-.run-view h1 {
-  font-size: 36px;
 }
 .run-view .metrics {
   margin: 18px 0;

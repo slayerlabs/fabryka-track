@@ -8,6 +8,7 @@ import {
 } from "react";
 import { useCustom, useCustomMutation } from "@refinedev/core";
 import { Link, useNavigate, useSearchParams } from "react-router";
+import { PageTop } from "../PageTop";
 import { request } from "../provider";
 import { LoginPage, type StudioUser } from "./Account";
 import { StudioMixRecipes } from "./StudioMixRecipes";
@@ -263,23 +264,40 @@ export function StudioPage() {
     url: "/api/auth/me",
     method: "get",
   });
-  if (query.isLoading) return <p role="status">Loading your workspace…</p>;
+  if (query.isLoading)
+    return (
+      <>
+        <PageTop />
+        <p role="status">Loading your workspace…</p>
+      </>
+    );
   if (query.error)
     return (
-      <p className="error" role="alert">
-        {query.error.message}
-      </p>
+      <>
+        <PageTop />
+        <p className="error" role="alert">
+          {query.error.message}
+        </p>
+      </>
     );
   const user = query.data?.data.user;
-  return user ? (
-    <StudioLoader
-      key={`${user.id}:${parentId || ""}:${checkpointId || ""}`}
-      user={user}
-      parentId={parentId}
-      checkpointId={checkpointId}
-    />
-  ) : (
-    <LoginPage />
+  if (!user) return <LoginPage />;
+  return (
+    <>
+      <PageTop
+        description={
+          parentId !== null || checkpointId !== null
+            ? "Review the inherited recipe, adjust your next experiment, and explicitly launch when ready. Nothing starts automatically."
+            : "Choose your data, train a model, and follow its progress live."
+        }
+      />
+      <StudioLoader
+        key={`${user.id}:${parentId || ""}:${checkpointId || ""}`}
+        user={user}
+        parentId={parentId}
+        checkpointId={checkpointId}
+      />
+    </>
   );
 }
 
@@ -704,22 +722,6 @@ function TrainingStudio({
   );
   return (
     <>
-      <div className="intro studio-intro">
-        <div className="eyebrow">Training studio</div>
-        <h1>
-          {fork
-            ? "Fork from a saved checkpoint."
-            : "A model starts with a mix."}
-        </h1>
-        <p className="muted">
-          {fork
-            ? "Review the inherited recipe, adjust your next experiment, and explicitly launch when ready. Nothing starts automatically."
-            : "Choose your data, train a model, and follow its progress live."}
-        </p>
-      </div>
-      <StudioEntry mode={mode} onChange={setMode} disabled={launching} />
-      {mode === "agent" ? <StudioAgent /> : <>
-      {mode === "beginner" && <p className="notice">Start with a profile or choose your text sources below. Then review the model, time limit and cost before starting. Your draft stays intact when you switch modes.</p>}
       {fork && (
         <div className="notice">
           <b>Source checkpoint</b>
@@ -741,6 +743,9 @@ function TrainingStudio({
           </small>
         </div>
       )}
+      <StudioEntry mode={mode} onChange={setMode} disabled={launching} />
+      {mode === "agent" ? <StudioAgent /> : <>
+      {mode === "beginner" && <p className="notice">Start with a profile or choose your text sources below. Then review the model, time limit and cost before starting. Your draft stays intact when you switch modes.</p>}
       {launchIssue && (
         <p className="error" role="alert">
           {launchIssue}

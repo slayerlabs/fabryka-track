@@ -1,45 +1,17 @@
 .runs-dashboard {
   display: grid;
-  grid-template-columns: minmax(280px, 1fr) auto;
-  gap: 0 24px;
+  grid-template-columns: minmax(0, 1fr);
 }
 .runs-dashboard > * {
   grid-column: 1 / -1;
   min-width: 0;
 }
-.runs-dashboard .runs-header {
-  grid-column: 1;
-  grid-row: 1;
-  display: block;
-  height: auto;
-  padding: 0;
-  border: 0;
-  background: none;
-}
-.runs-header h1,
-.dashboard-heading h1 {
-  margin: 0 0 13px;
-  font-size: clamp(30px, 3vw, 40px);
-  font-weight: 650;
-  line-height: 1.2;
-  letter-spacing: -1.2px;
-}
-.runs-subtitle,
-.dashboard-heading p {
-  max-width: 570px;
-  margin: 0;
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.8;
-}
 .runs-dashboard .runs-filters {
-  grid-column: 2;
-  grid-row: 1;
-  align-self: start;
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
-  padding-top: 2px;
+  margin: 18px 0;
 }
 .runs-filter {
   display: block;
@@ -565,15 +537,6 @@
   gap: 10px;
   margin-top: 24px;
 }
-.dashboard-heading {
-  height: auto;
-  padding: 0;
-  margin-bottom: 28px;
-  border: 0;
-  background: none;
-  gap: 24px;
-}
-.dashboard-heading .primary,
 .dashboard-row-actions .secondary {
   text-decoration: none;
   white-space: nowrap;
@@ -661,17 +624,6 @@
   font-size: 11px;
 }
 @media (max-width: 1250px) {
-  .runs-dashboard {
-    grid-template-columns: 1fr;
-  }
-  .runs-dashboard .runs-header,
-  .runs-dashboard .runs-filters {
-    grid-column: 1;
-    grid-row: auto;
-  }
-  .runs-dashboard .runs-filters {
-    margin-top: 22px;
-  }
   .runs-summary {
     margin-top: 25px;
     gap: 14px;
@@ -693,13 +645,6 @@
   }
 }
 @media (max-width: 760px) {
-  .runs-header h1,
-  .dashboard-heading h1 {
-    font-size: 30px;
-  }
-  .runs-subtitle {
-    font-size: 12px;
-  }
   .runs-summary {
     grid-template-columns: 1fr;
     gap: 12px;
@@ -744,12 +689,6 @@
   }
   .runs-checkpoint-dialog {
     padding: 22px;
-  }
-  .dashboard-heading {
-    align-items: flex-start;
-  }
-  .dashboard-heading .primary {
-    padding: 9px 12px;
   }
   .dashboard-filters {
     gap: 18px;
@@ -1068,8 +1007,7 @@
     grid-template-columns: minmax(0, 1fr);
   }
   .checkpoint-card-heading,
-  .checkpoint-comparison .focus-family-header,
-  .checkpoints-page .dashboard-heading {
+  .checkpoint-comparison .focus-family-header {
     flex-direction: column;
     align-items: flex-start;
     gap: 8px;

@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
+import { PageTop } from "../PageTop";
 import { RunChart, type Series } from "./RunChart";
 import { tokenLookup, withTokens } from "./lossAnalysis";
 import { ValidationProgress } from "./ValidationProgress";
@@ -25,6 +26,13 @@ import { RunExport } from "./RunExport";
 import { RunBenchmarks } from "./RunBenchmarks";
 import { WhiteBenchmark } from "./WhiteBenchmark";
 import { GlintProxyBenchmark } from "./GlintProxyBenchmark";
+
+const homeAncestor = { label: "Home", to: "/" };
+const writableRunAncestors = [homeAncestor, { label: "Focused runs", to: "/runs" }];
+const publicRunAncestors = [
+  homeAncestor,
+  { label: "Fabryka leaderboard", to: "/leaderboard" },
+];
 
 const metricNames: Record<string, string> = {
   "throughput/tokens_sec": "Training throughput",
@@ -72,6 +80,7 @@ function RunWorkspace({ id }: { id: string }) {
   if (!r)
     return (
       <>
+        <PageTop />
         <RunError error={query.error} retry={() => void query.refetch()} />
         {query.isLoading && <p role="status">Loading workspace…</p>}
       </>
@@ -206,24 +215,15 @@ function RunWorkspace({ id }: { id: string }) {
                   ? "Stopping training…"
                   : "Training in progress";
   return (
-    <div className="run-view">
-      <Link
-        to={readOnly ? "/leaderboard" : "/runs"}
-        className="muted"
-        style={{
-          display: "inline-block",
-          marginBottom: 25,
-          textDecoration: "none",
-        }}
-      >
-        ← {readOnly ? "Leaderboard" : "My runs"}
-      </Link>
+    <>
+      <PageTop
+        title={r.name}
+        ancestors={readOnly ? publicRunAncestors : writableRunAncestors}
+        eyebrow={local ? "Training results" : "Tracked experiment"}
+      />
+      <div className="run-view">
       <div className="intro row">
         <div>
-          <div className="eyebrow">
-            {local ? "Training results" : "Tracked experiment"}
-          </div>
-          <h1>{r.name}</h1>
           <p className="muted">
             {external
               ? `${model} · ${r.config.tokenizer_vocab_size}-token vocabulary · `
@@ -617,7 +617,8 @@ function RunWorkspace({ id }: { id: string }) {
           </details>
         </>
       )}
-    </div>
+      </div>
+    </>
   );
 }
 function RunNotes({ run, onSaved }: { run: Run; onSaved: () => void }) {

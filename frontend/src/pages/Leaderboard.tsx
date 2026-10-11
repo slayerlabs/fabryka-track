@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useCustom } from "@refinedev/core";
 import { Link, useNavigate } from "react-router";
+import { PageTop } from "../PageTop";
 import {
   colors,
   compact,
@@ -315,20 +316,22 @@ export function LeaderboardPage() {
       return next;
     });
   return (
-    <div className="leaderboard-page">
-      <div className="lb-intro">
-        <div>
-          <div className="lb-eyebrow">Fabryka research / Training results</div>
-          <h1>Small models. Measured progress.</h1>
+    <>
+      <PageTop
+        eyebrow="Fabryka research / Training results"
+        description={
           <p>
             Explore published runs by scale and data recipe. Follow the results
             back to the experiment.
           </p>
-        </div>
-        <Link className="secondary" to="/new">
-          New training run ↗
-        </Link>
-      </div>
+        }
+        actions={
+          <Link className="secondary" to="/new">
+            New training run ↗
+          </Link>
+        }
+      />
+      <div className="leaderboard-page">
       {query.isError ? (
         <div className="lb-empty" role="alert">
           <h2>Results could not be loaded.</h2>
@@ -591,5 +594,6 @@ export function LeaderboardPage() {
         </>
       )}
     </div>
+    </>
   );
 }

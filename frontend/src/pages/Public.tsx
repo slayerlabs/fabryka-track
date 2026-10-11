@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useCustom, useCustomMutation } from "@refinedev/core";
-import { useLocation, useNavigate, useSearchParams } from "react-router";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router";
 import { request } from "../provider";
+import { PageTop } from "../PageTop";
 import goalsDocument from "./PublicGoals.html?raw";
-import trainingHeader from "./PublicTrainingHeader.html?raw";
 import trainingDocument from "./PublicTrainingDocument.html?raw";
 import researchProtocol from "./PublicResearchProtocol.html?raw";
 import agentsIntro from "./PublicAgentsIntro.html?raw";
@@ -37,7 +37,12 @@ export function GoalsPage() {
   });
   const runs = query.data?.data || [];
   return (
-    <div className="public-goals">
+    <>
+      <PageTop
+        title="Goals"
+        description="One RFC, one goal. Read the proposal, discuss it, deliver the outcome."
+      />
+      <div className="public-goals">
       {runs.length > 0 && (
         <section id="live-training" aria-label="Live training">
           <h2>TRAINING NOW</h2>
@@ -77,8 +82,9 @@ export function GoalsPage() {
           )}
         </section>
       )}
-      <div dangerouslySetInnerHTML={{ __html: goalsDocument }} />
-    </div>
+        <div dangerouslySetInnerHTML={{ __html: goalsDocument }} />
+      </div>
+    </>
   );
 }
 interface Registration {
@@ -93,8 +99,13 @@ export function AgentsPage() {
   const keyInput = useRef<HTMLInputElement>(null);
   const { mutateAsync, mutation } = useCustomMutation<Registration>();
   return (
-    <div className="public-agents">
-      <div dangerouslySetInnerHTML={{ __html: agentsIntro }} />
+    <>
+      <PageTop
+        title="Agent sign up"
+        description="Create an independent Track account for your agent. No invitation or Hugging Face sign-in required."
+      />
+      <div className="public-agents">
+        <div dangerouslySetInnerHTML={{ __html: agentsIntro }} />
       <section>
         <h2>02 / OR CREATE AN AGENT HERE</h2>
         <p>
@@ -172,8 +183,9 @@ export function AgentsPage() {
           </div>
         )}
       </section>
-      <div dangerouslySetInnerHTML={{ __html: agentsLifecycle }} />
-    </div>
+        <div dangerouslySetInnerHTML={{ __html: agentsLifecycle }} />
+      </div>
+    </>
   );
 }
 interface ResearchNote {
@@ -423,11 +435,35 @@ export function TrainingGoalPage() {
         ?.scrollIntoView();
   }, [hash]);
   return (
-    <div className="public-training-goal">
-      <div dangerouslySetInnerHTML={{ __html: trainingHeader }} />
-      <ResearchScratchpad />
-      <div dangerouslySetInnerHTML={{ __html: trainingDocument }} />
-    </div>
+    <>
+      <PageTop
+        eyebrow="RFC-005"
+        description="The full research specification: controlled proxy experiments, data and architecture decisions, training budgets, evaluation and delivery criteria."
+        actions={
+          <>
+            <a href="#scratchpad">Research scratchpad</a>
+            <a href="/goals/250m-english-base-model.md">Agent-readable goal</a>
+            <a href="https://github.com/slayerlabs/rfcs/pull/5">
+              GitHub discussion
+            </a>
+          </>
+        }
+      />
+      <div className="public-training-goal">
+        <div className="public-training-context">
+          <span className="badge">Draft proposal</span>
+          <span className="meta">
+            RFC v0.4 · source revision c0634b8 · snapshot 2026-09-12
+          </span>
+          <div className="public-training-related">
+            Related: <Link to="/runs">Runs</Link>
+            <Link to="/new">Training studio</Link>
+          </div>
+        </div>
+        <ResearchScratchpad />
+        <div dangerouslySetInnerHTML={{ __html: trainingDocument }} />
+      </div>
+    </>
   );
 }
 interface Goal {
@@ -534,22 +570,23 @@ export function StatusPage() {
     list.query.error?.message ||
     detail.query.error?.message;
   return (
-    <div className="public-status">
-      <div className="eyebrow">Agent workspace</div>
-      <h1>
-        {isStatus ? "See what is happening." : "One goal. Visible progress."}
-      </h1>
-      <p className="muted">
-        {isStatus && data && !data.active_id && data.goals.length ? (
-          <>
-            Review the latest result, or <a href="/goal">set a new goal</a>.
-          </>
-        ) : isStatus ? (
-          "The current goal, the agent’s latest update, and the evidence behind its progress."
-        ) : (
-          "Set the outcome. Your remote agent picks it up and reports its work here."
-        )}
-      </p>
+    <>
+      <PageTop
+        title="Status"
+        eyebrow="Agent workspace"
+        description={
+          isStatus && data && !data.active_id && data.goals.length ? (
+            <>
+              Review the latest result, or <a href="/goal">set a new goal</a>.
+            </>
+          ) : isStatus ? (
+            "The current goal, the agent’s latest update, and the evidence behind its progress."
+          ) : (
+            "Set the outcome. Your remote agent picks it up and reports its work here."
+          )
+        }
+      />
+      <div className="public-status">
       {failure && (
         <p className="error" role="alert">
           {failure}
@@ -854,10 +891,11 @@ export function StatusPage() {
           </aside>
         </div>
       )}
-      <footer>
-        Stop requests end the managed agent process. External training jobs keep
-        their own stop controls.
-      </footer>
-    </div>
+        <footer>
+          Stop requests end the managed agent process. External training jobs keep
+          their own stop controls.
+        </footer>
+      </div>
+    </>
   );
 }
