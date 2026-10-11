@@ -105,12 +105,20 @@ export function StepRun({ pipeline, jobId }: { pipeline: string; jobId: string |
   const gated = !file || Object.keys(checked.errors).length > 0;
 
   useEffect(() => {
+    setJob(null);
+    setError("");
+    wasLive.current = false;
+    advanced.current = false;
+  }, [jobId]);
+
+  useEffect(() => {
     if (!jobId) return;
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
     async function refresh() {
       try {
         const next = await getUpload(jobId as string, controller.signal);
+        if (controller.signal.aborted) return;
         setJob(next);
         setError("");
         const described = describeJob(next);
@@ -193,17 +201,17 @@ export function StepRun({ pipeline, jobId }: { pipeline: string; jobId: string |
     <>
       <section className="panel">
         <h2>Step 3: run the pipeline</h2>
+        {error && (
+          <p className="error" role="alert">
+            {error}
+          </p>
+        )}
         {!jobId && !job && (
           <>
             <p className="muted">
               {file?.name} · {pipeline}. Starting the upload hands the file to the existing pipeline flow;
               keep this tab open until the upload finishes.
             </p>
-            {error && (
-              <p className="error" role="alert">
-                {error}
-              </p>
-            )}
             <div className="actions">
               <button className="primary" type="button" disabled={progress !== null} onClick={() => void start()}>
                 {progress ? "Starting…" : "Start upload"}
