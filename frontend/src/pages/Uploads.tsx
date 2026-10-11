@@ -2,41 +2,26 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useGetIdentity } from "@refinedev/core";
 import { Link, useNavigate, useParams } from "react-router";
 import { PageTop } from "../PageTop";
-import {
-  DECLARATION_TEXT,
-  MAX_UPLOAD_LABEL,
-  validateUpload,
-  type UploadErrors,
-  type UploadFormState,
-} from "../uploads/form";
+import { MAX_UPLOAD_LABEL, validateUpload, type UploadErrors, type UploadFormState } from "../uploads/form";
 import { uploadFile, type UploadProgress } from "../uploads/uploader";
-import { bindingLabel, describeJob, failureHint, humanize, keepPolling, modeLabel, rejectionMessage, stoppedMessage } from "../uploads/display";
-import { checksOpen, summarizeReport } from "../uploads/report";
-import { apiError } from "../provider";
+import { describeJob, errorMessage as message, failureHint, formatWhen as when, keepPolling, modeLabel, rejectionMessage, stoppedMessage } from "../uploads/display";
 import { HuggingFaceButton } from "./Account";
+import { FieldError, MetadataFields, emptyForm } from "../uploads/MetadataFields";
+import { usePipelines, type Pipelines } from "../uploads/usePipelines";
+import { JobFacts } from "../uploads/JobFacts";
+import { ReportDetails, ResultDownload } from "../uploads/ReportDetails";
 import {
   browserUploaderDeps,
   cancelUpload,
   getReport,
   getUpload,
-  listPipelines,
   listUploads,
-  resultGrant,
   type UploadJob,
-  type UploadPipeline,
   type UploadReport,
 } from "../uploads/api";
 
 const POLL_MS = 5000;
 const PAGE_SIZE = 20;
-
-function message(error: unknown) {
-  return error instanceof Error ? error.message : "Something went wrong. Try again.";
-}
-
-function when(value?: string | null) {
-  return value ? new Date(value).toLocaleString() : "—";
-}
 
 function size(bytes?: number | null) {
   if (bytes === null || bytes === undefined) return "—";
@@ -50,66 +35,6 @@ const PROGRESS_LABELS: Record<UploadProgress["phase"], string> = {
   uploading: "Uploading",
   confirming: "Confirming upload",
 };
-
-const TEXT_FIELDS = [
-  {
-    key: "license",
-    label: "License",
-    placeholder: "CC-BY-4.0",
-    hint: "Applies to every record that does not carry its own license.",
-  },
-  { key: "author", label: "Author (optional)", placeholder: undefined, hint: undefined },
-  { key: "source_ref", label: "Source reference (optional)", placeholder: "https://", hint: undefined },
-] as const;
-
-const MASK_CHOICES = [
-  { value: "yes", label: "Yes, mask names" },
-  { value: "no", label: "No, keep names" },
-] as const;
-
-const emptyForm = (): UploadFormState => ({
-  pipeline: "",
-  file: null,
-  source: "",
-  added: new Date().toISOString().slice(0, 10),
-  license: "",
-  author: "",
-  source_ref: "",
-  per_record_provenance: false,
-  mask_names: "",
-  declaration: false,
-});
-
-function FieldError({ text }: { text?: string }) {
-  return text ? (
-    <small className="error" role="alert">
-      {text}
-    </small>
-  ) : null;
-}
-
-interface Pipelines {
-  list: UploadPipeline[];
-  loaded: boolean;
-  error: string;
-}
-
-function usePipelines(): Pipelines {
-  const [value, setValue] = useState<Pipelines>({ list: [], loaded: false, error: "" });
-  useEffect(() => {
-    const controller = new AbortController();
-    listPipelines(controller.signal).then(
-      (reply) => {
-        if (!controller.signal.aborted) setValue({ list: reply.pipelines ?? [], loaded: true, error: "" });
-      },
-      (e) => {
-        if (!controller.signal.aborted) setValue({ list: [], loaded: true, error: message(e) });
-      },
-    );
-    return () => controller.abort();
-  }, []);
-  return value;
-}
 
 function NewUploadForm({ pipelines }: { pipelines: Pipelines }) {
   const navigate = useNavigate();
@@ -210,84 +135,7 @@ function NewUploadForm({ pipelines }: { pipelines: Pipelines }) {
           <small className="muted">The format is taken from the file extension.</small>
           <FieldError text={errors.file} />
         </label>
-        <div className="fields">
-          <label className="field">
-            <span>Source</span>
-            <input
-              value={state.source}
-              disabled={busy}
-              placeholder="my_source"
-              onChange={(event) => set("source", event.target.value)}
-            />
-            <small className="muted">Lowercase letters, digits and underscores.</small>
-            <FieldError text={errors.source} />
-          </label>
-          <label className="field">
-            <span>Added</span>
-            <input
-              type="date"
-              value={state.added}
-              disabled={busy}
-              onChange={(event) => set("added", event.target.value)}
-            />
-            <FieldError text={errors.added} />
-          </label>
-          {TEXT_FIELDS.map(({ key, label, placeholder, hint }) => (
-            <label className="field" key={key}>
-              <span>{label}</span>
-              <input
-                value={state[key]}
-                disabled={busy}
-                placeholder={placeholder}
-                onChange={(event) => set(key, event.target.value)}
-              />
-              {hint && <small className="muted">{hint}</small>}
-              <FieldError text={errors[key]} />
-            </label>
-          ))}
-          <div className="field">
-            <span>Provenance</span>
-            <label>
-              <input
-                type="checkbox"
-                checked={state.per_record_provenance}
-                disabled={busy}
-                onChange={(event) => set("per_record_provenance", event.target.checked)}
-              />{" "}
-              Records carry their own provenance
-            </label>
-            <small className="muted">When checked, every record must have its own source_ref.</small>
-          </div>
-        </div>
-        <div className="field" role="radiogroup" aria-labelledby="mask-names-label">
-          <span id="mask-names-label">Mask personal names?</span>
-          {MASK_CHOICES.map(({ value, label }) => (
-            <label key={value}>
-              <input
-                type="radio"
-                name="mask_names"
-                disabled={busy}
-                checked={state.mask_names === value}
-                onChange={() => set("mask_names", value)}
-              />{" "}
-              {label}{" "}
-            </label>
-          ))}
-          <FieldError text={errors.mask_names} />
-        </div>
-        <div className="field">
-          <span>Declaration</span>
-          <label>
-            <input
-              type="checkbox"
-              checked={state.declaration}
-              disabled={busy}
-              onChange={(event) => set("declaration", event.target.checked)}
-            />{" "}
-            {DECLARATION_TEXT}
-          </label>
-          <FieldError text={errors.declaration} />
-        </div>
+        <MetadataFields state={state} errors={errors} disabled={busy} set={set} />
         {error && (
           <p className="error" role="alert">
             {error}
@@ -467,94 +315,7 @@ function ReportSummary({ id }: { id: string }) {
   }, [id]);
   if (error) return <p className="muted">{error}</p>;
   if (!report) return <p className="muted">Loading report…</p>;
-  const checks = report.report?.qa?.checks ?? [];
-  return (
-    <>
-      <p>
-        <strong>Verdict:</strong> {report.verdict === "failed_qa" ? "Failed quality checks" : humanize(report.verdict)}
-        {report.failure_code && <> · {humanize(report.failure_code)}</>}
-      </p>
-      {summarizeReport(report).map((section) => (
-        <div key={section.title}>
-          <h3>{section.title}</h3>
-          <dl>
-            {section.rows.map((row) => (
-              <div key={row.label}>
-                <dt>{row.label}</dt>
-                <dd>{row.value}</dd>
-              </div>
-            ))}
-          </dl>
-        </div>
-      ))}
-      {checks.length > 0 && (
-        <details open={checksOpen(report)}>
-          <summary>Quality checks</summary>
-          <div className="table-scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th>Check</th>
-                  <th>Binding</th>
-                  <th>Status</th>
-                  <th>Count</th>
-                </tr>
-              </thead>
-              <tbody>
-                {checks.map((check, index) => (
-                  <tr key={`${check.name}-${index}`}>
-                    <td>{check.name ?? "—"}</td>
-                    <td>{bindingLabel(check.binding)}</td>
-                    <td>{humanize(check.status)}</td>
-                    <td>{check.count ?? "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </details>
-      )}
-    </>
-  );
-}
-
-function ResultDownload({ id, diagnosticFirst }: { id: string; diagnosticFirst: boolean }) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [diagnostic, setDiagnostic] = useState(diagnosticFirst);
-  async function download(asDiagnostic: boolean) {
-    setBusy(true);
-    setError("");
-    try {
-      window.location.assign((await resultGrant(id, asDiagnostic)).url);
-    } catch (e) {
-      if (apiError(e).code === "diagnostic_required") setDiagnostic(true);
-      setError(message(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <>
-      {error && (
-        <p className="error" role="alert">
-          {error}
-        </p>
-      )}
-      <div className="actions">
-        {!diagnosticFirst && (
-          <button className="primary" disabled={busy} onClick={() => void download(false)}>
-            Download result
-          </button>
-        )}
-        {diagnostic && (
-          <button className="secondary" disabled={busy} onClick={() => void download(true)}>
-            Download diagnostic result
-          </button>
-        )}
-      </div>
-    </>
-  );
+  return <ReportDetails report={report} />;
 }
 
 export function UploadDetailPage() {
@@ -620,22 +381,7 @@ function UploadDetail({ id }: { id: string }) {
           !error && <p className="muted">Loading upload…</p>
         ) : (
           <>
-            <div className="table-scroll">
-              <table>
-                <tbody>
-                  <tr><th>Mode</th><td>{modeLabel(job.pipeline, pipelines.list)}</td></tr>
-                  <tr><th>Phase</th><td>{described.phase}</td></tr>
-                  <tr><th>Outcome</th><td>{described.outcome}</td></tr>
-                  <tr><th>Size</th><td>{size(job.encoded_bytes)}</td></tr>
-                  <tr><th>SHA-256</th><td><code>{job.input_sha256 ?? "—"}</code></td></tr>
-                  <tr><th>Upload started</th><td>{when(job.upload_started_at)}</td></tr>
-                  <tr><th>Upload deadline</th><td>{when(job.upload_deadline)}</td></tr>
-                  <tr><th>Admitted</th><td>{when(job.admitted_at)}</td></tr>
-                  <tr><th>Result stored</th><td>{when(job.first_result_stored_at)}</td></tr>
-                  <tr><th>Expires</th><td>{when(job.expires_at)}</td></tr>
-                </tbody>
-              </table>
-            </div>
+            <JobFacts job={job} pipelines={pipelines.list} />
             {failureHint(job) && (
               <p className="notice" role="status">
                 {failureHint(job)}

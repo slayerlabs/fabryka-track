@@ -38,6 +38,8 @@ export function resolvePageMeta(pathname: string): PageMeta {
     matchPath({ path, end: true, caseSensitive: false }, pathname);
   if (matches("/goals/250m-english-base-model"))
     return { title: "Train a 250M English base model", ancestors: [home, goals] };
+  if (matches("/uploads/new"))
+    return { title: "New upload", ancestors: [home, uploads] };
   const upload = matches("/uploads/:id");
   if (upload)
     return { title: `Upload ${upload.params.id!.slice(0, 8)}`, ancestors: [home, uploads] };

@@ -22,7 +22,7 @@ const label = (map: Record<string, string>, name: string) => map[name] ?? name;
 
 const count = (value: number) => value.toLocaleString("en-US");
 
-function duration(ms: number) {
+export function duration(ms: number) {
   if (ms < 1000) return `${ms} ms`;
   const seconds = Math.floor(ms / 1000);
   return seconds >= 60 ? `${Math.floor(seconds / 60)}m ${seconds % 60}s` : `${seconds}s`;

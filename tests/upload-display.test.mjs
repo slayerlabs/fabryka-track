@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { bindingLabel, diagnosticOnly, humanize, jobOutcome, keepPolling, modeLabel, rejectionMessage, showsReport, stoppedMessage } from "../frontend/src/uploads/display.ts";
+import { bindingLabel, diagnosticOnly, errorMessage, hasAttribution, humanize, jobOutcome, keepPolling, modeLabel, rejectionMessage, showsReport, stoppedMessage } from "../frontend/src/uploads/display.ts";
 
 test("machine codes read as plain words", () => {
   assert.equal(humanize("failed_qa"), "Failed qa");
@@ -118,4 +118,17 @@ test("a mode shows its title from the list and falls back to the pipeline id", (
   assert.equal(modeLabel("dynaword-upload", pipelines), "Dynaword");
   assert.equal(modeLabel("x", []), "x");
   assert.equal(modeLabel("x", pipelines), "x");
+});
+
+test("an attribution download is offered only for a published job that lists one", () => {
+  const published = { publication_state: "published", artifacts: [{ kind: "result" }, { kind: "attribution" }] };
+  assert.equal(hasAttribution(job("passed", published)), true);
+  assert.equal(hasAttribution(job("passed", { ...published, publication_state: "pending" })), false);
+  assert.equal(hasAttribution(job("passed", { publication_state: "published", artifacts: [{ kind: "result" }] })), false);
+  assert.equal(hasAttribution(job("passed", { publication_state: "published" })), false);
+});
+
+test("error messages come from Error objects and fall back to a generic sentence", () => {
+  assert.equal(errorMessage(new Error("boom")), "boom");
+  assert.equal(errorMessage("boom"), "Something went wrong. Try again.");
 });

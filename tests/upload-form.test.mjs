@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DECLARATION_TEXT, DECLARATION_VERSION, validateUpload } from "../frontend/src/uploads/form.ts";
+import { DECLARATION_TEXT, DECLARATION_VERSION, MAX_UPLOAD_BYTES, pipelineLimit, validateUpload } from "../frontend/src/uploads/form.ts";
 
 const valid = {
   pipeline: "dynaword-upload",
@@ -74,4 +74,15 @@ test("a license is required, since records without one are all rejected", () => 
   for (const license of ["", "   "])
     assert.match(validateUpload({ ...valid, license }).errors.license, /license/i, JSON.stringify(license));
   assert.equal(validateUpload({ ...valid, license: "CC-BY-4.0" }).errors.license, undefined);
+});
+
+test("the file limit follows the chosen pipeline and falls back to the default", () => {
+  const gib = 1024 ** 3;
+  assert.equal(pipelineLimit({ max_encoded_bytes: 10 * gib }), 10 * gib);
+  for (const pipeline of [undefined, {}, { max_encoded_bytes: 0 }, { max_encoded_bytes: "big" }])
+    assert.equal(pipelineLimit(pipeline), MAX_UPLOAD_BYTES);
+  const big = { ...valid, file: { name: "data.jsonl", size: 2 * gib } };
+  assert.match(validateUpload(big).errors.file, /larger than 512\.0 MiB/);
+  assert.equal(validateUpload(big, 10 * gib).errors.file, undefined);
+  assert.match(validateUpload({ ...big, file: { name: "data.jsonl", size: 10 * gib + 1 } }, 10 * gib).errors.file, /larger than 10\.0 GiB/);
 });

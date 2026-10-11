@@ -11,6 +11,9 @@ export interface Rejection {
 export interface UploadPipeline {
   pipeline: string;
   title: string;
+  description?: string;
+  file_requirements?: string;
+  max_encoded_bytes?: number;
   parameters: Record<string, unknown>;
 }
 
@@ -30,6 +33,7 @@ export interface UploadJob {
   encoded_bytes?: number | null;
   input_sha256?: string | null;
   rejection?: Rejection | null;
+  artifacts?: { kind: string }[];
 }
 
 export interface UploadCheck {

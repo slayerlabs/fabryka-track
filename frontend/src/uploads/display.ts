@@ -91,3 +91,11 @@ export function keepPolling(error: unknown) {
   const { status } = apiError(error);
   return status === undefined || status === 429 || status >= 500;
 }
+
+export const errorMessage = (error: unknown) =>
+  error instanceof Error ? error.message : "Something went wrong. Try again.";
+
+export const formatWhen = (value?: string | null) => (value ? new Date(value).toLocaleString() : "—");
+
+export const hasAttribution = (job: UploadJob) =>
+  showsReport(job) && job.artifacts?.some((artifact) => artifact.kind === "attribution") === true;
