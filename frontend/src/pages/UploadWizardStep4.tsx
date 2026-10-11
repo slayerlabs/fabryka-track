@@ -93,9 +93,10 @@ export function StepResults({ jobId }: { jobId: string | null }) {
   );
   const maskedBars: BarEntry[] = useMemo(() => {
     const masked = report?.report?.report?.pii_masked;
+    const { records, ...categories } = masked ?? {};
     return [
-      ...labeled(masked, PII_LABELS),
-      ...(typeof masked?.records === "number" ? [{ label: "Records with a mask", value: masked.records }] : []),
+      ...labeled(categories, PII_LABELS),
+      ...(typeof records === "number" ? [{ label: "Records with a mask", value: records }] : []),
     ];
   }, [report]);
   const statBars: BarEntry[] = useMemo(() => labeled(report?.report?.qa?.stats, STAT_LABELS), [report]);

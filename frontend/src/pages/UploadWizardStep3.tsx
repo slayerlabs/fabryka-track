@@ -78,6 +78,7 @@ export function StepRun({ pipeline, jobId, maxBytes }: { pipeline: string; jobId
   const started = useRef(false);
   const wasLive = useRef(false);
   const advanced = useRef(false);
+  const cancelOperation = useRef(0);
   useEffect(() => () => abort.current?.abort(), []);
 
   const described = job && describeJob(job);
@@ -109,10 +110,13 @@ export function StepRun({ pipeline, jobId, maxBytes }: { pipeline: string; jobId
     draft.draft.precheckScope?.pipeline !== pipeline || draft.draft.precheckScope.maxBytes !== maxBytes;
 
   useEffect(() => {
+    cancelOperation.current += 1;
     setJob(null);
     setError("");
+    setCancelling(false);
     wasLive.current = false;
     advanced.current = false;
+    return () => { cancelOperation.current += 1; };
   }, [jobId]);
 
   useEffect(() => {
@@ -176,14 +180,17 @@ export function StepRun({ pipeline, jobId, maxBytes }: { pipeline: string; jobId
   }
 
   async function cancel() {
-    if (!job || !window.confirm("Cancel this upload? This cannot be undone.")) return;
+    if (!job || job.job_id !== jobId || cancelling || !window.confirm("Cancel this upload? This cannot be undone.")) return;
+    const operation = ++cancelOperation.current;
     setCancelling(true);
+    setError("");
     try {
-      setJob(await cancelUpload(job.job_id));
+      const next = await cancelUpload(job.job_id);
+      if (cancelOperation.current === operation) setJob(next);
     } catch (e) {
-      setError(message(e));
+      if (cancelOperation.current === operation) setError(message(e));
     } finally {
-      setCancelling(false);
+      if (cancelOperation.current === operation) setCancelling(false);
     }
   }
 

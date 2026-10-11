@@ -177,3 +177,29 @@ test("a declared 10 GiB JSONL starts bounded real reads and aborts after three c
   assert.equal(reads.length, 3);
   assert.ok(reads.every(([start, end]) => end - start <= CHUNK));
 });
+
+
+test("diagnostics count physical lines separately for malformed JSON and invalid records", async () => {
+  for (const ending of ['', '\n']) {
+    for (const reverse of [false, true]) {
+      const errors = reverse ? ['null', '{broken'] : ['{broken', 'null'];
+      const report = await precheckFile(fileFrom([`\n\n${good}\n${errors[0]}\n \n${errors[1]}${ending}`]));
+      assert.equal(report.rows, 3);
+      assert.equal(report.passed, false);
+      assert.match(report.findings.find(f => f.rule === 'json').detail,
+        new RegExp(`first at line ${reverse ? 6 : 4}`));
+      assert.match(report.findings.find(f => f.rule === 'records').detail,
+        new RegExp(`first at line ${reverse ? 4 : 6}`));
+    }
+  }
+});
+
+test("physical error lines survive a newline on the chunk boundary and EOF", async () => {
+  const padding = new Uint8Array(CHUNK - 1).fill(32);
+  const file = fileFrom([padding, '\n\n{broken\nnull']);
+  const report = await precheckFile(file);
+  bounded(file);
+  assert.equal(report.rows, 2);
+  assert.match(report.findings.find(f => f.rule === 'json').detail, /first at line 3/);
+  assert.match(report.findings.find(f => f.rule === 'records').detail, /first at line 4/);
+});

@@ -38,7 +38,9 @@ async function checkJsonl(file: SliceableFile, signal?: AbortSignal): Promise<Pr
   let checked = 0;
   let badParse = 0;
   let badRecords = 0;
-  let firstBadLine = 0;
+  let line = 0;
+  let firstBadJsonLine = 0;
+  let firstBadRecordLine = 0;
   let deferredCount = 0;
   let nonBlank = false;
   let encodedLength = 0;
@@ -58,6 +60,7 @@ async function checkJsonl(file: SliceableFile, signal?: AbortSignal): Promise<Pr
   }
 
   function finishRow() {
+    line += 1;
     const tail = decoder.decode();
     if (tail.trim()) nonBlank = true;
     if (nonBlank) {
@@ -72,13 +75,13 @@ async function checkJsonl(file: SliceableFile, signal?: AbortSignal): Promise<Pr
             record = JSON.parse(fragments.join("") + tail);
           } catch {
             badParse += 1;
-            if (!firstBadLine) firstBadLine = rows;
+            if (!firstBadJsonLine) firstBadJsonLine = line;
           }
           if (record !== undefined) {
             if (typeof record !== "object" || record === null || Array.isArray(record) ||
                 !validId((record as Record<string, unknown>).id) || !validText((record as Record<string, unknown>).text)) {
               badRecords += 1;
-              if (!firstBadLine) firstBadLine = rows;
+              if (!firstBadRecordLine) firstBadRecordLine = line;
             }
           }
         }
@@ -119,7 +122,7 @@ async function checkJsonl(file: SliceableFile, signal?: AbortSignal): Promise<Pr
       rule: "json",
       ok: false,
       count: badParse,
-      detail: `${badParse} ${badParse === 1 ? "line is" : "lines are"} not valid JSON (first at line ${firstBadLine}).`,
+      detail: `${badParse} ${badParse === 1 ? "line is" : "lines are"} not valid JSON (first at line ${firstBadJsonLine}).`,
     });
   }
   if (badRecords > 0) {
@@ -127,7 +130,7 @@ async function checkJsonl(file: SliceableFile, signal?: AbortSignal): Promise<Pr
       rule: "records",
       ok: false,
       count: badRecords,
-      detail: `${badRecords} of the first ${checked} rows miss an id or non-blank text (first at line ${firstBadLine}).`,
+      detail: `${badRecords} of the first ${checked} rows miss an id or non-blank text (first at line ${firstBadRecordLine}).`,
     });
   }
   if (deferredCount > 0) {
