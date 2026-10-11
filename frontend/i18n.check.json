@@ -1,0 +1,6 @@
+{
+  "dictionaries": {
+    "pl": ["src/locales/pl/*.json"],
+    "en": ["src/locales/en/*.json"]
+  }
+}
