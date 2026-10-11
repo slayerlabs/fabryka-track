@@ -2,6 +2,7 @@ import { createContext, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { MAX_UPLOAD_LABEL } from "../uploads/form";
 import type { MetadataValues } from "../uploads/metadata.tsx";
+import type { FilePrecheck } from "../uploads/draft.ts";
 import type { UploadPipeline } from "../uploads/api";
 import { usePipelines, type Pipelines } from "./Uploads";
 import { StepFileCheck } from "./UploadWizardStep2.tsx";
@@ -12,10 +13,12 @@ const STEPS = ["Pipeline", "File check", "Run", "Results"] as const;
 
 export interface WizardDraft extends MetadataValues {
   file: File | null;
+  precheck: FilePrecheck | null;
 }
 
 const emptyDraft = (): WizardDraft => ({
   file: null,
+  precheck: null,
   source: "",
   added: new Date().toISOString().slice(0, 10),
   license: "",

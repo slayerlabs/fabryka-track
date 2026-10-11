@@ -3,6 +3,7 @@ import { useNavigate } from "react-router";
 import { validateUpload, type UploadErrors, type UploadFormState } from "../uploads/form.ts";
 import { FieldError, MetadataFields, type MetadataValues } from "../uploads/metadata.tsx";
 import { precheckFile, type PrecheckReport } from "../uploads/precheck.ts";
+import { precheckFor } from "../uploads/draft.ts";
 import { size } from "./Uploads.tsx";
 import { WizardDraftContext } from "./UploadWizard.tsx";
 
@@ -32,15 +33,18 @@ function reportRows(report: PrecheckReport) {
 export function StepFileCheck({ pipeline }: { pipeline: string }) {
   const draft = useContext(WizardDraftContext);
   const navigate = useNavigate();
-  const [report, setReport] = useState<PrecheckReport | null>(null);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState("");
   const runId = useRef(0);
   const abort = useRef<AbortController | null>(null);
-  useEffect(() => () => abort.current?.abort(), []);
+  useEffect(() => () => {
+    runId.current += 1;
+    abort.current?.abort();
+  }, []);
 
   if (!draft) throw new Error("StepFileCheck must render inside the wizard draft provider.");
   const { patch } = draft;
+  const report = precheckFor(draft.draft.file, draft.draft.precheck);
 
   const metadata: MetadataValues = {
     source: draft.draft.source,
@@ -56,29 +60,26 @@ export function StepFileCheck({ pipeline }: { pipeline: string }) {
   const { errors }: { errors: UploadErrors } = validateUpload(formState);
 
   async function onFile(file: File | null) {
-    patch({ file });
-    setError("");
+    const id = ++runId.current;
     abort.current?.abort();
+    patch({ file, precheck: null });
+    setError("");
     if (!file) {
-      setReport(null);
       setChecking(false);
       return;
     }
-    const id = ++runId.current;
     const controller = new AbortController();
     abort.current = controller;
-    setReport(null);
     setChecking(true);
     try {
       const result = await precheckFile(file, controller.signal);
-      if (id !== runId.current) return;
-      setReport(result);
+      if (id !== runId.current || controller.signal.aborted) return;
+      patch({ precheck: { file, report: result } });
     } catch (e) {
       if (controller.signal.aborted || id !== runId.current) return;
       setError(e instanceof Error ? e.message : "Checking the file failed. Try again.");
-      setReport(null);
     } finally {
-      if (id === runId.current) setChecking(false);
+      if (id === runId.current && !controller.signal.aborted) setChecking(false);
     }
   }
 
@@ -101,6 +102,7 @@ export function StepFileCheck({ pipeline }: { pipeline: string }) {
             disabled={checking}
             onChange={(event) => void onFile(event.target.files?.[0] ?? null)}
           />
+          {draft.draft.file && <small className="muted">Selected file: {draft.draft.file.name}</small>}
           <small className="muted">The format is taken from the file extension.</small>
           <FieldError text={errors.file} />
         </label>

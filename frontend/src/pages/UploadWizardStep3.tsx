@@ -9,6 +9,7 @@ import {
   stoppedMessage,
 } from "../uploads/display.ts";
 import { uploadFile, type UploadProgress } from "../uploads/uploader.ts";
+import { precheckFor } from "../uploads/draft.ts";
 import { validateUpload, type UploadFormState } from "../uploads/form.ts";
 import type { MetadataValues } from "../uploads/metadata.tsx";
 import { WizardDraftContext } from "./UploadWizard.tsx";
@@ -102,7 +103,8 @@ export function StepRun({ pipeline, jobId }: { pipeline: string; jobId: string |
   };
   const formState: UploadFormState = { pipeline, file, ...meta };
   const checked = validateUpload(formState);
-  const gated = !file || Object.keys(checked.errors).length > 0;
+  const gated =
+    !file || Object.keys(checked.errors).length > 0 || precheckFor(file, draft.draft.precheck)?.passed !== true;
 
   useEffect(() => {
     setJob(null);
@@ -145,7 +147,7 @@ export function StepRun({ pipeline, jobId }: { pipeline: string; jobId: string |
   }, [jobId, navigate, pipeline]);
 
   async function start() {
-    if (!checked.form || !file || started.current) return;
+    if (gated || !checked.form || !file || started.current) return;
     started.current = true;
     const controller = new AbortController();
     abort.current = controller;
