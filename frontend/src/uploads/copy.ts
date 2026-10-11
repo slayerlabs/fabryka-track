@@ -114,6 +114,7 @@ export const COPY = {
     newUpload: "New upload",
     history: "All uploads",
     expired: "The results of this upload have expired.",
+    inProgress: "This upload is still in progress. Results appear here once they are published.",
   },
   verdicts: {
     passed: "Passed",
@@ -129,6 +130,13 @@ export const COPY = {
     funnel: "What happened to the records",
     checks: "Quality checks",
     pii: "Personal data masked",
+    recordsIn: "Records in",
+    recordsOut: "Records out",
+    rejectedAtIntake: "Rejected at intake",
+    rejectedPrefix: "Rejected: ",
+    recordsWithMask: "Records with a mask",
+    axis: "Records",
+    unavailable: "The chart library could not be loaded. Reload this page to try again.",
   },
   downloads: {
     result: "Download result",

@@ -2484,3 +2484,12 @@ footer {
 .recipe-stages { margin: 0; padding-left: 20px; color: var(--muted-3); line-height: 1.8; }
 @keyframes timeline-pulse { 50% { box-shadow: 0 0 0 6px var(--accent-tint); } }
 @media (prefers-reduced-motion: reduce) { .timeline-node.active .timeline-marker { animation: none; } }
+
+.result-charts { display: grid; gap: 20px; margin-top: 24px; }
+.check-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+.check-cell { display: grid; gap: 4px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); }
+.check-cell span { font-size: 13px; font-weight: 600; }
+.check-cell small { color: var(--muted); }
+.check-cell.passed { background: var(--green-tint); border-color: var(--green); }
+.check-cell.failed { background: var(--red-tint); border-color: var(--red); }
+.check-cell.other { background: var(--amber-tint); border-color: var(--amber-line); }

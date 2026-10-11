@@ -12,6 +12,7 @@ import { useFileCheck } from "../uploads/useFileCheck";
 import { usePipelines } from "../uploads/usePipelines";
 import { WizardFileStep } from "../uploads/WizardFileStep";
 import { WizardPipelineStep } from "../uploads/WizardPipelineStep";
+import { WizardResultsStep } from "../uploads/WizardResultsStep";
 import { WizardProgressStep } from "../uploads/WizardProgressStep";
 import { HuggingFaceButton } from "./Account";
 
@@ -113,6 +114,7 @@ function UploadWizard() {
           onFinished={() => go({ step: 4 })}
         />
       )}
+      {at.step === 4 && <WizardResultsStep jobId={at.job} pipelines={pipelines.list} />}
       {at.step === 2 && (
         <WizardFileStep
           state={state}
