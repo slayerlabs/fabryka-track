@@ -25,6 +25,7 @@ export interface UploadJob {
   publication_state?: string | null;
   transfer_state?: string | null;
   failure_code?: string | null;
+  stage?: string | null;
   upload_started_at?: string | null;
   upload_deadline?: string | null;
   admitted_at?: string | null;

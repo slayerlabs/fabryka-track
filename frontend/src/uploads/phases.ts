@@ -1,3 +1,4 @@
+import { PIPELINE_STAGE_LABELS } from "./copy.ts";
 import type { UploadProgress } from "./uploader.ts";
 
 export type NodeKey = "hashing" | "parts" | "confirming" | "validating" | "queued" | "running" | "finalizing";
@@ -25,6 +26,9 @@ const FAILURE_NODE: Record<string, number> = { records_invalid: VALIDATING, prof
 const WORKER_CODES = ["input_corrupt", "deadline", "memory_limit", "scratch_limit", "recipe_failed", "provider_transient", "lease_lost", "runtime_unsupported", "transfer_transient"];
 const FINISHED_RUN = new Set(["passed", "failed_qa"]);
 const FINAL_PHASES = new Set(["complete", "rejected", "expired"]);
+
+export const stageLabel = (stage?: string | null) =>
+  stage && Object.hasOwn(PIPELINE_STAGE_LABELS, stage) ? PIPELINE_STAGE_LABELS[stage] : null;
 
 export const isFinal = (clientPhase: string) => FINAL_PHASES.has(clientPhase);
 

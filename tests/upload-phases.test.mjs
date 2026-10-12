@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { isFinal, timeline } from "../frontend/src/uploads/phases.ts";
+import { isFinal, stageLabel, timeline } from "../frontend/src/uploads/phases.ts";
 
 const KEYS = ["hashing", "parts", "confirming", "validating", "queued", "running", "finalizing"];
 const states = (input) => timeline(input).map((node) => node.state);
@@ -114,4 +114,12 @@ test("a known failure code still wins over the last seen node", () => {
 test("a failed upload with no job marks the node it stopped on", () => {
   assert.deepEqual(states({ uploadFailed: true, last: "parts" }), [D, F, P, P, P, P, P]);
   assert.deepEqual(states({ uploadFailed: false, last: "parts" }), Array(7).fill(P));
+});
+
+const STAGES = ["bootstrap", "download", "normalize", "quality_labels", "upload_dedup", "pii_mask", "masked_exact_dedup", "write_parquet", "qa", "artifact_upload", "reporting"];
+
+test("every pipeline stage has a label and unknown or missing stages show nothing", () => {
+  for (const stage of STAGES) assert.ok(stageLabel(stage), stage);
+  assert.equal(stageLabel("pii_mask"), "Masking personal data");
+  for (const value of [undefined, null, "", "future_stage", "__proto__", "constructor"]) assert.equal(stageLabel(value), null);
 });

@@ -20,6 +20,20 @@ export const STAGE_LABELS: Record<string, string> = {
   masked_exact_dedup: "Duplicates after masking",
 };
 
+export const PIPELINE_STAGE_LABELS: Record<string, string> = {
+  bootstrap: "Starting the worker",
+  download: "Downloading the file",
+  normalize: "Validating records",
+  quality_labels: "Removing too-short records",
+  upload_dedup: "Removing duplicates",
+  pii_mask: "Masking personal data",
+  masked_exact_dedup: "Removing duplicates created by masking",
+  write_parquet: "Writing the result file",
+  qa: "Auditing the result",
+  artifact_upload: "Uploading the result",
+  reporting: "Writing the report",
+};
+
 export const PII_LABELS: Record<string, string> = {
   phone: "Phone numbers",
   pii: "Other personal data (PESEL, email…)",
@@ -105,6 +119,7 @@ export const COPY = {
     viewResults: "View results",
     loading: "Loading upload…",
     elapsed: "Elapsed since admitted",
+    stage: "Now",
     recipeHeading: "What the pipeline does with your file",
     factsHeading: "Upload details",
     fileUnreadable: "The file could not be read. Choose it again and retry.",
