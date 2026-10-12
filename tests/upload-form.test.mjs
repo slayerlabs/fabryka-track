@@ -11,7 +11,6 @@ const valid = {
   author: "  ",
   source_ref: "",
   per_record_provenance: false,
-  mask_names: "no",
   declaration: true,
 };
 
@@ -21,11 +20,11 @@ test("a complete form becomes the create request with blank optional fields omit
   assert.deepEqual(form, {
     pipeline: "dynaword-upload",
     format: "jsonl",
-    parameters: { source: "my_source", added: "2026-10-08", license: "CC0-1.0", per_record_provenance: false, mask_names: false },
+    parameters: { source: "my_source", added: "2026-10-08", license: "CC0-1.0", per_record_provenance: false, mask_names: true },
     declaration: { accepted: true, version: DECLARATION_VERSION },
   });
   const filled = validateUpload({ ...valid, file: { name: "x.PARQUET", size: 5 }, license: " cc-by-4.0 ",
-    author: "Ada", source_ref: "https://example.org", per_record_provenance: true, mask_names: "yes" });
+    author: "Ada", source_ref: "https://example.org", per_record_provenance: true });
   assert.equal(filled.form.format, "parquet");
   assert.deepEqual(filled.form.parameters, { source: "my_source", added: "2026-10-08", license: "cc-by-4.0",
     author: "Ada", source_ref: "https://example.org", per_record_provenance: true, mask_names: true });
@@ -47,10 +46,11 @@ test("added must be a real calendar date", () => {
     assert.ok(validateUpload({ ...valid, added }).errors.added, added);
 });
 
-test("mask_names needs an explicit yes or no", () => {
-  const { errors, form } = validateUpload({ ...valid, mask_names: "" });
-  assert.ok(errors.mask_names);
-  assert.equal(form, undefined);
+test("personal names are always masked and the form has no mask_names choice", () => {
+  const { errors, form } = validateUpload(valid);
+  assert.equal(errors.mask_names, undefined);
+  assert.equal(form.parameters.mask_names, true);
+  assert.equal(validateUpload({ ...valid, mask_names: "no" }).form.parameters.mask_names, true);
 });
 
 test("the declaration must be accepted", () => {

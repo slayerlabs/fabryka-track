@@ -11,11 +11,6 @@ const TEXT_FIELDS = [
   { key: "source_ref", label: "Source reference (optional)", placeholder: "https://", hint: undefined },
 ] as const;
 
-const MASK_CHOICES = [
-  { value: "yes", label: "Yes, mask names" },
-  { value: "no", label: "No, keep names" },
-] as const;
-
 export const emptyForm = (): UploadFormState => ({
   pipeline: "",
   file: null,
@@ -25,7 +20,6 @@ export const emptyForm = (): UploadFormState => ({
   author: "",
   source_ref: "",
   per_record_provenance: false,
-  mask_names: "",
   declaration: false,
 });
 
@@ -95,22 +89,6 @@ export function MetadataFields({ state, errors, disabled, set }: Props) {
           </label>
           <small className="muted">When checked, every record must have its own source_ref.</small>
         </div>
-      </div>
-      <div className="field" role="radiogroup" aria-labelledby="mask-names-label">
-        <span id="mask-names-label">Mask personal names?</span>
-        {MASK_CHOICES.map(({ value, label }) => (
-          <label key={value}>
-            <input
-              type="radio"
-              name="mask_names"
-              disabled={disabled}
-              checked={state.mask_names === value}
-              onChange={() => set("mask_names", value)}
-            />{" "}
-            {label}{" "}
-          </label>
-        ))}
-        <FieldError text={errors.mask_names} />
       </div>
       <div className="field">
         <span>Declaration</span>

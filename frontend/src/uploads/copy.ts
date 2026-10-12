@@ -96,7 +96,7 @@ export const COPY = {
     intro: "Keep this tab open until the upload finishes; an interrupted upload cannot be resumed and has to be started again.",
     fileLabel: "File",
     missingFields: "Still needed:",
-    fields: { source: "Source", added: "Added", license: "License", mask_names: "Mask personal names", declaration: "Declaration", file: "File", pipeline: "Mode" },
+    fields: { source: "Source", added: "Added", license: "License", declaration: "Declaration", file: "File", pipeline: "Mode" },
     formatHint: "The format is taken from the file extension.",
     checking: "Checking the file…",
     checkFailed: "The file could not be checked.",

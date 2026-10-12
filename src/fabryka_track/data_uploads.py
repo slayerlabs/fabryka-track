@@ -73,7 +73,8 @@ class UploadParameters(Body):
     author: str | None = Field(default=None, max_length=4096)
     source_ref: str | None = Field(default=None, max_length=4096)
     per_record_provenance: StrictBool | None = None
-    mask_names: StrictBool
+    # accepted only so cached older frontends keep working; the value is ignored
+    mask_names: StrictBool | None = None
 
 
 class Declaration(Body):
@@ -232,7 +233,7 @@ def oversize_error(caller, body, refusal):
 @router.post("")
 def create_upload(body: CreateUpload, caller=Depends(uploader)):
     payload = {"protocol": PROTOCOL, "pipeline": body.pipeline, "input": body.input.model_dump(),
-               "parameters": body.parameters.model_dump(exclude_none=True),
+               "parameters": {**body.parameters.model_dump(exclude_none=True), "mask_names": True},
                "declaration": {"version": body.declaration.version, "accepted": True}}
     try:
         return forward(caller, "POST", "/jobs", json=payload, action_key=body.action_key)
