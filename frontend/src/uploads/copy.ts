@@ -24,7 +24,7 @@ export const PIPELINE_STAGE_LABELS: Record<string, string> = {
   bootstrap: "Starting the worker",
   download: "Downloading the file",
   normalize: "Validating records",
-  quality_labels: "Checking record quality",
+  quality_labels: "Removing too-short records",
   upload_dedup: "Removing duplicates",
   pii_mask: "Masking personal data",
   masked_exact_dedup: "Removing duplicates created by masking",
