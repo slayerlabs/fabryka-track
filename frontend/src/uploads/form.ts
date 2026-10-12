@@ -25,7 +25,6 @@ export interface UploadFormState {
   author: string;
   source_ref: string;
   per_record_provenance: boolean;
-  mask_names: "yes" | "no" | "";
   declaration: boolean;
 }
 
@@ -57,8 +56,6 @@ export function validateUpload(state: UploadFormState, limitBytes = MAX_UPLOAD_B
       "Use up to 128 lowercase letters, digits and underscores, starting with a letter or digit.";
   if (!isCalendarDate(state.added)) errors.added = "Enter the date the data was added (YYYY-MM-DD).";
   if (!state.license.trim()) errors.license = "Enter the license of the data, for example CC-BY-4.0.";
-  if (state.mask_names !== "yes" && state.mask_names !== "no")
-    errors.mask_names = "Choose whether personal names should be masked.";
   if (!state.declaration) errors.declaration = "Accept the declaration to continue.";
   if (Object.keys(errors).length || !format) return { errors };
   const parameters: UploadForm["parameters"] = { source: state.source, added: state.added };
@@ -67,6 +64,6 @@ export function validateUpload(state: UploadFormState, limitBytes = MAX_UPLOAD_B
     if (value) parameters[key] = value;
   }
   parameters.per_record_provenance = state.per_record_provenance;
-  parameters.mask_names = state.mask_names === "yes";
+  parameters.mask_names = true;
   return { errors, form: { pipeline: state.pipeline, format, parameters, declaration: { accepted: true, version: DECLARATION_VERSION } } };
 }

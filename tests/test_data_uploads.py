@@ -19,7 +19,7 @@ def create_body(**overrides):
         "action_key": ACTION_KEY,
         "pipeline": "dynaword-upload",
         "input": {"format": "jsonl", "encoded_bytes": 1024, "sha256": "a" * 64, "filename": "data.jsonl"},
-        "parameters": {"source": "my_source", "added": "2026-10-08", "license": "cc-by-4.0", "mask_names": False},
+        "parameters": {"source": "my_source", "added": "2026-10-08", "license": "cc-by-4.0"},
         "declaration": {"accepted": True, "version": data_uploads.DECLARATION_VERSION},
     }
     body.update(overrides)
@@ -105,7 +105,7 @@ def test_create_forwards_track_pair_and_hugging_face_identity(client, controller
     assert json.loads(sent.content) == {
         "protocol": "job-v1", "pipeline": "other-mode",
         "input": {"format": "jsonl", "encoded_bytes": 1024, "sha256": "a" * 64, "filename": "data.jsonl"},
-        "parameters": {"source": "my_source", "added": "2026-10-08", "license": "cc-by-4.0", "mask_names": False},
+        "parameters": {"source": "my_source", "added": "2026-10-08", "license": "cc-by-4.0", "mask_names": True},
         "declaration": {"version": "upload-declaration-v0-placeholder", "accepted": True},
     }
 
@@ -120,14 +120,12 @@ def test_create_without_accepted_declaration_never_reaches_controller(client, co
     assert controller.requests == []
 
 
-@pytest.mark.parametrize("mask_names", [None, "yes"])
-def test_mask_names_is_an_explicit_yes_or_no(client, controller, mask_names):
+@pytest.mark.parametrize("sent", [{}, {"mask_names": False}, {"mask_names": True}])
+def test_mask_names_is_always_true_whatever_the_browser_sends(client, controller, sent):
     body = create_body()
-    body["parameters"] = {**body["parameters"], "mask_names": mask_names}
-    if mask_names is None:
-        del body["parameters"]["mask_names"]
-    assert client.post("/api/uploads", json=body).status_code == 422
-    assert controller.requests == []
+    body["parameters"] = {k: v for k, v in body["parameters"].items() if k != "mask_names"} | sent
+    assert client.post("/api/uploads", json=body).status_code == 201
+    assert json.loads(controller.requests[0].content)["parameters"]["mask_names"] is True
 
 
 def test_repeated_create_returns_same_job(client, controller):
