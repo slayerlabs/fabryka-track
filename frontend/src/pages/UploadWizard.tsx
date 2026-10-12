@@ -64,6 +64,7 @@ function UploadWizard() {
   useEffect(() => {
     if (settled && urlStale) navigate(wizardUrl(at), { replace: true });
   }, [settled, urlStale, at.step, at.pipeline, at.job]);
+  useEffect(() => window.scrollTo(0, 0), [at.step]);
 
   const go = (next: Partial<WizardLocation> & { step: Step }, replace = false) =>
     navigate(wizardUrl({ ...at, ...next }), { replace });
