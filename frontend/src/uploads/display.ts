@@ -1,4 +1,6 @@
-import type { Rejection, UploadJob, UploadPipeline } from "./api.ts";
+import type { UploadJob, UploadPipeline } from "./api.ts";
+import { rejectionMessage as rejectionSentence } from "./rejection.ts";
+import { isFinal } from "./phases.ts";
 import type { UploadProgress } from "./uploader.ts";
 import { apiError } from "../provider.ts";
 
@@ -6,7 +8,6 @@ export const TRANSFER_READY = "ready";
 export const TRANSFER_CLOSED = "closed";
 export const PROCESSING_UPLOADING = "uploading";
 export const CLOSED_PHASES = new Set(["expired", "rejected"]);
-export const TERMINAL_PHASES = new Set(["complete", ...CLOSED_PHASES]);
 
 const PHASE_LABELS: Record<string, string> = {
   uploading: "Uploading",
@@ -62,32 +63,9 @@ export function failureHint(job: Pick<UploadJob, "processing_state" | "failure_c
 
 const REJECTION_TAIL = " No record in the first part of the file passed, so the upload was stopped before processing.";
 
-const FORM_LABELS: Record<string, string> = { license: "License", author: "Author" };
-
-function rejectionReason({ position, rule, field }: Rejection) {
-  switch (rule) {
-    case "json_object":
-      return `Record ${position} is not a JSON object.`;
-    case "required":
-      return `Record ${position} has no ${field}.`;
-    case "non_blank":
-      return `Record ${position} has a blank ${field}.`;
-    case "field_or_parameter":
-      return `Record ${position} has no ${field}. Set ${FORM_LABELS[field ?? ""] ?? field} in the form or add ${field} to every record.`;
-    case "required_when_parameter":
-      return `Record ${position} has no ${field}, which every record needs when 'Records carry their own provenance' is checked.`;
-    case "override_needs_field":
-      return `Record ${position} has its own ${field} but no source_ref; a ${field} that differs from the form's ${FORM_LABELS[field ?? ""] ?? field} needs one. Add source_ref to the record, or leave ${field} out of the record to use the form's.`;
-    case "parquet_column":
-      return `The Parquet file has no ${field} column.`;
-  }
-  const subject = position > 0 ? `Record ${position}` : "A record";
-  return `${subject} did not pass the ${rule} check${field ? ` on ${field}` : ""}.`;
-}
-
 export function rejectionMessage(job: JobState) {
   if (job.processing_state !== "rejected" || job.failure_code !== "records_invalid") return null;
-  const reason = job.rejection ? rejectionReason(job.rejection) : "The first records did not pass the pre-check.";
+  const reason = job.rejection ? rejectionSentence(job.rejection) : "The first records did not pass the pre-check.";
   return reason + REJECTION_TAIL;
 }
 
@@ -99,7 +77,7 @@ export function describeJob(job: UploadJob) {
   return {
     phase: PHASE_LABELS[job.client_phase] ?? job.client_phase,
     outcome: jobOutcome(job),
-    terminal: TERMINAL_PHASES.has(job.client_phase),
+    terminal: isFinal(job.client_phase),
     hasReport: showsReport(job),
     diagnosticOnly: diagnosticOnly(job),
     updatedAt: [job.first_result_stored_at, job.admitted_at, job.upload_started_at]
@@ -113,3 +91,19 @@ export function keepPolling(error: unknown) {
   const { status } = apiError(error);
   return status === undefined || status === 429 || status >= 500;
 }
+
+export const errorMessage = (error: unknown) =>
+  error instanceof Error ? error.message : "Something went wrong. Try again.";
+
+export const formatWhen = (value?: string | null) => (value ? new Date(value).toLocaleString() : "—");
+
+export const hasAttribution = (job: UploadJob) =>
+  showsReport(job) && job.artifacts?.some((artifact) => artifact.kind === "attribution") === true;
+
+const PROTOCOL_TERMINAL = new Set(["passed", "failed_qa", "failed", "cancelled", "rejected"]);
+
+export const canCancel = (job: Pick<UploadJob, "client_phase" | "processing_state">) =>
+  !isFinal(job.client_phase) && job.client_phase !== "finalizing" && !PROTOCOL_TERMINAL.has(job.processing_state ?? "");
+
+export const publishingResults = (job: Pick<UploadJob, "processing_state">) =>
+  job.processing_state === "passed" || job.processing_state === "failed_qa";

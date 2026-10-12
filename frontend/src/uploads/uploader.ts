@@ -1,7 +1,6 @@
 import { apiError } from "../provider.ts";
 import { CLOSED_PHASES, PROCESSING_UPLOADING, TRANSFER_CLOSED, TRANSFER_READY } from "./display.ts";
 import type { UploadForm } from "./form.ts";
-import type { Hasher } from "./sha256.ts";
 
 const CHUNK_BYTES = 8 * 1024 * 1024;
 const PART_RETRIES = 3;
@@ -24,7 +23,7 @@ export interface UploaderDeps {
   call: (path: string, init?: RequestInit) => Promise<unknown>;
   fetch: (url: string, init: RequestInit) => Promise<Response>;
   sleep: (ms: number, signal?: AbortSignal) => Promise<void>;
-  createHash: () => Hasher;
+  hash: (file: SliceableFile, onProgress: (loaded: number) => void, signal?: AbortSignal) => Promise<string>;
   newKey: () => string;
 }
 
@@ -44,20 +43,6 @@ const post = (body: unknown, signal?: AbortSignal): RequestInit => ({
   signal,
 });
 
-export async function hashFile(
-  file: SliceableFile,
-  hasher: Hasher,
-  { signal, onProgress }: Options = {},
-) {
-  for (let offset = 0; offset < file.size; offset += CHUNK_BYTES) {
-    signal?.throwIfAborted();
-    const end = Math.min(file.size, offset + CHUNK_BYTES);
-    hasher.update(new Uint8Array(await file.slice(offset, end).arrayBuffer()));
-    onProgress?.({ phase: "hashing", loaded: end, total: file.size });
-  }
-  return hasher.digest();
-}
-
 export async function uploadFile(
   file: SliceableFile,
   form: UploadForm,
@@ -66,7 +51,7 @@ export async function uploadFile(
 ) {
   const { signal, onProgress } = options;
   if (file.size === 0) throw new Error("The file is empty.");
-  const sha256 = await hashFile(file, deps.createHash(), options);
+  const sha256 = await deps.hash(file, (loaded) => onProgress?.({ phase: "hashing", loaded, total: file.size }), signal);
   onProgress?.({ phase: "preparing", loaded: 0, total: file.size });
   // No abort signal: an abandoned in-flight create could still produce a job that holds the slot.
   const create = post({

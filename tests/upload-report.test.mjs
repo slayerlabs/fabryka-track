@@ -29,8 +29,8 @@ test("an old report shows what it has and no funnel or masks", () => {
   assert.equal(row(OLD, "What happened to the data", "Near-duplicate pairs"), "2");
   assert.equal(row(OLD, "What happened to the data", "Not measured"), "PERSON, street_address");
   assert.equal(row(OLD, "Processing", "Processing time"), "5m 28s");
-  assert.equal(row(OLD, "Processing", "Input size"), "9.5 MB");
-  assert.equal(row(OLD, "Processing", "Output size"), "3.5 MB");
+  assert.equal(row(OLD, "Processing", "Input size"), "9.5 MiB");
+  assert.equal(row(OLD, "Processing", "Output size"), "3.5 MiB");
 });
 
 test("seeds, digests and memory are never shown", () => {
@@ -74,6 +74,12 @@ test("every rejection reason has its exact label", () => {
   assert.deepEqual(labels, Object.values(expected).map((l) => `Rejected: ${l}`));
 });
 
+test("an unresolved source_ref is labelled in the old summary too", () => {
+  const r = structuredClone(NEW);
+  r.report.report.funnel.rejected = { source_ref_unresolved: 2 };
+  assert.equal(row(r, "Records", "Rejected: unresolved source_ref"), "2");
+});
+
 test("durations under a second are shown in milliseconds", () => {
   const r = structuredClone(OLD);
   for (const [ms, text] of [[450, "450 ms"], [0, "0 ms"], [999, "999 ms"], [1000, "1s"], [59000, "59s"], [61000, "1m 1s"]]) {
@@ -82,9 +88,9 @@ test("durations under a second are shown in milliseconds", () => {
   }
 });
 
-test("sizes use B, KB, MB and GB", () => {
+test("sizes use B, KiB, MiB and GiB", () => {
   const r = structuredClone(OLD);
-  for (const [n, text] of [[0, "0 B"], [1023, "1,023 B"], [1024, "1.0 KB"], [1536, "1.5 KB"], [5 * 1024 * 1024, "5.0 MB"], [1024 ** 3, "1.0 GB"], [2.5 * 1024 ** 3, "2.5 GB"]]) {
+  for (const [n, text] of [[0, "0 B"], [1023, "1,023 B"], [1024, "1.0 KiB"], [1536, "1.5 KiB"], [5 * 1024 * 1024, "5.0 MiB"], [1024 ** 3, "1.0 GiB"], [2.5 * 1024 ** 3, "2.5 GiB"]]) {
     r.report.counters.input_bytes = n;
     assert.equal(row(r, "Processing", "Input size"), text);
   }

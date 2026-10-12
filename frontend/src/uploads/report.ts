@@ -1,4 +1,6 @@
 import type { UploadReport } from "./api.ts";
+import { formatBytes } from "./bytes.ts";
+import { PII_LABELS, REJECT_LABELS, STAGE_LABELS, STAT_LABELS } from "./copy.ts";
 
 export interface SummaryRow {
   label: string;
@@ -10,41 +12,6 @@ export interface SummarySection {
   rows: SummaryRow[];
 }
 
-const REJECT_REASON_LABELS: Record<string, string> = {
-  unparseable: "unparseable line",
-  not_an_object: "not a JSON object",
-  missing_id: "missing id",
-  invalid_id: "invalid id",
-  duplicate_id: "duplicate id",
-  invalid_text: "invalid text",
-  empty_text: "empty text",
-  source_mismatch: "source mismatch",
-  invalid_field_type: "invalid field type",
-  invalid_date: "invalid date",
-  missing_license: "missing license",
-  missing_source_ref: "missing source_ref",
-};
-
-const STAGE_LABELS: Record<string, string> = {
-  quality_labels: "Too short",
-  upload_dedup: "Near or exact duplicates",
-  masked_exact_dedup: "Duplicates after masking",
-};
-
-const PII_LABELS: Record<string, string> = {
-  phone: "Phone numbers",
-  pii: "Other personal data (PESEL, email…)",
-  person: "Person names",
-};
-
-const STAT_LABELS: Record<string, string> = {
-  token_count: "Tokens",
-  exact_duplicate_pairs: "Exact duplicate pairs",
-  near_duplicate_pairs: "Near-duplicate pairs",
-  residual_pii_records: "Records with remaining personal data",
-  license_review_records: "Records needing license review",
-};
-
 function inOrder(counts: Record<string, number> | undefined, known: Record<string, string>) {
   const entries = Object.entries(counts ?? {});
   const rank = (name: string) => Object.keys(known).indexOf(name);
@@ -55,14 +22,7 @@ const label = (map: Record<string, string>, name: string) => map[name] ?? name;
 
 const count = (value: number) => value.toLocaleString("en-US");
 
-function bytes(value: number) {
-  if (value >= 1024 ** 3) return `${(value / 1024 ** 3).toFixed(1)} GB`;
-  if (value >= 1024 * 1024) return `${(value / 1024 / 1024).toFixed(1)} MB`;
-  if (value >= 1024) return `${(value / 1024).toFixed(1)} KB`;
-  return `${count(value)} B`;
-}
-
-function duration(ms: number) {
+export function duration(ms: number) {
   if (ms < 1000) return `${ms} ms`;
   const seconds = Math.floor(ms / 1000);
   return seconds >= 60 ? `${Math.floor(seconds / 60)}m ${seconds % 60}s` : `${seconds}s`;
@@ -88,7 +48,7 @@ export function summarizeReport(report: UploadReport): SummarySection[] {
   const records = present(funnel
     ? [
         ["Records in", format(funnel.rows_in)],
-        ...inOrder(funnel.rejected, REJECT_REASON_LABELS).map(([k, v]): [string, string | undefined] => [`Rejected: ${label(REJECT_REASON_LABELS, k)}`, format(v)]),
+        ...inOrder(funnel.rejected, REJECT_LABELS).map(([k, v]): [string, string | undefined] => [`Rejected: ${label(REJECT_LABELS, k)}`, format(v)]),
         ...inOrder(funnel.removed, STAGE_LABELS).map(([k, v]): [string, string | undefined] => [`Removed: ${label(STAGE_LABELS, k).toLowerCase()}`, format(v)]),
         ["Records out", format(funnel.rows_out)],
       ]
@@ -108,8 +68,8 @@ export function summarizeReport(report: UploadReport): SummarySection[] {
 
   const processing = present([
     ["Processing time", format(counters?.elapsed_ms, duration)],
-    ["Input size", format(counters?.input_bytes, bytes)],
-    ["Output size", format(counters?.output_bytes, bytes)],
+    ["Input size", format(counters?.input_bytes, formatBytes)],
+    ["Output size", format(counters?.output_bytes, formatBytes)],
   ]);
 
   return [

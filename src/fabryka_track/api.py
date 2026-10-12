@@ -429,7 +429,7 @@ def web(path: str = ""):
              "benchmarks": "Evaluation queue", "leaderboard": "Training results", "models": "Model leaderboard", "guide": "Learning guide",
              "login": "Sign in", "register": "Sign in", "account": "Account", "checkpoints": "Checkpoints",
              "agents": "Agent sign up",
-             "benchmark-results": "Published benchmarks", "uploads": "Data uploads",
+             "benchmark-results": "Published benchmarks", "uploads": "Data uploads", "uploads/new": "New upload",
              "goals/250m-english-base-model": "250M English base model"}
     path = path.rstrip("/")
     title = pages.get(path)

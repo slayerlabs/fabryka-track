@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { bindingLabel, diagnosticOnly, humanize, jobOutcome, keepPolling, modeLabel, rejectionMessage, showsReport, stoppedMessage } from "../frontend/src/uploads/display.ts";
+import { isFinal } from "../frontend/src/uploads/phases.ts";
+import { bindingLabel, canCancel, describeJob, diagnosticOnly, errorMessage, publishingResults, hasAttribution, humanize, jobOutcome, keepPolling, modeLabel, rejectionMessage, showsReport, stoppedMessage } from "../frontend/src/uploads/display.ts";
 
 test("machine codes read as plain words", () => {
   assert.equal(humanize("failed_qa"), "Failed qa");
@@ -79,16 +80,11 @@ test("a job whose every record was refused explains the usual causes", async () 
 const rejected = (rejection) => ({ processing_state: "rejected", failure_code: "records_invalid", client_phase: "closed", rejection });
 const TAIL = " No record in the first part of the file passed, so the upload was stopped before processing.";
 
-test("each pre-check rule has a plain message", () => {
+test("a rejected job shows the specific sentence for its reason", () => {
   const cases = [
-    [{ position: 3, rule: "json_object", field: null }, "Record 3 is not a JSON object."],
-    [{ position: 3, rule: "required", field: "text" }, "Record 3 has no text."],
-    [{ position: 3, rule: "non_blank", field: "text" }, "Record 3 has a blank text."],
-    [{ position: 3, rule: "field_or_parameter", field: "license" }, "Record 3 has no license. Set License in the form or add license to every record."],
-    [{ position: 3, rule: "field_or_parameter", field: "author" }, "Record 3 has no author. Set Author in the form or add author to every record."],
-    [{ position: 3, rule: "required_when_parameter", field: "source_ref" }, "Record 3 has no source_ref, which every record needs when 'Records carry their own provenance' is checked."],
-    [{ position: 3, rule: "override_needs_field", field: "license" }, "Record 3 has its own license but no source_ref; a license that differs from the form's License needs one. Add source_ref to the record, or leave license out of the record to use the form's."],
-    [{ position: 3, rule: "override_needs_field", field: "author" }, "Record 3 has its own author but no source_ref; a author that differs from the form's Author needs one. Add source_ref to the record, or leave author out of the record to use the form's."],
+    [{ position: 3, rule: "not_an_object", field: null }, "Record 3 is not a JSON object."],
+    [{ position: 3, rule: "missing_id", field: "id" }, "Record 3 has no id."],
+    [{ position: 3, rule: "empty_text", field: "text" }, "Record 3 has a blank text."],
     [{ position: 0, rule: "parquet_column", field: "text" }, "The Parquet file has no text column."],
   ];
   for (const [rejection, message] of cases) assert.equal(rejectionMessage(rejected(rejection)), message + TAIL);
@@ -123,4 +119,37 @@ test("a mode shows its title from the list and falls back to the pipeline id", (
   assert.equal(modeLabel("dynaword-upload", pipelines), "Dynaword");
   assert.equal(modeLabel("x", []), "x");
   assert.equal(modeLabel("x", pipelines), "x");
+});
+
+test("an attribution download is offered only for a published job that lists one", () => {
+  const published = { publication_state: "published", artifacts: [{ kind: "result" }, { kind: "attribution" }] };
+  assert.equal(hasAttribution(job("passed", published)), true);
+  assert.equal(hasAttribution(job("passed", { ...published, publication_state: "pending" })), false);
+  assert.equal(hasAttribution(job("passed", { publication_state: "published", artifacts: [{ kind: "result" }] })), false);
+  assert.equal(hasAttribution(job("passed", { publication_state: "published" })), false);
+});
+
+test("error messages come from Error objects and fall back to a generic sentence", () => {
+  assert.equal(errorMessage(new Error("boom")), "boom");
+  assert.equal(errorMessage("boom"), "Something went wrong. Try again.");
+});
+
+test("an upload can be cancelled only while it is still working", () => {
+  for (const phase of ["uploading", "validating", "queued", "running"]) assert.equal(canCancel(job("running", { client_phase: phase })), true, phase);
+  assert.equal(canCancel(job("passed", { client_phase: "finalizing" })), false);
+  assert.equal(canCancel(job("running", { client_phase: "finalizing" })), false);
+  for (const state of ["passed", "failed_qa", "failed", "cancelled", "rejected"]) assert.equal(canCancel(job(state, { client_phase: "running" })), false, state);
+  for (const phase of ["complete", "rejected", "expired"]) assert.equal(canCancel(job("running", { client_phase: phase })), false, phase);
+});
+
+test("only a finished run is being published; other finalizing jobs are just finishing up", () => {
+  assert.equal(publishingResults(job("passed")), true);
+  assert.equal(publishingResults(job("failed_qa")), true);
+  assert.equal(publishingResults(job("failed")), false);
+  assert.equal(publishingResults(job("cancelled")), false);
+});
+
+test("the history terminal flag and the wizard's final phases are the same set", () => {
+  for (const phase of ["uploading", "validating", "queued", "running", "finalizing", "complete", "rejected", "expired", "unknown"])
+    assert.equal(describeJob(job("passed", { client_phase: phase })).terminal, isFinal(phase), phase);
 });

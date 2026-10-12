@@ -1,6 +1,6 @@
 import { request } from "../provider.ts";
-import { Sha256 } from "./sha256.ts";
 import type { UploaderDeps } from "./uploader.ts";
+import { hashInWorker } from "./workerHash.ts";
 
 export interface Rejection {
   position: number;
@@ -11,6 +11,9 @@ export interface Rejection {
 export interface UploadPipeline {
   pipeline: string;
   title: string;
+  description?: string;
+  file_requirements?: string;
+  max_encoded_bytes?: number;
   parameters: Record<string, unknown>;
 }
 
@@ -30,6 +33,7 @@ export interface UploadJob {
   encoded_bytes?: number | null;
   input_sha256?: string | null;
   rejection?: Rejection | null;
+  artifacts?: { kind: string }[];
 }
 
 export interface UploadCheck {
@@ -46,7 +50,7 @@ export interface UploadReport {
     rows_in?: number | null;
     rows_out?: number | null;
     counters?: { elapsed_ms?: number | null; input_bytes?: number | null; output_bytes?: number | null };
-    qa?: { checks?: UploadCheck[]; stats?: Record<string, number | null> };
+    qa?: { checks?: UploadCheck[]; stats?: Record<string, number | null> } | null;
     report?: {
       funnel?: {
         rows_in?: number | null;
@@ -100,6 +104,10 @@ export const browserUploaderDeps = (): UploaderDeps => ({
   call: request,
   fetch: (url, init) => fetch(url, init),
   sleep,
-  createHash: () => new Sha256(),
+  hash: (file, onProgress, signal) =>
+    hashInWorker(() => new Worker(new URL("./sha256.worker.ts", import.meta.url), { type: "module" }), file, onProgress, signal),
   newKey: () => crypto.randomUUID(),
 });
+
+export const attributionGrant = (id: string, diagnostic = false) =>
+  request<{ url: string }>(`${job(id)}/attribution${diagnostic ? "?diagnostic=true" : ""}`);
