@@ -44,7 +44,6 @@ const navigation: { label: string; links: [string, string, IconName][] }[] = [
       ["/runs", "Focused runs", "play"],
       ["/checkpoints", "Checkpoints", "layers"],
       ["/benchmarks", "Evaluation queue", "chart"],
-      ["/uploads", "Data uploads", "database"],
       ["/leaderboard", "Fabryka leaderboard", "trophy"],
     ],
   },
