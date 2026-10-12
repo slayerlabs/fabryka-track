@@ -477,3 +477,13 @@ def test_attribution_is_guarded_like_the_other_upload_routes(client, controller)
     client.cookies.clear()
     assert client.get(f"/api/uploads/{JOB_ID}/attribution").status_code == 401
     assert len(controller.requests) == 1
+
+
+@pytest.mark.parametrize("stage", ["pii_mask", None, "stage_from_the_future"])
+def test_job_status_passes_the_stage_through_untouched(client, controller, stage):
+    controller.reply = lambda request: httpx.Response(200, json={**job_status(), "stage": stage})
+    assert client.get(f"/api/uploads/{JOB_ID}").json()["stage"] == stage
+
+
+def test_job_status_without_a_stage_stays_without_one(client, controller):
+    assert "stage" not in client.get(f"/api/uploads/{JOB_ID}").json()

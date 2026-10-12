@@ -1,6 +1,6 @@
 import { formatBytes } from "./bytes";
 import { COPY } from "./copy";
-import type { NodeKey, TimelineNode } from "./phases";
+import { stageLabel, type NodeKey, type TimelineNode } from "./phases";
 import type { UploadProgress } from "./uploader";
 
 const MARKER = { pending: "", active: "", done: "✓", failed: "✕" } as const;
@@ -22,13 +22,22 @@ interface Props {
   nodes: TimelineNode[];
   upload: UploadProgress | null;
   elapsed: string | null;
+  stage?: string | null;
 }
 
-export function Timeline({ nodes, upload, elapsed }: Props) {
+export function Timeline({ nodes, upload, elapsed, stage }: Props) {
   const detail = (key: NodeKey) => {
     if (upload && key === "hashing" && upload.phase === "hashing") return <Transfer upload={upload} />;
     if (upload && key === "parts" && (upload.phase === "preparing" || upload.phase === "uploading")) return <Transfer upload={upload} />;
-    if (key === "running" && elapsed) return <span>{COPY.progress.elapsed}: {elapsed}</span>;
+    if (key === "running") {
+      const now = stageLabel(stage);
+      return (
+        <>
+          {elapsed && <span>{COPY.progress.elapsed}: {elapsed}</span>}
+          {now && <span>{COPY.progress.stage}: {now}</span>}
+        </>
+      );
+    }
     return null;
   };
   return (

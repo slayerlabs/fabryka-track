@@ -131,7 +131,7 @@ export function WizardProgressStep({ jobId, source, pipelines, onJobCreated, onB
             {state.error}
           </p>
         )}
-        <Timeline nodes={timeline(timelineInput(state))} upload={state.upload} elapsed={elapsed} />
+        <Timeline nodes={timeline(timelineInput(state))} upload={state.upload} elapsed={elapsed} stage={job?.stage} />
         {job?.client_phase === "finalizing" && (
           <p className="notice" role="status">
             {publishingResults(job) ? COPY.messages.publishing : COPY.messages.finishing}
