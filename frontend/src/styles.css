@@ -291,7 +291,7 @@ small {
   font-weight: 600;
   margin-bottom: 9px;
 }
-input:not([type="range"]):not([type="checkbox"]),
+input:not([type="range"]):not([type="checkbox"]):not([type="radio"]),
 select,
 textarea {
   width: 100%;
