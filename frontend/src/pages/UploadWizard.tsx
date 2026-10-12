@@ -54,7 +54,8 @@ function UploadWizard() {
   const hasJob = requested.job !== "";
   if (hasJob !== hadJob) {
     setHadJob(hasJob);
-    if (hadJob) setForm(emptyForm());
+    // reset only once the job id is in the URL: navigation runs as a transition, so an earlier reset bounces to step 2
+    setForm(emptyForm());
   }
 
   const at = resolveLocation({ ...requested, pipeline: pipelineId }, { canStart });
@@ -99,10 +100,7 @@ function UploadWizard() {
           jobId={at.job}
           source={form.file && validation.form ? { file: form.file, form: validation.form } : null}
           pipelines={pipelines.list}
-          onJobCreated={(job) => {
-            setForm(emptyForm());
-            go({ step: 3, job }, true);
-          }}
+          onJobCreated={(job) => go({ step: 3, job }, true)}
           onBusyChange={setUploading}
           onFinished={() => go({ step: 4 })}
         />
