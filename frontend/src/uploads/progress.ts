@@ -14,6 +14,7 @@ export interface ProgressState {
   runningSince: number | null;
   last: NodeKey | null;
   uploadFailed: boolean;
+  created: boolean;
 }
 
 const UPLOAD_KEY: Record<UploadProgress["phase"], NodeKey> = { hashing: "hashing", preparing: "parts", uploading: "parts", confirming: "confirming" };
@@ -40,6 +41,7 @@ export const initialProgress: ProgressState = {
   runningSince: null,
   last: null,
   uploadFailed: false,
+  created: false,
 };
 
 function observe(state: ProgressState, job: UploadJob, now: number): ProgressState {
@@ -57,6 +59,8 @@ function observe(state: ProgressState, job: UploadJob, now: number): ProgressSta
   };
 }
 
+export const awaitingStart = (state: ProgressState, jobId: string) => !jobId && !state.uploading && !state.created;
+
 export function progressReducer(state: ProgressState, action: ProgressAction): ProgressState {
   switch (action.type) {
     case "upload-started":
@@ -64,7 +68,7 @@ export function progressReducer(state: ProgressState, action: ProgressAction): P
     case "upload-progress":
       return { ...state, upload: action.progress, last: UPLOAD_KEY[action.progress.phase] };
     case "upload-finished":
-      return { ...state, uploading: false };
+      return { ...state, uploading: false, created: true };
     case "upload-failed":
       return {
         ...state,

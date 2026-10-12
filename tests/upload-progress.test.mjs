@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { initialProgress, progressReducer, timelineInput } from "../frontend/src/uploads/progress.ts";
+import { awaitingStart, initialProgress, progressReducer, timelineInput } from "../frontend/src/uploads/progress.ts";
 
 const job = (client_phase, extra = {}) => ({ job_id: "j", pipeline: "p", client_phase, processing_state: client_phase, ...extra });
 const run = (actions, start = initialProgress) => actions.reduce(progressReducer, start);
@@ -103,4 +103,15 @@ test("upload progress also moves the last node, and a real failure keeps it mark
   const stopped = progressReducer(started, { type: "upload-failed", message: "", aborted: true });
   assert.equal(stopped.uploadFailed, false);
   assert.equal(progressReducer(failed, { type: "upload-started", total: 1 }).uploadFailed, false);
+});
+
+test("a finished upload never offers Start again while the job id reaches the URL", () => {
+  assert.equal(awaitingStart(initialProgress, ""), true);
+  const uploading = run([{ type: "upload-started", total: 10 }]);
+  assert.equal(awaitingStart(uploading, ""), false);
+  const finished = progressReducer(uploading, { type: "upload-finished" });
+  assert.equal(awaitingStart(finished, ""), false);
+  assert.equal(awaitingStart(finished, "job-1"), false);
+  const failed = progressReducer(uploading, { type: "upload-failed", message: "x", aborted: false });
+  assert.equal(awaitingStart(failed, ""), true);
 });

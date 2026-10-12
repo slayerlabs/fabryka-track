@@ -54,7 +54,7 @@ function UploadWizard() {
   const hasJob = requested.job !== "";
   if (hasJob !== hadJob) {
     setHadJob(hasJob);
-    // reset only once the job id is in the URL: navigation runs as a transition, so an earlier reset bounces to step 2
+    // reset when the job param flips, not before: navigation runs as a transition and an earlier reset bounces to step 2
     setForm(emptyForm());
   }
 
@@ -64,7 +64,9 @@ function UploadWizard() {
   useEffect(() => {
     if (settled && urlStale) navigate(wizardUrl(at), { replace: true });
   }, [settled, urlStale, at.step, at.pipeline, at.job]);
-  useEffect(() => window.scrollTo(0, 0), [at.step]);
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [at.step]);
 
   const go = (next: Partial<WizardLocation> & { step: Step }, replace = false) =>
     navigate(wizardUrl({ ...at, ...next }), { replace });

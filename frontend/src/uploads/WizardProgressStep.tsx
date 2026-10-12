@@ -5,7 +5,7 @@ import { canCancel, describeJob, errorMessage, failureHint, keepPolling, publish
 import type { UploadForm } from "./form";
 import { JobFacts } from "./JobFacts";
 import { isFinal, timeline } from "./phases";
-import { initialProgress, progressReducer, timelineInput } from "./progress";
+import { awaitingStart, initialProgress, progressReducer, timelineInput } from "./progress";
 import { duration } from "./report";
 import { Timeline } from "./Timeline";
 import { uploadFile } from "./uploader";
@@ -115,7 +115,7 @@ export function WizardProgressStep({ jobId, source, pipelines, onJobCreated, onB
   }
 
   const job = state.job;
-  const idle = !jobId && !state.uploading;
+  const idle = awaitingStart(state, jobId);
   const stoppable = state.uploading && state.upload?.phase !== "confirming";
   const elapsed = state.runningSince === null ? null : duration(Math.max(0, now - state.runningSince));
   const finished = job !== null && isFinal(job.client_phase);
