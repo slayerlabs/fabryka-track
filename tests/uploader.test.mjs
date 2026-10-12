@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash, randomBytes } from "node:crypto";
 import test from "node:test";
-import { Sha256 } from "../frontend/src/uploads/sha256.ts";
+import { sha256File } from "../frontend/src/uploads/sha256.ts";
 import { uploadFile } from "../frontend/src/uploads/uploader.ts";
 
 const MiB = 1024 * 1024;
@@ -62,7 +62,7 @@ function deps(track, extra = {}) {
     call: track.call,
     fetch: track.fetch,
     sleep: async () => {},
-    createHash: () => new Sha256(),
+    hash: sha256File,
     newKey: () => `action-key-${String(++key).padStart(8, "0")}`,
     ...extra,
   };

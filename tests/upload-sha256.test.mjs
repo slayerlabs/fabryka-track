@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash, randomBytes } from "node:crypto";
 import test from "node:test";
-import { Sha256 } from "../frontend/src/uploads/sha256.ts";
+import { Sha256, sha256File } from "../frontend/src/uploads/sha256.ts";
 
 const reference = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
@@ -37,4 +37,18 @@ test("the 512 MiB maximum, whose bit length overflows 32 bits, matches node:cryp
     theirs.update(chunk);
   }
   assert.equal(ours.digest(), theirs.digest("hex"));
+});
+
+test("a file is hashed in 8 MiB slices with progress up to its size", async () => {
+  const bytes = randomBytes(8 * 1024 * 1024 * 2 + 5);
+  const progress = [];
+  const digest = await sha256File(new Blob([bytes]), (loaded) => progress.push(loaded));
+  assert.equal(digest, reference(bytes));
+  assert.deepEqual(progress, [8 * 1024 * 1024, 16 * 1024 * 1024, bytes.length]);
+});
+
+test("an aborted signal stops hashing before the next slice", async () => {
+  const controller = new AbortController();
+  controller.abort(new Error("stopped"));
+  await assert.rejects(sha256File(new Blob([randomBytes(10)]), undefined, controller.signal), /stopped/);
 });

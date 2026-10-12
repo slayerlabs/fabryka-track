@@ -14,6 +14,23 @@ export interface Hasher {
   digest(): string;
 }
 
+const SLICE_BYTES = 8 * 1024 * 1024;
+
+export async function sha256File(
+  file: Pick<Blob, "size" | "slice">,
+  onProgress?: (loaded: number) => void,
+  signal?: AbortSignal,
+) {
+  const hasher = new Sha256();
+  for (let offset = 0; offset < file.size; offset += SLICE_BYTES) {
+    signal?.throwIfAborted();
+    const end = Math.min(file.size, offset + SLICE_BYTES);
+    hasher.update(new Uint8Array(await file.slice(offset, end).arrayBuffer()));
+    onProgress?.(end);
+  }
+  return hasher.digest();
+}
+
 export class Sha256 implements Hasher {
   private state = new Uint32Array([
     0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
