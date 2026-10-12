@@ -107,6 +107,7 @@ export const COPY = {
     elapsed: "Elapsed since admitted",
     recipeHeading: "What the pipeline does with your file",
     factsHeading: "Upload details",
+    fileUnreadable: "The file could not be read. Choose it again and retry.",
   },
   results: {
     loading: "Loading results…",

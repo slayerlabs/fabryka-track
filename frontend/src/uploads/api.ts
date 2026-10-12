@@ -1,5 +1,6 @@
 import { request } from "../provider.ts";
-import type { SliceableFile, UploaderDeps } from "./uploader.ts";
+import type { UploaderDeps } from "./uploader.ts";
+import { hashInWorker } from "./workerHash.ts";
 
 export interface Rejection {
   position: number;
@@ -99,40 +100,12 @@ function sleep(ms: number, signal?: AbortSignal) {
   });
 }
 
-const FILE_UNREADABLE = "The file could not be read. Choose it again and retry.";
-
-function hashInWorker(file: SliceableFile, onProgress: (loaded: number) => void, signal?: AbortSignal) {
-  return new Promise<string>((resolve, reject) => {
-    signal?.throwIfAborted();
-    const worker = new Worker(new URL("./sha256.worker.ts", import.meta.url), { type: "module" });
-    const finish = () => {
-      worker.terminate();
-      signal?.removeEventListener("abort", abort);
-    };
-    const abort = () => {
-      finish();
-      reject(signal!.reason);
-    };
-    signal?.addEventListener("abort", abort);
-    worker.onmessage = ({ data }) => {
-      if ("loaded" in data) return onProgress(data.loaded);
-      finish();
-      if ("digest" in data) resolve(data.digest);
-      else reject(new Error(FILE_UNREADABLE));
-    };
-    worker.onerror = () => {
-      finish();
-      reject(new Error(FILE_UNREADABLE));
-    };
-    worker.postMessage(file);
-  });
-}
-
 export const browserUploaderDeps = (): UploaderDeps => ({
   call: request,
   fetch: (url, init) => fetch(url, init),
   sleep,
-  hash: hashInWorker,
+  hash: (file, onProgress, signal) =>
+    hashInWorker(() => new Worker(new URL("./sha256.worker.ts", import.meta.url), { type: "module" }), file, onProgress, signal),
   newKey: () => crypto.randomUUID(),
 });
 
