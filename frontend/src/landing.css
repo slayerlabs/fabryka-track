@@ -84,3 +84,21 @@
 @media(max-width:700px){.landing-brand-lockup .brand-lockup{gap:8px}.landing-brand-lockup .brand-lockup img{width:35px;height:35px}.landing-brand-lockup .brand-lockup-wordmark{font-size:20px}}
 
 .landing-footer .brand-lockup-wordmark{color:#fcfaf6}.landing-footer .brand-lockup-wordmark span{color:#e7a078}
+
+/* Research sources and the proposed evaluation, separate from product results. */
+.landing-literature{border-top:1px solid #d7d1ca}
+.landing-studies{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:36px 60px;margin-top:32px}
+.landing-studies article{min-width:0;border-top:1px solid #d7d1ca;padding-top:22px}
+.landing-studies article>span{font:11px/1.7 var(--mono);color:#963200;letter-spacing:.04em}
+.landing-studies h3,.landing-measurement h3{font:500 25px/1.3 var(--sans);letter-spacing:-.7px;margin:18px 0 14px}
+.landing-studies p,.landing-measurement>p:not(.landing-kicker){font-size:16px;line-height:1.8;color:#49423d;margin:0 0 18px}
+.landing-studies a{font-size:14px;line-height:1.7;color:#963200;text-underline-offset:4px;overflow-wrap:anywhere}
+.landing-studies small{display:block;font:11px/1.8 var(--mono);color:#49423d;margin-top:13px}
+.landing-measurement{margin-top:45px;padding:30px;background:#f3efe9;border-left:2px solid #b33b00}
+.landing-measurement .landing-kicker{margin-bottom:12px}
+.landing-measurement h3{margin-top:0}
+.landing-measurement dl{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:25px;margin:25px 0}
+.landing-measurement dt{font:12px/1.7 var(--mono);color:#963200;margin-bottom:7px}
+.landing-measurement dd{font-size:15px;line-height:1.7;margin:0;color:#1a1512}
+.landing-measurement>p.landing-measurement-note{font-size:13px;margin-bottom:0;padding-top:18px;border-top:1px solid #d7d1ca}
+@media(max-width:700px){.landing-studies{grid-template-columns:1fr;gap:30px;margin-top:30px}.landing-measurement{padding:24px 20px}.landing-measurement dl{grid-template-columns:1fr;gap:18px}.landing-studies h3,.landing-measurement h3{font-size:23px}}
