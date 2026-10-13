@@ -44,6 +44,9 @@ breadcrumbs, one page heading, optional description/actions and the browser titl
 Add new route defaults to `resolvePageMeta`; views with fetched titles override them
 only after the data loads. The illustrated `/` landing keeps its separate hero.
 
+The final sidebar section, Knowledge Base, links to `/guide` and the intentionally
+empty `/api-docs` page. The backend's existing `/docs` API reference is unchanged.
+
 The shell and landing navigation share `BrandLockup`: the official factory symbol
 from [Fabryka's design system](https://github.com/slayerlabs/ui-design/tree/main/Fabryka%20Design%20System-2/assets)
 beside the inline “fabryka / track” wordmark. Preserve the symbol's proportions.
@@ -221,11 +224,12 @@ larger models or longer budgets can produce meaningful generalization.
 
 ## User accounts
 
-Sign in at `/#login` with Hugging Face. The first successful HF sign-in creates
+Sign in at `/login` with Hugging Face. The first successful HF sign-in creates
 an account automatically. Password login, password registration and password
 changes are disabled; their API routes are not registered.
-`/#account` provides sign-out and SDK API key management. Generating a key requires
-a Hugging Face sign-in within the last five minutes. Session tokens live in
+`/account` provides sign-out and SDK API key management. An active Track session
+is enough to generate or rotate a key; there is no five-minute HF reauthentication
+gate. Account API keys grant full account access. Session tokens live in
 HttpOnly, SameSite=Lax cookies (Secure over HTTPS), expire after 14 days, and are
 stored only as hashes. HF authentication attempts are rate-limited.
 Browser mutations require X-Track-Request: 1 and reject foreign Origin headers.
@@ -280,8 +284,8 @@ Hugging Face is the only login and registration method. Existing Track users
 can connect an HF identity from Account; new HF sign-ins receive a separate
 `hf_` username. Identity is keyed by the provider's stable `sub`, never inferred
 from matching usernames or email addresses. No existing workspace is claimed
-automatically. Accounts can generate an API key within five minutes of signing
-in; older sessions must sign in with HF again.
+automatically. Accounts can generate an API key with an active Track session;
+older sessions need to sign in again only after they expire.
 
 This uses the Hugging Face documented Client ID Metadata Document flow with
 PKCE S256. `/.well-known/oauth-cimd` publishes the client metadata. Configure

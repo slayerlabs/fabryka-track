@@ -232,9 +232,12 @@ export function AccountPage() {
       <div className="divider" />
       <h2>SDK API key</h2>
       <p className="muted">
-        Use an API key with the Python tracker. Generating a key replaces the
-        previous one.
+        Generating a key replaces the previous one. This account API key grants
+        full account access, not just SDK access; Track does not enforce per-job
+        spending approval. Keep it in a trusted environment, never in chat or
+        source control.
       </p>
+      <p><a href="/api-docs#sdk-quickstart" target="_blank" rel="noopener noreferrer">Python setup (opens in a new tab)</a></p>
       <form
         onSubmit={(event) => {
           event.preventDefault();

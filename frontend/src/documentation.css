@@ -1,0 +1,177 @@
+.docs-layout {
+  display: grid;
+  grid-template-columns: minmax(180px, 220px) minmax(0, 760px);
+  gap: clamp(32px, 5vw, 80px);
+  max-width: 1160px;
+  margin: 0 auto;
+  padding: 40px 0 90px;
+  align-items: start;
+}
+
+.docs-contents {
+  display: block;
+  position: sticky;
+  top: 24px;
+  min-width: 0;
+  padding-top: 5px;
+}
+
+.docs-contents h2 {
+  margin: 0 0 15px;
+  font-size: 14px;
+}
+
+.docs-contents ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-left: 1px solid var(--line);
+}
+
+.docs-contents a {
+  display: block;
+  padding: 9px 0 9px 16px;
+  color: var(--muted-3);
+  font-size: 13px;
+  line-height: 1.45;
+  text-decoration: none;
+}
+
+.docs-contents-reference {
+  margin: 20px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.docs-contents-reference a {
+  padding: 7px 0;
+  color: var(--accent-dark);
+  font-weight: 600;
+}
+
+.docs-contents a:hover,
+.docs-articles a:hover {
+  color: var(--accent-dark);
+  text-decoration: underline;
+}
+
+.docs-contents a:focus-visible,
+.docs-articles a:focus-visible,
+.docs-articles button:focus-visible {
+  outline: 3px solid var(--accent-dark);
+  outline-offset: 3px;
+}
+
+.docs-articles { min-width: 0; }
+.docs-articles [id] { scroll-margin-top: 25px; }
+.docs-articles [tabindex="-1"]:focus { outline: none; }
+
+.docs-intro {
+  max-width: 64ch;
+  margin: 0 0 42px;
+  color: var(--muted-3);
+  font-size: 17px;
+  line-height: 1.75;
+}
+
+.docs-article {
+  min-width: 0;
+  padding: 39px 0;
+  border-top: 1px solid var(--line);
+}
+
+.docs-article h2 {
+  margin: 0 0 14px;
+  font-size: clamp(24px, 3vw, 30px);
+  letter-spacing: -.025em;
+  line-height: 1.25;
+}
+
+.docs-article > p {
+  max-width: 66ch;
+  color: var(--muted-3);
+  line-height: 1.7;
+}
+
+.docs-articles a { color: var(--accent-dark); }
+.docs-reference-links {
+  padding-left: 20px;
+  line-height: 2;
+}
+
+/* One sequential SDK setup, reused here rather than duplicated in Cockpit. */
+.docs-sdk .sdk-summary { margin: 0; color: var(--muted-3); }
+.docs-sdk .sdk-setup-steps {
+  margin: 26px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.docs-sdk .sdk-setup-steps > li {
+  padding: 25px 0;
+  border-top: 1px solid var(--line);
+}
+.docs-sdk .sdk-step-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+.docs-sdk .sdk-step-heading > span {
+  display: grid;
+  flex: 0 0 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--accent-dark);
+  color: #fff;
+  font: 600 14px var(--sans);
+}
+.docs-sdk .sdk-step-heading h4 {
+  margin: 0 0 4px;
+  font: 600 18px/1.4 var(--sans);
+}
+.docs-sdk .sdk-step-heading p {
+  margin: 0;
+  color: var(--muted-3);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.docs-sdk a.sdk-key-button {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 24px;
+  margin: 14px 0;
+  padding: 12px 16px;
+  border-radius: 6px;
+  background: var(--accent-dark);
+  color: #fff;
+  font-weight: 600;
+  text-decoration: none;
+}
+.docs-sdk p.sdk-hint {
+  margin: 10px 0;
+  color: var(--muted-3);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.docs-sdk .sdk-next {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+
+@media (max-width: 900px) {
+  .docs-layout { grid-template-columns: minmax(0, 1fr); gap: 25px; padding-top: 24px; }
+  .docs-contents { position: static; }
+  .docs-contents ol { columns: 2; }
+  .docs-contents li { break-inside: avoid; }
+}
+
+@media (max-width: 600px) {
+  .docs-contents ol { columns: 1; }
+  .docs-intro { margin-bottom: 26px; font-size: 15px; }
+  .docs-article { padding: 30px 0; }
+}

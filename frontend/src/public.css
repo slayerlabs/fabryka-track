@@ -155,36 +155,51 @@
   box-sizing: border-box;
 }
 .public-agents {
-  margin: 0;
-}
-.public-agents {
-  max-width: 900px;
-  margin: 35px auto;
-  padding: 20px;
+  margin: 0 0 60px;
 }
 .public-agents a {
-  color: var(--accent);
+  color: var(--accent-dark);
 }
-.public-agents pre {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 18px;
+.public-agents-intro {
+  max-width: 80ch;
+  margin: 28px 0 30px;
+  line-height: 1.65;
+}
+.public-agents-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(24px, 4vw, 48px);
+  align-items: start;
+}
+.public-agents-options > section {
+  min-width: 0;
+  margin: 0;
+  padding: 24px 0 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+}
+.public-agents-options h2,
+.public-agents-lifecycle h2 {
+  margin: 0 0 18px;
+  font-size: 20px;
+}
+.public-agents-options p,
+.public-agents-lifecycle p {
+  line-height: 1.65;
+}
+.public-agents-api .code-snippet {
+  margin: 18px 0 16px;
 }
 .public-agents input {
-  padding: 12px;
+  display: block;
   width: 100%;
   margin: 8px 0 18px;
-}
-.public-agents button {
   padding: 12px;
 }
-.public-agents section {
-  margin: 28px 0;
-  padding: 22px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
+.public-agents-form button {
+  min-height: 44px;
+  padding: 12px;
 }
 .public-agents code {
   overflow-wrap: anywhere;
@@ -192,10 +207,18 @@
 .public-agents [hidden] {
   display: none !important;
 }
-.public-agents {
-  padding: 0;
-  margin: 0;
-  max-width: none;
+.public-agents-lifecycle section {
+  margin: 36px 0 0;
+  padding: 24px 0 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+}
+@media (max-width: 850px) {
+  .public-agents-options {
+    grid-template-columns: 1fr;
+    gap: 22px;
+  }
 }
 
 .public-training-goal * {

@@ -12,23 +12,24 @@ export type PageTopProps = {
 
 type PageMeta = { title: string; ancestors: readonly Breadcrumb[] };
 const home: Breadcrumb = { label: "Home", to: "/" };
-const goals: Breadcrumb = { label: "Goals", to: "/goals" };
+const goals: Breadcrumb = { label: "Current Lab Goals", to: "/goals" };
 const uploads: Breadcrumb = { label: "Data uploads", to: "/uploads" };
 const runs: Breadcrumb = { label: "Focused runs", to: "/runs" };
 const pages: readonly [string, string][] = [
-  ["/overview", "Overview"],
-  ["/new", "Training studio"],
+  ["/overview", "Cockpit"],
+  ["/new", "Training sandbox"],
   ["/runs", "Focused runs"],
   ["/public-runs", "Public runs"],
   ["/checkpoints", "Checkpoints"],
   ["/benchmarks", "Evaluation queue"],
   ["/uploads", "Data uploads"],
-  ["/leaderboard", "Fabryka leaderboard"],
+  ["/leaderboard", "Sandbox leaderboard"],
   ["/models", "Model leaderboard"],
-  ["/goals", "Goals"],
+  ["/goals", "Current Lab Goals"],
   ["/agents", "Agent sign up"],
   ["/benchmark-results", "Published benchmark results"],
   ["/guide", "Training guide"],
+  ["/api-docs", "Documentation"],
   ["/login", "Sign in"],
   ["/account", "Account"],
 ];

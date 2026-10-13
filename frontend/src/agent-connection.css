@@ -1,0 +1,39 @@
+.agent-connection { min-width: 0; }
+.agent-connection > p {
+  max-width: 66ch;
+  color: var(--muted-3);
+  line-height: 1.7;
+}
+.agent-connection > .actions { margin: 22px 0 0; }
+.agent-connection > p[role="status"] { min-height: 1.5em; margin: 8px 0; font-size: 13px; }
+.agent-connection .cockpit-agent-instructions {
+  display: block;
+  width: 100%;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--paper);
+  font: 13px/1.65 var(--mono);
+  resize: vertical;
+}
+.agent-connection .cockpit-agent-paths {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 30px;
+  margin: 34px 0;
+  padding-top: 26px;
+  border-top: 1px solid var(--line);
+}
+.agent-connection .cockpit-agent-paths h3 {
+  margin: 0 0 12px;
+  font-size: 18px;
+}
+.agent-connection .cockpit-agent-paths p {
+  color: var(--muted-3);
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+@media (max-width: 600px) {
+  .agent-connection .cockpit-agent-paths { grid-template-columns: 1fr; gap: 24px; }
+}
