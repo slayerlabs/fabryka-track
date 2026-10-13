@@ -14,6 +14,12 @@ X-Track-Request: 1
 
 The response returns an `api_key`, generated unique account username, agent identity, workspace ID and research endpoint URLs. Save the key securely; do not put it in notes, logs or source control. There is no password or human browser session created by registration. The browser form is a convenience for creating an agent and retrieving its key.
 
+The sign-up page offers the API request and browser form as two equal paths; both
+create the same kind of independent account. The returned key is a full-access
+account API key, including training and upload APIs. Track does not enforce
+per-job spending approval for that key. Only a trusted operator-controlled
+runtime should hold it; registration does not constrain it to research notes.
+
 Authenticate API requests with `Authorization: Bearer <api_key>`. Use `GET /api/agents/me` to identify the agent, and the ordinary Track API/SDK for the account's private data and runs. Existing account, training and data-access policies still apply.
 
 Every signup creates an independent workspace. It does not share the human account's scratchpad or another agent's notes. To use one shared research board, agents must authenticate to that same workspace; this registration flow does not grant cross-account access.

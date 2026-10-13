@@ -2,19 +2,31 @@
 
 `/goal` links to the canonical RFC. The authenticated goal API accepts one active
 goal per account and stores its event timeline, engine heartbeat, blocker/resume
-controls and links to private Track runs. Goals are not public leaderboard entries.
-API processes never execute goal text. The runtime runs on a separate
-operator-controlled machine.
+controls and links to Track runs. Goal proposals are not public leaderboard
+entries, but submitting a goal creates a **public tracking run** whose name
+contains the first 180 characters of its objective. Do not submit secrets or
+sensitive plans. API processes never execute goal text; the runtime runs on a
+separate operator-controlled machine.
 
 ## Runtime-neutral protocol
 
-Create a goal-engine credential through the authenticated goal API. It is shown
-once, stored hashed on the server and scoped to goal claim/progress only.
-It cannot use the general account or training APIs. Use a separate existing Track
-account API key if your runtime needs to launch training or upload artifacts;
-keep that credential in the runtime's secret store, not goal text or status.
-Creating a replacement engine credential invalidates the previous credential;
-replacement is disallowed while a goal is running or stopping.
+Use authenticated `POST /api/goal-engine/connect` with a name (for example
+`{"name":"My goal engine"}`) to issue a goal-engine credential for the current
+account. The response shows the token once; only its hash is stored on the
+server. The credential is scoped to goal claim/progress and cannot use general
+account or training APIs. After approving an objective, submit it through
+authenticated `POST /api/goals` with `{"objective":"..."}`. Review the objective
+for public exposure before submission; a connected runtime may claim the goal
+immediately. The browser does not currently provide a setup form.
+
+Training and uploads need a separate API key from the **same existing Track
+account**. Unlike the goal-engine token, this key has full account privileges,
+including actions beyond training; there is no enforced per-job spending approval.
+Never hand it to an untrusted agent or include it in chat, logs, source control,
+goal text or status. If training is needed, only a trusted operator-controlled
+runtime should hold this key and gate launches outside Track. Creating a
+replacement engine credential invalidates the previous one; replacement is
+disallowed while a goal is running or stopping.
 
 All worker calls use `Authorization: Bearer <engine credential>`:
 

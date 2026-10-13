@@ -3,7 +3,7 @@ import re
 
 def test_document_routes_share_loadable_frontend_assets(client):
     paths = ['/', '/overview', '/goals', '/agents', '/goals/250m-english-base-model',
-             '/benchmark-results', '/leaderboard', '/models', '/runs', '/public-runs', '/new', '/guide',
+             '/benchmark-results', '/leaderboard', '/models', '/runs', '/public-runs', '/new', '/guide', '/api-docs',
              '/account', '/login', '/register', '/benchmarks', '/checkpoints',
              '/run/7caf2e37-e453-4e31-8a5d-2e4425f606d2', '/uploads', '/uploads/new',
              '/uploads/7caf2e37-e453-4e31-8a5d-2e4425f606d2',

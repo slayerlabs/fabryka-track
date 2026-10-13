@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { Authenticated, useGetIdentity } from "@refinedev/core";
 import {
   Link,
   NavLink,
+  matchPath,
   Navigate,
   Route,
   Routes,
@@ -33,29 +34,35 @@ import { OverviewPage } from "./pages/Overview";
 import { BrandLockup } from "./BrandLockup";
 import { PageTop } from "./PageTop";
 import { LandingPage } from "./pages/Landing";
+import { studioModeUrl } from "./pages/StudioLocation";
+import { DocumentationPage } from "./pages/Documentation";
 
 const navigation: { label: string; links: [string, string, IconName][] }[] = [
   {
-    label: "Workspace",
+    label: "Training Studio",
     links: [
-      ["/overview", "Overview", "layers"],
-      ["/agents", "Connect an agent", "users"],
-      ["/new", "Training studio", "flask"],
+      ["/overview", "Cockpit", "layers"],
+      ["/agents", "Agent sign up", "users"],
+      ["/new", "Sandbox", "flask"],
       ["/runs", "Focused runs", "play"],
       ["/checkpoints", "Checkpoints", "layers"],
       ["/benchmarks", "Evaluation queue", "chart"],
-      ["/leaderboard", "Fabryka leaderboard", "trophy"],
     ],
   },
   {
     label: "Research & resources",
     links: [
-      ["/goals", "Goals", "target"],
+      ["/goals", "Current Lab Goals", "target"],
       ["/benchmark-results", "Published results", "chart"],
       ["/public-runs", "Public runs", "play"],
-      ["/leaderboard", "Training results", "trophy"],
       ["/models", "Model leaderboard", "trophy"],
+    ],
+  },
+  {
+    label: "Knowledge Base",
+    links: [
       ["/guide", "Training guide", "book"],
+      ["/api-docs", "Documentation", "book"],
     ],
   },
 ];
@@ -86,9 +93,11 @@ function ApplicationShell() {
   const { data: identity } = useGetIdentity<Identity | null>();
   const dashboard = useDashboard(Boolean(identity));
   const memory = identity ? dashboard.data?.gpu_memory : undefined;
+  const onStudio = Boolean(matchPath({ path: "/new", end: true, caseSensitive: false }, location.pathname));
+  const studioDestination = studioModeUrl(new URLSearchParams(onStudio ? location.search : ""), null);
   useEffect(() => {
     setMenuOpen(false);
-  }, [location.pathname]);
+  }, [location.pathname, location.search]);
   useEffect(() => {
     if (!menuOpen) return;
     closeButton.current?.focus();
@@ -102,6 +111,9 @@ function ApplicationShell() {
   function dismissMenu() {
     setMenuOpen(false);
     requestAnimationFrame(() => menuButton.current?.focus());
+  }
+  function closeMenuFromLink() {
+    if (menuOpen) dismissMenu();
   }
   function handleMenuKeys(event: React.KeyboardEvent<HTMLDivElement>) {
     if (event.key === "Escape") {
@@ -152,7 +164,7 @@ function ApplicationShell() {
             aria-label={menuOpen ? "Main menu" : undefined}
           >
             <div className="sidebar-panel-header">
-              <Link className="brand" to="/" aria-label="Fabryka Track home" onClick={() => setMenuOpen(false)}>
+              <Link className="brand" to="/" aria-label="Fabryka Track home" onClick={closeMenuFromLink}>
                 <BrandLockup />
               </Link>
               <button
@@ -170,16 +182,31 @@ function ApplicationShell() {
                 <section className="sidebar-group" key={group.label} aria-label={group.label}>
                   <h2 className="sidebar-group-label">{group.label}</h2>
                   <div className="sidebar-links">
-                    {group.links.map(([path, label, icon]) => (
-                      <NavLink key={path} to={path} end={path === "/"} onClick={() => setMenuOpen(false)}>
+                    {group.links.map(([path, label, icon]) => path === "/new" ? (
+                      <Fragment key={path}>
+                        <Link
+                          to={studioDestination}
+                          className={onStudio ? "active" : undefined}
+                          aria-current={onStudio ? "page" : undefined}
+                          onClick={closeMenuFromLink}
+                        >
+                          <Icon name={icon} />
+                          <span>{label}</span>
+                        </Link>
+                        <div className="sidebar-subgroup" role="group" aria-label="Sandbox">
+                          <NavLink to="/leaderboard" onClick={closeMenuFromLink}>
+                            <Icon name="trophy" />
+                            <span>Sandbox leaderboard</span>
+                          </NavLink>
+                        </div>
+                      </Fragment>
+                    ) : (
+                      <NavLink key={path} to={path} end={path === "/"} onClick={closeMenuFromLink}>
                         <Icon name={icon} />
                         <span>{label}</span>
                         {path === "/runs" && identity && dashboard.data && (
                           <span className="sidebar-count">
-                            {
-                              dashboard.data.runs.filter((run) => run.focused)
-                                .length
-                            }
+                            {dashboard.data.runs.filter((run) => run.focused).length}
                           </span>
                         )}
                       </NavLink>
@@ -227,7 +254,7 @@ function ApplicationShell() {
             <NavLink
               className="sidebar-account"
               to={identity ? "/account" : "/login"}
-              onClick={() => setMenuOpen(false)}
+              onClick={closeMenuFromLink}
             >
               <Icon name="user" />
               {identity?.username || "Sign in"}
@@ -251,6 +278,7 @@ function ApplicationShell() {
             <Route path="/leaderboard" element={<LeaderboardPage />} />
             <Route path="/models" element={<ModelBoardPage />} />
             <Route path="/guide" element={<GuidePage />} />
+            <Route path="/api-docs" element={<DocumentationPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route
               path="/register"

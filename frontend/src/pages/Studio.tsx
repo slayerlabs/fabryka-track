@@ -24,7 +24,8 @@ import {
   type StudioCheckpoint,
   type StudioForkSource,
 } from "./StudioFork";
-import { StudioEntry, StudioAgent } from "./StudioEntry";
+import { StudioEntry } from "./StudioEntry";
+import { resolveStudioMode, type StudioMode } from "./StudioLocation";
 import "../studio-entry.css";
 export { GuidePage } from "./StudioGuide";
 
@@ -477,7 +478,14 @@ function TrainingStudio({
   );
   const [recipeRequest, setRecipeRequest] = useState<{ source: RecipeSource; nonce: number }>();
   const [stage, setStage] = useState(1);
-  const [mode, setMode] = useState<"beginner" | "advanced" | "agent">(fork ? "advanced" : "beginner");
+  const [params, setSearchParams] = useSearchParams();
+  const mode = resolveStudioMode(params, Boolean(fork));
+  const selectMode = (next: StudioMode) => {
+    if (next === mode) return;
+    const updated = new URLSearchParams(params);
+    updated.set("mode", next);
+    setSearchParams(updated);
+  };
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [profileMessage, setProfileMessage] = useState("");
@@ -743,8 +751,7 @@ function TrainingStudio({
           </small>
         </div>
       )}
-      <StudioEntry mode={mode} onChange={setMode} disabled={launching} />
-      {mode === "agent" ? <StudioAgent /> : <>
+      <StudioEntry mode={mode} onChange={selectMode} disabled={launching} />
       {mode === "beginner" && <p className="notice">Start with a profile or choose your text sources below. Then review the model, time limit and cost before starting. Your draft stays intact when you switch modes.</p>}
       {launchIssue && (
         <p className="error" role="alert">
@@ -1656,7 +1663,6 @@ function TrainingStudio({
           )}
         </div>
       </div>
-      </>}
       {preview && (
         <StudioDatasetReader
           key={preview.id}

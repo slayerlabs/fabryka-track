@@ -1,0 +1,35 @@
+.agent-connection { min-width: 0; }
+.agent-connection > p {
+  max-width: 66ch;
+  color: var(--muted-3);
+  line-height: 1.7;
+}
+.agent-connection-paths {
+  margin: 26px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.agent-connection-paths > li {
+  padding: 25px 0;
+  border-top: 1px solid var(--line);
+}
+.agent-connection-paths h3,
+.agent-connection-instructions-heading {
+  margin: 0 0 12px;
+  font: 600 18px/1.4 var(--sans);
+}
+.agent-connection-paths p {
+  max-width: 66ch;
+  margin: 0 0 12px;
+  color: var(--muted-3);
+  font-size: 14px;
+  line-height: 1.7;
+}
+.agent-connection-instructions-heading {
+  margin-top: 18px;
+}
+.agent-connection > .agent-connection-hint {
+  margin: 12px 0 0;
+  font-size: 13px;
+  line-height: 1.6;
+}

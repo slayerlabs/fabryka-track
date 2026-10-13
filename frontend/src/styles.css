@@ -1886,6 +1886,11 @@ summary:focus-visible {
   color: var(--ink);
   padding: 0 14px 11px;
 }
+.sidebar-subgroup {
+  margin: -2px 0 4px 14px;
+  padding-left: 10px;
+  border-left: 1px solid var(--line);
+}
 .sidebar a:not(.brand) {
   display: flex;
   align-items: center;
@@ -2085,6 +2090,10 @@ summary:focus-visible {
   .sidebar-group-label {
     padding: 0 12px 8px;
     font-size: 14px;
+  }
+  .sidebar-subgroup {
+    margin-left: 12px;
+    padding-left: 8px;
   }
   .sidebar a:not(.brand) {
     min-height: 44px;
