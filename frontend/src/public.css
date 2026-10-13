@@ -165,6 +165,13 @@
   margin: 28px 0 30px;
   line-height: 1.65;
 }
+.public-agents-guide-button {
+  min-height: 44px;
+  margin: 12px 0 16px;
+}
+.public-agents-guide-button--intro {
+  margin: -12px 0 30px;
+}
 .public-agents-options {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

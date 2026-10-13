@@ -1,5 +1,6 @@
 """Account sessions, API credentials and ownership checks."""
 import hashlib
+import ipaddress
 import secrets
 import threading
 import time
@@ -10,12 +11,15 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy import delete, select
 
 from .database import session_scope
+from .settings import settings
 from .models import Account, AccountSession, HuggingFaceIdentity, Run, RunSDKToken
 
 router = APIRouter(prefix="/api/auth")
 COOKIE = "track_session"
 _attempts = defaultdict(deque)
 _rate_lock = threading.Lock()
+LOCAL_ACCOUNT_ID = "00000000-0000-4000-8000-000000000001"
+LOCAL_USERNAME = "local_demo"
 
 
 def digest(value):
@@ -97,6 +101,43 @@ def new_session(request, response, session, user):
     response.set_cookie(COOKIE, token, max_age=14*86400, httponly=True,
                         secure=request.url.scheme == "https", samesite="lax", path="/")
     return public_account(user)
+
+
+def local_login_allowed(request: Request) -> bool:
+    if not settings.local_login or not request.client:
+        return False
+    try:
+        peer = ipaddress.ip_address(request.client.host)
+    except ValueError:
+        return False
+    return (
+        peer.is_loopback
+        and request.url.hostname in ("localhost", "127.0.0.1")
+        and request.url.scheme == "http"
+        and not any(header in request.headers for header in (
+            "forwarded", "x-forwarded-for", "x-forwarded-host", "x-forwarded-proto"
+        ))
+    )
+
+
+@router.get("/local")
+def local_login_available(request: Request):
+    return {"enabled": local_login_allowed(request)}
+
+
+@router.post("/local")
+def local_login(request: Request, response: Response, session=Depends(session_scope)):
+    if not local_login_allowed(request) or request.headers.get("origin") != str(request.base_url).rstrip("/"):
+        raise HTTPException(403, "Local sign-in is unavailable.")
+    user = session.get(Account, LOCAL_ACCOUNT_ID)
+    if user is None:
+        if session.scalar(select(Account).where(Account.username == LOCAL_USERNAME)):
+            raise HTTPException(409, "Local account name is already in use.")
+        user = Account(id=LOCAL_ACCOUNT_ID, username=LOCAL_USERNAME, password_hash="")
+        session.add(user)
+    elif user.username != LOCAL_USERNAME:
+        raise HTTPException(409, "Local account ID is already in use.")
+    return {"user": new_session(request, response, session, user)}
 
 
 @router.get("/me")

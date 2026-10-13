@@ -12,6 +12,41 @@ from fabryka_track.database import SessionLocal
 from fabryka_track.models import Account, AccountSession, Dataset, Run
 from test_api import event
 from test_training import launch, finished
+from fabryka_track.settings import settings
+
+
+def test_local_login_is_opt_in_and_restricted_to_local_browser(client, monkeypatch):
+    path = '/api/auth/local'
+    with TestClient(app, base_url='http://localhost:8000',
+                    client=('127.0.0.1', 50000),
+                    headers={'X-Track-Request': '1', 'Origin': 'http://localhost:8000'}) as local:
+        assert local.get(path).json() == {'enabled': False}
+        assert local.post(path).status_code == 403
+        monkeypatch.setattr(settings, 'local_login', True)
+        assert local.get(path).json() == {'enabled': True}
+        assert local.post(path, headers={'Origin': 'https://evil.example'}).status_code == 403
+        assert local.post(path, headers={'Origin': ''}).status_code == 403
+        assert local.post(path, headers={'X-Forwarded-For': '127.0.0.1'}).status_code == 403
+        assert local.post(path).json()['user']['username'] == 'local_demo'
+        assert local.get('/api/auth/me').json()['user']['username'] == 'local_demo'
+        assert local.get('/api/projects').status_code == 200
+        assert local.post('/api/auth/logout').status_code == 200
+        assert local.get('/api/projects').status_code == 401
+        assert local.post(path).status_code == 200
+        with SessionLocal() as db:
+            assert len(db.scalars(select(Account).where(Account.username == 'local_demo')).all()) == 1
+    with TestClient(app, base_url='http://localhost:8000',
+                    client=('192.0.2.10', 50000),
+                    headers={'X-Track-Request': '1', 'Origin': 'http://localhost:8000'}) as remote:
+        assert remote.get(path).json() == {'enabled': False}
+        assert remote.post(path).status_code == 403
+    with TestClient(app, base_url='http://public.example',
+                    client=('127.0.0.1', 50000),
+                    headers={'X-Track-Request': '1', 'Origin': 'http://public.example'}) as proxied:
+        assert proxied.get(path).json() == {'enabled': False}
+        assert proxied.post(path).status_code == 403
+
+
 
 
 def test_hf_only_sessions_and_csrf(client):

@@ -9,6 +9,7 @@ class Settings(BaseSettings):
 
     database_url: str = "sqlite:///./fabryka-track.db"
     public_url: str = "https://track.fabryka.ai"
+    local_login: bool = False
     api_key: str | None = None
     api_url: str = "http://localhost:8000"
     spool_dir: Path = Path("~/.fabryka-track/spool").expanduser()

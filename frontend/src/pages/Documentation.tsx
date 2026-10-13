@@ -5,14 +5,6 @@ import { AgentConnection } from "./AgentConnection";
 import { SDKQuickstart } from "./SDKQuickstart";
 import "../documentation.css";
 
-const sections = [
-  ["sdk-quickstart", "Track with Python"],
-  ["agent-existing-workspace", "Connect an existing workspace"],
-  ["agent-independent-account", "Create a separate agent account"],
-  ["training-sandbox", "Training sandbox"],
-  ["api-reference", "API reference"],
-] as const;
-
 export function DocumentationPage() {
   const { hash } = useLocation();
   useEffect(() => {
@@ -27,7 +19,15 @@ export function DocumentationPage() {
         <nav className="docs-contents" aria-label="Documentation sections">
           <h2>On this page</h2>
           <ol>
-            {sections.map(([id, title]) => <li key={id}><a href={`#${id}`}>{title}</a></li>)}
+            <li><a href="#sdk-quickstart">Track with Python</a></li>
+            <li><a href="#docs-agent-title">Connect your own agent</a>
+              <ol className="docs-contents-subsections">
+                <li><a href="#agent-existing-workspace">Connect an existing workspace</a></li>
+                <li><a href="#agent-independent-account">Create a separate agent account</a></li>
+              </ol>
+            </li>
+            <li><a href="#training-sandbox">Training sandbox</a></li>
+            <li><a href="#api-reference">API reference</a></li>
           </ol>
           <p className="docs-contents-reference"><a href="/docs" target="_blank" rel="noopener noreferrer">Open Swagger API reference (opens in a new tab)</a></p>
         </nav>

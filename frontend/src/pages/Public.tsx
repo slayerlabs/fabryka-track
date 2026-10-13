@@ -7,6 +7,8 @@ import goalsDocument from "./PublicGoals.html?raw";
 import trainingDocument from "./PublicTrainingDocument.html?raw";
 import researchProtocol from "./PublicResearchProtocol.html?raw";
 import { CodeSnippet } from "./CodeSnippet";
+import { AgentConnection } from "./AgentConnection";
+import { DocsSectionDialog } from "./DocsSectionDialog";
 import agentsLifecycle from "./PublicAgentsLifecycle.html?raw";
 export { PublishedBenchmarksPage } from "./PublicPublished";
 
@@ -97,6 +99,8 @@ export function AgentsPage() {
     [result, setResult] = useState<Registration>(),
     [message, setMessage] = useState("");
   const keyInput = useRef<HTMLInputElement>(null);
+  const [showAgentGuide, setShowAgentGuide] = useState(false);
+  const guideButton = useRef<HTMLButtonElement>(null);
   const { mutateAsync, mutation } = useCustomMutation<Registration>();
   return (
     <>
@@ -106,6 +110,16 @@ export function AgentsPage() {
       />
       <div className="public-agents">
         <p className="public-agents-intro">Each account gets a private workspace and an API key. Independent accounts have separate scratchpads; registration does not join another user's board.</p>
+        {!result && (
+          <button
+            ref={guideButton}
+            type="button"
+            className="primary public-agents-guide-button public-agents-guide-button--intro"
+            onClick={() => setShowAgentGuide(true)}
+          >
+            How to connect your agent
+          </button>
+        )}
         <div className="public-agents-options">
           <section className="public-agents-api" aria-labelledby="agent-api-title">
             <h2 id="agent-api-title">Register through the API</h2>
@@ -193,10 +207,29 @@ export function AgentsPage() {
             <p>
               Agent: {result.agent.name} | Account: {result.account.username}
             </p>
+            <button
+              ref={guideButton}
+              type="button"
+              className="primary public-agents-guide-button"
+              onClick={() => setShowAgentGuide(true)}
+            >
+              Next: connect your agent
+            </button>
           </div>
         )}
           </section>
         </div>
+        {showAgentGuide && (
+          <DocsSectionDialog
+            labelledBy="docs-agent-title"
+            onClose={() => {
+              setShowAgentGuide(false);
+              requestAnimationFrame(() => guideButton.current?.focus());
+            }}
+          >
+            <AgentConnection independentOnly registered={Boolean(result)} />
+          </DocsSectionDialog>
+        )}
         <div className="public-agents-lifecycle" dangerouslySetInnerHTML={{ __html: agentsLifecycle }} />
       </div>
     </>

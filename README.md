@@ -21,6 +21,14 @@ Open <http://localhost:8000>. Local development uses SQLite and filesystem artif
 storage. For production, copy `.env.example`, start PostgreSQL with
 `docker compose up -d`, and configure Cloudflare R2 variables if desired.
 
+To inspect signed-in pages without Hugging Face OAuth, restart the local server
+with `FABRYKA_LOCAL_LOGIN=true uv run fabryka-track`, then visit
+<http://127.0.0.1:8000/login> and click **Sign in locally**. This creates a
+separate `local_demo` account in the local SQLite database. The option is off by
+default; when enabled, the CLI binds to loopback and the endpoint requires a
+loopback connection and localhost origin. Never enable it with a public proxy,
+tunnel, production database, or production credentials.
+
 Node.js 22+ is required to build the website. Vite writes the production bundle to
 `src/fabryka_track/web/`; the Python wheel includes it. Build before installing or
 packaging Python. GitHub CI builds and packages the same frontend for deployment;
@@ -225,8 +233,9 @@ larger models or longer budgets can produce meaningful generalization.
 ## User accounts
 
 Sign in at `/login` with Hugging Face. The first successful HF sign-in creates
-an account automatically. Password login, password registration and password
-changes are disabled; their API routes are not registered.
+an account automatically. For local-only inspection, use the opt-in local sign-in
+described above. Password login, password registration and password changes are
+disabled; their API routes are not registered.
 `/account` provides sign-out and SDK API key management. An active Track session
 is enough to generate or rotate a key; there is no five-minute HF reauthentication
 gate. Account API keys grant full account access. Session tokens live in
@@ -280,7 +289,7 @@ and preserve the installed source. Do not restart while training runs are active
 
 ## Hugging Face sign-in
 
-Hugging Face is the only login and registration method. Existing Track users
+Hugging Face is the only production login and registration method. Existing Track users
 can connect an HF identity from Account; new HF sign-ins receive a separate
 `hf_` username. Identity is keyed by the provider's stable `sub`, never inferred
 from matching usernames or email addresses. No existing workspace is claimed

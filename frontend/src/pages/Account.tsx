@@ -50,6 +50,31 @@ export function HuggingFaceButton({ link = false }: { link?: boolean }) {
 
 export function LoginPage() {
   const [params] = useSearchParams();
+  const { query: localLoginQuery } = useCustom<{ enabled: boolean }>({
+    url: "/api/auth/local",
+    method: "get",
+  });
+  const { mutateAsync: signInLocally } = useCustomMutation<{}>();
+  const [localBusy, setLocalBusy] = useState(false);
+  const [localError, setLocalError] = useState("");
+  async function signInLocal() {
+    setLocalBusy(true);
+    setLocalError("");
+    try {
+      await signInLocally({
+        url: "/api/auth/local",
+        method: "post",
+        values: {},
+      });
+      window.location.assign("/new");
+    } catch (e) {
+      setLocalError(
+        e instanceof Error ? e.message : "Could not sign in locally.",
+      );
+      setLocalBusy(false);
+    }
+  }
+  const localLoginEnabled = localLoginQuery.data?.data.enabled === true;
   return (
     <>
       <PageTop title="Sign in" ancestors={[{ label: "Home", to: "/" }]} />
@@ -63,6 +88,22 @@ export function LoginPage() {
           {params.get("error")}
         </p>
       )}
+      {localLoginEnabled && (
+        <>
+          {localError && (
+            <p className="error" role="alert">
+              {localError}
+            </p>
+          )}
+          <button
+            className="secondary"
+            disabled={localBusy}
+            onClick={signInLocal}
+          >
+            {localBusy ? "Signing in…" : "Sign in locally"}
+          </button>
+        </>
+      )}
       <div
         id="hf-account-info"
         lang="en"
@@ -74,9 +115,13 @@ export function LoginPage() {
           borderRadius: 8,
         }}
       >
-        <strong>Before you start</strong>
+        <strong>
+          {localLoginEnabled ? "Hugging Face sign-in" : "Before you start"}
+        </strong>
         <p className="muted">
-          You need a Hugging Face account. Complete these three steps:
+          {localLoginEnabled
+            ? "These steps are only needed for Hugging Face sign-in. You need a Hugging Face account:"
+            : "You need a Hugging Face account. Complete these three steps:"}
         </p>
         <ol style={{ paddingLeft: 22, lineHeight: 1.6 }}>
           <li>
@@ -118,8 +163,9 @@ export function LoginPage() {
       </div>
       <HuggingFaceButton />
       <p className="muted">
-        Human sign-in uses Hugging Face. Your account is created automatically
-        when you first sign in. Agents can{" "}
+        {localLoginEnabled
+          ? "Choose local sign-in or Hugging Face. Your account is created automatically when you first sign in. Agents can "
+          : "Human sign-in uses Hugging Face. Your account is created automatically when you first sign in. Agents can "}
         <Link to="/agents">create an independent account here</Link>.
       </p>
       <Link to="/leaderboard">Browse the public leaderboard →</Link>
