@@ -207,6 +207,8 @@ test("a part that exhausts its retries stops the parts still in flight", { timeo
   const bytes = randomBytes(33 * MiB);
   const track = heldTrack({ respond: ({ part, attempt }) => (part === 2 && attempt <= 4 ? new Response(null, { status: 500 }) : null) });
   const upload = uploadFile(sliceOnlyFile(bytes), form, deps(track), { onProgress: () => {} });
+  // The upload may reject while we are still waiting for part 2's last attempt; keep that rejection handled.
+  upload.catch(() => undefined);
   for (let i = 0; i < 100 && track.puts.filter((p) => p.part === 2).length < 4; i++) await settle();
   assert.equal(track.puts.filter((p) => p.part === 2).length, 4);
   await assert.rejects(upload, /part 2/i);

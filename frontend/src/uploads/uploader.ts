@@ -3,6 +3,8 @@ import { CLOSED_PHASES, PROCESSING_UPLOADING, TRANSFER_CLOSED, TRANSFER_READY } 
 import type { UploadForm } from "./form.ts";
 
 const CHUNK_BYTES = 8 * 1024 * 1024;
+// Pending the parallel-upload measurement; mirrors the worker's UPLOAD_THREADS.
+export const UPLOAD_CONCURRENCY = 4;
 const PART_RETRIES = 3;
 const READY_POLLS = 40;
 const REQUEST_RETRIES = 4;
@@ -68,15 +70,42 @@ export async function uploadFile(
     signal?.throwIfAborted();
     await waitUntilReady(job, deps, signal);
     const partSize = session.part_size_bytes || CHUNK_BYTES;
-    const parts: { part_number: number; etag: string }[] = [];
-    for (let start = 0; start < file.size; start += partSize) {
-      const end = Math.min(file.size, start + partSize);
-      const partNumber = parts.length + 1;
-      parts.push({ part_number: partNumber, etag: await sendPart(job, partNumber, file.slice(start, end), deps, signal) });
-      signal?.throwIfAborted();
-      onProgress?.({ phase: "uploading", loaded: end, total: file.size });
+    const cancel = new AbortController();
+    const forwardAbort = () => cancel.abort(signal?.reason);
+    signal?.addEventListener("abort", forwardAbort, { once: true });
+    try {
+      const partCount = Math.ceil(file.size / partSize);
+      const etags: string[] = [];
+      let uploaded = 0;
+      let failure: unknown;
+      let next = 0;
+      const worker = async () => {
+        while (next < partCount) {
+          const index = next++;
+          const start = index * partSize;
+          const end = Math.min(file.size, start + partSize);
+          try {
+            etags[index] = await sendPart(job, index + 1, file.slice(start, end), deps, cancel.signal);
+          } catch (error) {
+            if (failure === undefined) failure = error;
+            cancel.abort(error);
+            throw error;
+          }
+          cancel.signal.throwIfAborted();
+          uploaded += end - start;
+          onProgress?.({ phase: "uploading", loaded: uploaded, total: file.size });
+        }
+      };
+      const workers = Array.from({ length: Math.min(UPLOAD_CONCURRENCY, partCount) }, () => worker());
+      await Promise.all(workers.map((workerPromise) => workerPromise.catch(() => undefined)));
+      if (failure !== undefined) throw failure;
+      cancel.signal.throwIfAborted();
+      if (etags.length !== partCount || etags.some((etag) => !etag)) throw new Error("Not every part returned an ETag.");
+      const parts = etags.map((etag, index) => ({ part_number: index + 1, etag }));
+      confirm = post({ action_key: deps.newKey(), parts, encoded_bytes: file.size, input_sha256: sha256 });
+    } finally {
+      signal?.removeEventListener("abort", forwardAbort);
     }
-    confirm = post({ action_key: deps.newKey(), parts, encoded_bytes: file.size, input_sha256: sha256 });
   } catch (error) {
     // Without resume, an abandoned job would only hold the user's upload slot until its deadline.
     await cancelJob(job, deps);
@@ -143,19 +172,20 @@ async function waitUntilReady(job: string, deps: UploaderDeps, signal?: AbortSig
   throw new Error("The upload was not ready for transfer in time. Try again later.");
 }
 
-async function sendPart(job: string, partNumber: number, body: Blob, deps: UploaderDeps, signal?: AbortSignal) {
+async function sendPart(job: string, partNumber: number, body: Blob, deps: UploaderDeps, signal: AbortSignal) {
   let hiddenEtag = false;
   for (let attempt = 0; attempt <= PART_RETRIES; attempt++) {
-    signal?.throwIfAborted();
+    signal.throwIfAborted();
     hiddenEtag = false;
+    const grant = (await deps.call(`${job}/parts`, post({ part_number: partNumber }, signal))) as Grant;
+    signal.throwIfAborted();
     try {
-      const grant = (await deps.call(`${job}/parts`, post({ part_number: partNumber }, signal))) as Grant;
       const response = await deps.fetch(grant.url, { method: grant.method, body, signal });
       const etag = response.headers.get("ETag");
       if (response.ok && etag) return etag;
       hiddenEtag = response.ok;
     } catch (error) {
-      if (signal?.aborted || isNonRetryableGrantError(error)) throw error;
+      if (signal.aborted || isNonRetryableGrantError(error)) throw error;
     }
     if (attempt < PART_RETRIES) await deps.sleep(1000 * 2 ** attempt, signal);
   }
