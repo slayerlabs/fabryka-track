@@ -284,3 +284,18 @@ test("a non-retryable grant error stops the upload with its own message", async 
   assert.equal(track.calls.filter((c) => c.path.endsWith("/parts") && c.failed).length, 1);
   assert.equal(track.puts.length, 0);
 });
+
+for (const [name, error] of [
+  ["a 503", () => failure(503, "unavailable", "Service unavailable.")],
+  ["a 429", () => failure(429, "rate_limited", "Too many requests.")],
+  ["transfer_not_ready", () => failure(409, "transfer_not_ready", "Not ready.")],
+  ["a network error", () => new TypeError("fetch failed")],
+]) {
+  test(`a grant that fails once with ${name} is retried and the upload completes`, async () => {
+    const track = fakeTrack({ readyAfter: 0 });
+    const call = failing(track, "/parts", [error()]);
+    assert.equal(await uploadFile(sliceOnlyFile(randomBytes(10)), form, deps(track, { call })), JOB);
+    assert.equal(track.puts.length, 1);
+    assert.ok(!track.calls.some((c) => c.path.endsWith("/cancel")));
+  });
+}

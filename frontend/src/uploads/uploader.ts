@@ -177,9 +177,9 @@ async function sendPart(job: string, partNumber: number, body: Blob, deps: Uploa
   for (let attempt = 0; attempt <= PART_RETRIES; attempt++) {
     signal.throwIfAborted();
     hiddenEtag = false;
-    const grant = (await deps.call(`${job}/parts`, post({ part_number: partNumber }, signal))) as Grant;
-    signal.throwIfAborted();
     try {
+      const grant = (await deps.call(`${job}/parts`, post({ part_number: partNumber }, signal))) as Grant;
+      signal.throwIfAborted();
       const response = await deps.fetch(grant.url, { method: grant.method, body, signal });
       const etag = response.headers.get("ETag");
       if (response.ok && etag) return etag;
