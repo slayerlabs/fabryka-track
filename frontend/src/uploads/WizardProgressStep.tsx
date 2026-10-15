@@ -1,5 +1,5 @@
 import { useEffect, useReducer, useRef, useState } from "react";
-import { browserUploaderDeps, cancelUpload, getUpload, type UploadPipeline } from "./api";
+import { browserUploaderDeps, cancelUpload, getUpload, type UploadJob, type UploadPipeline } from "./api";
 import { COPY } from "./copy";
 import { canCancel, describeJob, errorMessage, failureHint, keepPolling, publishingResults, rejectionMessage } from "./display";
 import type { UploadForm } from "./form";
@@ -24,6 +24,7 @@ interface Props {
   onJobCreated: (id: string) => void;
   onBusyChange: (busy: boolean) => void;
   onFinished: () => void;
+  onJob: (job: UploadJob) => void;
 }
 
 function useClock(active: boolean) {
@@ -37,7 +38,7 @@ function useClock(active: boolean) {
   return now;
 }
 
-export function WizardProgressStep({ jobId, source, pipelines, onJobCreated, onBusyChange, onFinished }: Props) {
+export function WizardProgressStep({ jobId, source, pipelines, onJobCreated, onBusyChange, onFinished, onJob }: Props) {
   const [state, dispatch] = useReducer(progressReducer, initialProgress);
   const abort = useRef<AbortController | null>(null);
   const running = state.job?.client_phase === "running";
@@ -52,6 +53,7 @@ export function WizardProgressStep({ jobId, source, pipelines, onJobCreated, onB
       try {
         const job = await getUpload(jobId, controller.signal);
         dispatch({ type: "polled", job, now: Date.now() });
+        onJob(job);
         if (isFinal(job.client_phase)) return;
       } catch (e) {
         if (controller.signal.aborted) return;

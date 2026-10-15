@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { COPY } from "../uploads/copy";
 import { canStartUpload } from "../uploads/gate";
+import type { UploadJob } from "../uploads/api";
 import { carryForm, pipelineLimit, validateUpload, type UploadFormState } from "../uploads/form";
 import { backTo, parseLocation, reachable, resolveLocation, wizardTitle, wizardUrl, type Step, type WizardLocation } from "../uploads/location";
 import { emptyForm } from "../uploads/MetadataFields";
@@ -33,6 +34,7 @@ function UploadWizard() {
   const [form, setForm] = useState<UploadFormState>(emptyForm);
   const [uploading, setUploading] = useState(false);
   const [hadJob, setHadJob] = useState(false);
+  const [jobParameters, setJobParameters] = useState<UploadJob["parameters"]>();
 
   const requested = parseLocation(params);
   const only = pipelines.list.length === 1 ? pipelines.list[0].pipeline : "";
@@ -54,8 +56,9 @@ function UploadWizard() {
   const hasJob = requested.job !== "";
   if (hasJob !== hadJob) {
     setHadJob(hasJob);
+    if (hasJob) setJobParameters(undefined);
     // reset when the job param flips, not before: navigation runs as a transition and an earlier reset bounces to step 2
-    setForm((current) => carryForm(current, emptyForm(), requested));
+    setForm((current) => carryForm(current, emptyForm(), requested, jobParameters));
   }
 
   const at = resolveLocation({ ...requested, pipeline: pipelineId }, { canStart });
@@ -105,9 +108,17 @@ function UploadWizard() {
           onJobCreated={(job) => go({ step: 3, job }, true)}
           onBusyChange={setUploading}
           onFinished={() => go({ step: 4 })}
+          onJob={(job) => setJobParameters(job.parameters)}
         />
       )}
-      {at.step === 4 && <WizardResultsStep jobId={at.job} pipelines={pipelines.list} onUnfinished={() => go({ step: 3 }, true)} />}
+      {at.step === 4 && (
+        <WizardResultsStep
+          jobId={at.job}
+          pipelines={pipelines.list}
+          onUnfinished={() => go({ step: 3 }, true)}
+          onJob={(job) => setJobParameters(job.parameters)}
+        />
+      )}
       {at.step === 2 && (
         <WizardFileStep
           state={state}
