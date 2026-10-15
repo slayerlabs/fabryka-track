@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
-import { getReport, getUpload, type UploadPipeline } from "./api";
+import { getReport, getUpload, type UploadJob, type UploadPipeline } from "./api";
 import { COPY } from "./copy";
 import { describeJob, errorMessage, failureHint, hasAttribution, humanize, rejectionMessage } from "./display";
 import { JobFacts } from "./JobFacts";
@@ -25,16 +25,19 @@ interface Props {
   jobId: string;
   pipelines: UploadPipeline[];
   onUnfinished: () => void;
+  onJob: (job: UploadJob) => void;
 }
 
-export function WizardResultsStep({ jobId, pipelines, onUnfinished }: Props) {
+export function WizardResultsStep({ jobId, pipelines, onUnfinished, onJob }: Props) {
   const [load, setLoad] = useState<Load>({ status: "loading" });
   useEffect(() => {
     const controller = new AbortController();
     setLoad({ status: "loading" });
     loadUploadResults(jobId, { getUpload, getReport }, controller.signal).then(
       (results) => {
-        if (!controller.signal.aborted) setLoad({ status: "done", results });
+        if (controller.signal.aborted) return;
+        setLoad({ status: "done", results });
+        onJob(results.job);
       },
       (e) => {
         if (!controller.signal.aborted) setLoad({ status: "error", message: errorMessage(e) });

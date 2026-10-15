@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { jobUrl, parseLocation, wizardTitle, resolveLocation, wizardUrl } from "../frontend/src/uploads/location.ts";
+import { backTo, jobUrl, parseLocation, reachable, wizardTitle, resolveLocation, wizardUrl } from "../frontend/src/uploads/location.ts";
 
 const params = (query) => new URLSearchParams(query);
 const open = { canStart: true };
@@ -48,6 +48,40 @@ test("history rows open step 4 for finished jobs and step 3 for jobs still worki
   for (const phase of ["complete", "rejected", "expired"]) assert.equal(jobUrl({ job_id: "j", client_phase: phase }), "/uploads/new?step=4&job=j", phase);
   for (const phase of ["uploading", "validating", "queued", "running", "finalizing"]) assert.equal(jobUrl({ job_id: "j", client_phase: phase }), "/uploads/new?step=3&job=j", phase);
   assert.equal(jobUrl({ job_id: "a/b", client_phase: "running" }), "/uploads/new?step=3&job=a%2Fb");
+});
+
+test("history rows keep the job's pipeline so going back to the form knows the mode", () => {
+  assert.equal(jobUrl({ job_id: "j", client_phase: "rejected", pipeline: "p" }), "/uploads/new?step=4&pipeline=p&job=j");
+});
+
+test("every earlier step is reachable from a tab and no later one is", () => {
+  const cases = [
+    [{ step: 4, pipeline: "p", job: "j" }, [1, 2, 3]],
+    [{ step: 3, pipeline: "p", job: "j" }, [1, 2]],
+    [{ step: 3, pipeline: "p", job: "" }, [1, 2]],
+    [{ step: 2, pipeline: "p", job: "" }, [1]],
+    [{ step: 1, pipeline: "", job: "" }, []],
+  ];
+  for (const [at, open] of cases)
+    for (const step of [1, 2, 3, 4]) assert.equal(reachable(at, step, false), open.includes(step), `${at.step}->${step}`);
+});
+
+test("no tab is reachable while the browser is still sending the file", () => {
+  for (const step of [1, 2, 3, 4]) assert.equal(reachable({ step: 3, pipeline: "p", job: "" }, step, true), false, String(step));
+});
+
+test("going back to the form or the mode leaves the job behind and keeps the pipeline", () => {
+  const at = { step: 4, pipeline: "p", job: "j" };
+  assert.deepEqual(backTo(at, 3), { step: 3, pipeline: "p", job: "j" });
+  assert.deepEqual(backTo(at, 2), { step: 2, pipeline: "p", job: "" });
+  assert.deepEqual(backTo(at, 1), { step: 1, pipeline: "p", job: "" });
+  assert.equal(wizardUrl(backTo(at, 2)), "/uploads/new?step=2&pipeline=p");
+  assert.deepEqual(resolveLocation(backTo(at, 2), closed), { step: 2, pipeline: "p", job: "" });
+  assert.deepEqual(backTo({ step: 3, pipeline: "p", job: "j" }, 2), { step: 2, pipeline: "p", job: "" });
+});
+
+test("a job opened without its pipeline goes back to choosing the mode", () => {
+  assert.equal(resolveLocation(backTo({ step: 4, pipeline: "", job: "j" }, 2), closed).step, 1);
 });
 
 test("the page title names the upload once a job id is present", () => {

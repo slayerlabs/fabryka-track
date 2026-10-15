@@ -35,6 +35,7 @@ export interface UploadJob {
   input_sha256?: string | null;
   rejection?: Rejection | null;
   artifacts?: { kind: string }[];
+  parameters?: Record<string, unknown>;
 }
 
 export interface UploadCheck {

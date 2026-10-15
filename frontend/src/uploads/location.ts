@@ -31,7 +31,12 @@ export function resolveLocation(at: WizardLocation, { canStart }: { canStart: bo
   return { ...at, step: at.step === 1 ? 1 : 2 };
 }
 
-export const jobUrl = ({ job_id, client_phase }: { job_id: string; client_phase: string }) =>
-  wizardUrl({ step: isFinal(client_phase) ? 4 : 3, pipeline: "", job: job_id });
+export const reachable = (at: WizardLocation, step: Step, uploading: boolean) => !uploading && step < at.step;
+
+// steps 1 and 2 start a new upload, so the old job stays where it is
+export const backTo = (at: WizardLocation, step: Step): WizardLocation => ({ ...at, step, job: step > 2 ? at.job : "" });
+
+export const jobUrl = ({ job_id, client_phase, pipeline = "" }: { job_id: string; client_phase: string; pipeline?: string }) =>
+  wizardUrl({ step: isFinal(client_phase) ? 4 : 3, pipeline, job: job_id });
 
 export const wizardTitle = (job: string) => (job ? `Upload ${job.slice(0, 8)}` : "New upload");

@@ -67,3 +67,26 @@ export function validateUpload(state: UploadFormState, limitBytes = MAX_UPLOAD_B
   parameters.mask_names = true;
   return { errors, form: { pipeline: state.pipeline, format, parameters, declaration: { accepted: true, version: DECLARATION_VERSION } } };
 }
+
+const PREFILLED_TEXT = ["source", "added", "license", "author", "source_ref"] as const;
+
+export function prefillForm(form: UploadFormState, parameters: unknown, fresh: UploadFormState): UploadFormState {
+  if (!parameters || typeof parameters !== "object") return form;
+  const stored = parameters as Record<string, unknown>;
+  const next = { ...form };
+  for (const key of PREFILLED_TEXT) {
+    const value = stored[key];
+    if (typeof value === "string" && form[key] === fresh[key]) next[key] = value;
+  }
+  const provenance = stored.per_record_provenance;
+  if (typeof provenance === "boolean" && form.per_record_provenance === fresh.per_record_provenance)
+    next.per_record_provenance = provenance;
+  return next;
+}
+
+// the browser cannot refill a file input, and the declaration is given again for the new file
+export function carryForm(form: UploadFormState, fresh: UploadFormState, next: { pipeline: string; job: string }, jobParameters?: unknown) {
+  if (!next.job && !next.pipeline) return fresh;
+  const carried = { ...form, file: null, declaration: false };
+  return next.job ? carried : prefillForm(carried, jobParameters, fresh);
+}

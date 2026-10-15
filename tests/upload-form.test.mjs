@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DECLARATION_TEXT, DECLARATION_VERSION, MAX_UPLOAD_BYTES, pipelineLimit, validateUpload } from "../frontend/src/uploads/form.ts";
+import { DECLARATION_TEXT, DECLARATION_VERSION, MAX_UPLOAD_BYTES, carryForm, pipelineLimit, prefillForm, validateUpload } from "../frontend/src/uploads/form.ts";
 
 const valid = {
   pipeline: "dynaword-upload",
@@ -85,4 +85,55 @@ test("the file limit follows the chosen pipeline and falls back to the default",
   assert.match(validateUpload(big).errors.file, /larger than 512\.0 MiB/);
   assert.equal(validateUpload(big, 10 * gib).errors.file, undefined);
   assert.match(validateUpload({ ...big, file: { name: "data.jsonl", size: 10 * gib + 1 } }, 10 * gib).errors.file, /larger than 10\.0 GiB/);
+});
+
+test("the form survives the job coming and going, without the file or the declaration", () => {
+  const fresh = { ...valid, file: null, source: "", license: "", declaration: false };
+  const filled = { ...valid, author: "Ada", source_ref: "https://example.org", per_record_provenance: true };
+  const kept = { ...filled, file: null, declaration: false };
+  assert.deepEqual(carryForm(filled, fresh, { step: 3, pipeline: "p", job: "j" }), kept);
+  assert.deepEqual(carryForm(filled, fresh, { step: 2, pipeline: "p", job: "" }), kept);
+  assert.deepEqual(carryForm(filled, fresh, { step: 1, pipeline: "p", job: "" }), kept);
+});
+
+test("a new upload with no mode chosen starts from an empty form", () => {
+  const fresh = { ...valid, file: null, source: "", declaration: false };
+  assert.equal(carryForm(valid, fresh, { step: 1, pipeline: "", job: "" }), fresh);
+});
+
+const blank = { ...valid, file: null, source: "", added: "2026-10-15", license: "", author: "", source_ref: "", declaration: false };
+const stored = { source: "old_source", added: "2026-10-02", license: "CC0-1.0", author: "Ada", source_ref: "https://example.org",
+  per_record_provenance: true, mask_names: true };
+
+test("a form opened without its session takes the job's stored parameters", () => {
+  assert.deepEqual(prefillForm(blank, stored, blank), { ...blank, source: "old_source", added: "2026-10-02", license: "CC0-1.0",
+    author: "Ada", source_ref: "https://example.org", per_record_provenance: true });
+});
+
+test("values already in the form win over the job's parameters", () => {
+  const typed = { ...blank, source: "typed", added: "2026-01-01", per_record_provenance: true };
+  const prefilled = prefillForm(typed, { ...stored, per_record_provenance: false }, blank);
+  assert.equal(prefilled.source, "typed");
+  assert.equal(prefilled.added, "2026-01-01");
+  assert.equal(prefilled.per_record_provenance, true);
+  assert.equal(prefilled.license, "CC0-1.0");
+});
+
+test("a controller that sends no parameters leaves the form as it is", () => {
+  for (const parameters of [undefined, null, "source", 3])
+    assert.equal(prefillForm(blank, parameters, blank), blank);
+});
+
+test("only well-typed known fields are taken from the job", () => {
+  const prefilled = prefillForm(blank, { source: 7, license: ["x"], per_record_provenance: "yes", pipeline: "other",
+    declaration: true, file: "x.jsonl" }, blank);
+  assert.deepEqual(prefilled, blank);
+});
+
+test("going back from a job prefills the carried form, but a new upload and entering a job do not", () => {
+  const prefilled = prefillForm(blank, stored, blank);
+  assert.deepEqual(carryForm(blank, blank, { step: 2, pipeline: "p", job: "" }, stored), prefilled);
+  assert.deepEqual(carryForm(blank, blank, { step: 1, pipeline: "p", job: "" }, stored), prefilled);
+  assert.equal(carryForm(blank, blank, { step: 1, pipeline: "", job: "" }, stored), blank);
+  assert.deepEqual(carryForm(blank, blank, { step: 3, pipeline: "p", job: "j" }, stored), blank);
 });
