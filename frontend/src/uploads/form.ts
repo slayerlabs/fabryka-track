@@ -67,3 +67,7 @@ export function validateUpload(state: UploadFormState, limitBytes = MAX_UPLOAD_B
   parameters.mask_names = true;
   return { errors, form: { pipeline: state.pipeline, format, parameters, declaration: { accepted: true, version: DECLARATION_VERSION } } };
 }
+
+// the browser cannot refill a file input, and the declaration is given again for the new file
+export const carryForm = (form: UploadFormState, fresh: UploadFormState, next: { pipeline: string; job: string }) =>
+  next.job || next.pipeline ? { ...form, file: null, declaration: false } : fresh;

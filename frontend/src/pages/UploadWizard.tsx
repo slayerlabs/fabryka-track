@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { COPY } from "../uploads/copy";
 import { canStartUpload } from "../uploads/gate";
-import { pipelineLimit, validateUpload, type UploadFormState } from "../uploads/form";
-import { parseLocation, resolveLocation, wizardTitle, wizardUrl, type Step, type WizardLocation } from "../uploads/location";
+import { carryForm, pipelineLimit, validateUpload, type UploadFormState } from "../uploads/form";
+import { backTo, parseLocation, reachable, resolveLocation, wizardTitle, wizardUrl, type Step, type WizardLocation } from "../uploads/location";
 import { emptyForm } from "../uploads/MetadataFields";
 import { useFileCheck } from "../uploads/useFileCheck";
 import { usePipelines } from "../uploads/usePipelines";
@@ -55,7 +55,7 @@ function UploadWizard() {
   if (hasJob !== hadJob) {
     setHadJob(hasJob);
     // reset when the job param flips, not before: navigation runs as a transition and an earlier reset bounces to step 2
-    setForm(emptyForm());
+    setForm((current) => carryForm(current, emptyForm(), requested));
   }
 
   const at = resolveLocation({ ...requested, pipeline: pipelineId }, { canStart });
@@ -73,21 +73,20 @@ function UploadWizard() {
   const set = <K extends keyof UploadFormState>(key: K, value: UploadFormState[K]) =>
     setForm((current) => ({ ...current, [key]: value }));
 
-  const reachable = (step: Step) => !uploading && (at.job ? at.step === 4 && step === 3 : step < at.step);
-
   return (
     <>
       <nav className="steps wizard-steps" aria-label="Upload steps">
         {COPY.steps.map(({ key, title }, index) => {
           const step = (index + 1) as Step;
+          const open = reachable(at, step, uploading);
           return (
             <button
               key={key}
               type="button"
-              className={`step${step === at.step ? " active" : ""}${step < at.step ? " done" : ""}`}
+              className={`step${step === at.step ? " active" : ""}${open ? " done" : ""}`}
               aria-current={step === at.step ? "step" : undefined}
-              disabled={step !== at.step && !reachable(step)}
-              onClick={() => step !== at.step && go({ step })}
+              disabled={step !== at.step && !open}
+              onClick={() => open && navigate(wizardUrl(backTo(at, step)))}
             >
               <b>{step}</b>
               {title}

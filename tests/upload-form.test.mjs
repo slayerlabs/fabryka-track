@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DECLARATION_TEXT, DECLARATION_VERSION, MAX_UPLOAD_BYTES, pipelineLimit, validateUpload } from "../frontend/src/uploads/form.ts";
+import { DECLARATION_TEXT, DECLARATION_VERSION, MAX_UPLOAD_BYTES, carryForm, pipelineLimit, validateUpload } from "../frontend/src/uploads/form.ts";
 
 const valid = {
   pipeline: "dynaword-upload",
@@ -85,4 +85,18 @@ test("the file limit follows the chosen pipeline and falls back to the default",
   assert.match(validateUpload(big).errors.file, /larger than 512\.0 MiB/);
   assert.equal(validateUpload(big, 10 * gib).errors.file, undefined);
   assert.match(validateUpload({ ...big, file: { name: "data.jsonl", size: 10 * gib + 1 } }, 10 * gib).errors.file, /larger than 10\.0 GiB/);
+});
+
+test("the form survives the job coming and going, without the file or the declaration", () => {
+  const fresh = { ...valid, file: null, source: "", license: "", declaration: false };
+  const filled = { ...valid, author: "Ada", source_ref: "https://example.org", per_record_provenance: true };
+  const kept = { ...filled, file: null, declaration: false };
+  assert.deepEqual(carryForm(filled, fresh, { step: 3, pipeline: "p", job: "j" }), kept);
+  assert.deepEqual(carryForm(filled, fresh, { step: 2, pipeline: "p", job: "" }), kept);
+  assert.deepEqual(carryForm(filled, fresh, { step: 1, pipeline: "p", job: "" }), kept);
+});
+
+test("a new upload with no mode chosen starts from an empty form", () => {
+  const fresh = { ...valid, file: null, source: "", declaration: false };
+  assert.equal(carryForm(valid, fresh, { step: 1, pipeline: "", job: "" }), fresh);
 });
