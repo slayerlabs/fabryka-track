@@ -8,6 +8,38 @@ export interface Rejection {
   field?: string | null;
 }
 
+export type BundleKind = "data" | "metadata" | "datasheet";
+
+export interface SourceVersion {
+  source: string;
+  version: number;
+  current: boolean;
+}
+
+export interface SourceSummary {
+  source: string;
+  current_version: number;
+  updated_at: string;
+}
+
+export interface SourceDetails {
+  pretty_name: string;
+  description: string;
+  source_ref: string;
+  publisher: string;
+  domains: string[];
+  limitations: string;
+}
+
+export interface SourceDescription {
+  source: string;
+  version: number;
+  job_id: string;
+  created_at: string;
+  uploader: string | null;
+  description: SourceDetails;
+}
+
 export interface UploadPipeline {
   pipeline: string;
   title: string;
@@ -36,6 +68,7 @@ export interface UploadJob {
   rejection?: Rejection | null;
   artifacts?: { kind: string }[];
   parameters?: Record<string, unknown>;
+  source_version?: SourceVersion;
 }
 
 export interface UploadCheck {
@@ -87,6 +120,20 @@ export const cancelUpload = (id: string) =>
     method: "POST",
     body: JSON.stringify({ action_key: crypto.randomUUID() }),
   });
+
+const diagnosticQuery = (diagnostic: boolean) => (diagnostic ? "?diagnostic=true" : "");
+
+export const listSources = (signal?: AbortSignal) =>
+  request<{ sources: SourceSummary[] }>("/api/uploads/sources", { signal });
+
+export const getSource = (name: string, signal?: AbortSignal) =>
+  request<SourceDescription>(`/api/uploads/sources/${encodeURIComponent(name)}`, { signal });
+
+export const bundleGrant = (id: string, kind: BundleKind, diagnostic: boolean) =>
+  request<{ url: string }>(`${job(id)}/${kind}${diagnosticQuery(diagnostic)}`);
+
+export const datasheetText = (id: string, diagnostic: boolean, signal?: AbortSignal) =>
+  request<{ markdown: string }>(`${job(id)}/datasheet/text${diagnosticQuery(diagnostic)}`, { signal });
 
 export const resultGrant = (id: string, diagnostic: boolean) =>
   request<{ url: string }>(`${job(id)}/result${diagnostic ? "?diagnostic=true" : ""}`);
