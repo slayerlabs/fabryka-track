@@ -1,9 +1,11 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { SourceDescription, SourceSummary } from "./api";
 import { formatBytes } from "./bytes";
 import { COPY } from "./copy";
 import type { FileCheck } from "./useFileCheck";
-import { FieldError, MetadataFields } from "./MetadataFields";
+import { FieldError, Label, MetadataFields } from "./MetadataFields";
 import type { UploadErrors, UploadFormState } from "./form";
+import { refusalSummary, type Refusal } from "./refusal";
 
 interface Props {
   state: UploadFormState;
@@ -13,6 +15,10 @@ interface Props {
   onChange: <K extends keyof UploadFormState>(key: K, value: UploadFormState[K]) => void;
   onBack: () => void;
   onRun: () => void;
+  sources: SourceSummary[];
+  described: SourceDescription | null;
+  onPickSource: (source: string) => void;
+  refusal: Refusal | null;
 }
 
 function CheckResult({ check }: { check: FileCheck }) {
@@ -74,19 +80,32 @@ function CheckResult({ check }: { check: FileCheck }) {
   );
 }
 
-export function WizardFileStep({ state, errors, check, canRun, onChange, onBack, onRun }: Props) {
+export function WizardFileStep({ state, errors, check, canRun, onChange, onBack, onRun, sources, described, onPickSource, refusal }: Props) {
   const [touched, setTouched] = useState<Set<string>>(new Set());
   const shown = Object.fromEntries(Object.entries(errors).filter(([key]) => touched.has(key) && key !== "file")) as UploadErrors;
+  const visible = { ...shown, ...refusal?.errors };
   const set: Props["onChange"] = (key, value) => {
     setTouched((current) => new Set(current).add(key));
     onChange(key, value);
   };
+  const formRef = useRef<HTMLFormElement>(null);
+  const bannerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!refusal) return;
+    // the wizard scrolls to the top after the step change; focusing later brings the refusal back into view
+    const frame = requestAnimationFrame(() => {
+      const field = formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]');
+      (field ?? bannerRef.current)?.focus();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, []);
   const pending = check.status === "done" && !canRun && check.report.blocking.length === 0;
   return (
     <section className="panel">
       <h2>{COPY.steps[1].title}</h2>
       <p className="muted">{COPY.file.intro}</p>
       <form
+        ref={formRef}
         onSubmit={(event) => {
           event.preventDefault();
           if (canRun) onRun();
@@ -94,7 +113,7 @@ export function WizardFileStep({ state, errors, check, canRun, onChange, onBack,
         noValidate
       >
         <label className="field">
-          <span>{COPY.file.fileLabel}</span>
+          <Label text={COPY.file.fileLabel} required />
           <input
             type="file"
             accept=".jsonl,.parquet"
@@ -109,12 +128,28 @@ export function WizardFileStep({ state, errors, check, canRun, onChange, onBack,
           {!state.file && <FieldError text={touched.size ? errors.file : undefined} />}
         </label>
         <CheckResult check={check} />
-        <MetadataFields state={state} errors={shown} disabled={false} set={set} />
+        <MetadataFields
+          state={state}
+          errors={visible}
+          disabled={false}
+          set={set}
+          sources={sources}
+          described={described}
+          onPickSource={(source) => {
+            setTouched((current) => new Set(current).add("source"));
+            onPickSource(source);
+          }}
+        />
         {pending && (
           <p className="muted">
             {COPY.file.missingFields}{" "}
             {Object.keys(errors).map((key) => COPY.file.fields[key as keyof typeof COPY.file.fields] ?? key).join(", ")}
           </p>
+        )}
+        {refusal && (
+          <div className="banner banner-bad" role="alert" tabIndex={-1} ref={bannerRef}>
+            <b>{COPY.file.refusedTitle}</b> {refusalSummary(refusal)}
+          </div>
         )}
         <div className="actions">
           <button className="secondary" type="button" onClick={onBack}>

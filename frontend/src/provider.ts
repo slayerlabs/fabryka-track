@@ -22,11 +22,12 @@ function record(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-export function apiError(error: unknown): { status?: number; code?: string } {
-  const { statusCode, code } = (record(error) ? error : {}) as { statusCode?: unknown; code?: unknown };
+export function apiError(error: unknown): { status?: number; code?: string; field?: string } {
+  const { statusCode, code, field } = (record(error) ? error : {}) as { statusCode?: unknown; code?: unknown; field?: unknown };
   return {
     status: typeof statusCode === "number" ? statusCode : undefined,
     code: typeof code === "string" ? code : undefined,
+    field: typeof field === "string" ? field : undefined,
   };
 }
 
@@ -68,6 +69,7 @@ export async function request<T = unknown>(
     throw Object.assign(new Error(message), {
       statusCode: response.status,
       code: record(body) && typeof body.code === "string" ? body.code : undefined,
+      field: record(body) && typeof body.field === "string" ? body.field : undefined,
     }) satisfies HttpError;
   }
   // Callers supply the response contract of the same-version FastAPI endpoint.

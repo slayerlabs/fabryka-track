@@ -1,4 +1,5 @@
 import base64
+import hashlib
 import json
 
 import httpx
@@ -7,11 +8,16 @@ from sqlalchemy import delete, select
 
 from fabryka_track import data_uploads
 from fabryka_track.database import SessionLocal
-from fabryka_track.models import HuggingFaceIdentity
+from fabryka_track.models import Account, HuggingFaceIdentity
 
 REQUEST_ID = "0f0e0d0c-0b0a-4999-8888-777766665555"
 JOB_ID = "6f1c1f3e-2b7a-4d5e-9c3b-1a2b3c4d5e6f"
 ACTION_KEY = "0b0c7d9e-1f2a-4b3c-8d4e-5f6a7b8c9d0e"
+
+
+PARAMETERS = {"source": "my_source", "added": "2026-10-08", "license": "cc-by-4.0",
+              "source_ref": "https://example.org/my_source", "pretty_name": "My source",
+              "description": "Synthetic records for the proxy tests.", "domains": ["Other"]}
 
 
 def create_body(**overrides):
@@ -19,7 +25,7 @@ def create_body(**overrides):
         "action_key": ACTION_KEY,
         "pipeline": "dynaword-upload",
         "input": {"format": "jsonl", "encoded_bytes": 1024, "sha256": "a" * 64, "filename": "data.jsonl"},
-        "parameters": {"source": "my_source", "added": "2026-10-08", "license": "cc-by-4.0"},
+        "parameters": dict(PARAMETERS),
         "declaration": {"accepted": True, "version": data_uploads.DECLARATION_VERSION},
     }
     body.update(overrides)
@@ -63,6 +69,7 @@ def controller(monkeypatch):
         return real_client(transport=httpx.MockTransport(fake), **kw)
     monkeypatch.setattr(data_uploads.httpx, "Client", build)
     monkeypatch.setattr(data_uploads, "_client", None)
+    monkeypatch.setattr(data_uploads, "_storage", None)
     monkeypatch.setattr(data_uploads.settings, "pipeline_url", "https://pipeline.test")
     monkeypatch.setattr(data_uploads.settings, "pipeline_username", "track")
     monkeypatch.setattr(data_uploads.settings, "pipeline_password", "track-secret")
@@ -105,7 +112,7 @@ def test_create_forwards_track_pair_and_hugging_face_identity(client, controller
     assert json.loads(sent.content) == {
         "protocol": "job-v1", "pipeline": "other-mode",
         "input": {"format": "jsonl", "encoded_bytes": 1024, "sha256": "a" * 64, "filename": "data.jsonl"},
-        "parameters": {"source": "my_source", "added": "2026-10-08", "license": "cc-by-4.0", "mask_names": True},
+        "parameters": {**PARAMETERS, "mask_names": True},
         "declaration": {"version": "upload-declaration-v0-placeholder", "accepted": True},
     }
 
@@ -178,12 +185,16 @@ CONFIRM = {"parts": [{"part_number": 1, "etag": '"abc"'}, {"part_number": 2, "et
     ("post", f"/api/uploads/{JOB_ID}/cancel", {"action_key": ACTION_KEY},
      ("POST", f"/jobs/v1/jobs/{JOB_ID}/cancel", "", {"protocol": "job-v1"}, ACTION_KEY)),
     ("get", "/api/uploads/pipelines", None, ("GET", "/jobs/v1/pipelines", "", None, None)),
+    ("get", "/api/uploads/sources", None, ("GET", "/jobs/v1/sources", "", None, None)),
+    ("get", "/api/uploads/sources/my_source", None, ("GET", "/jobs/v1/sources/my_source", "", None, None)),
+    ("get", "/api/uploads/sources/report", None, ("GET", "/jobs/v1/sources/report", "", None, None)),
     ("get", f"/api/uploads/{JOB_ID}", None, ("GET", f"/jobs/v1/jobs/{JOB_ID}", "", None, None)),
     ("get", f"/api/uploads/{JOB_ID}/report", None, ("GET", f"/jobs/v1/jobs/{JOB_ID}/report", "", None, None)),
-    ("get", f"/api/uploads/{JOB_ID}/result", None, ("GET", f"/jobs/v1/jobs/{JOB_ID}/result", "", None, None)),
-    ("get", f"/api/uploads/{JOB_ID}/attribution", None, ("GET", f"/jobs/v1/jobs/{JOB_ID}/attribution", "", None, None)),
-    ("get", f"/api/uploads/{JOB_ID}/result?diagnostic=true", None,
-     ("GET", f"/jobs/v1/jobs/{JOB_ID}/result", "diagnostic=true", None, None)),
+    ("get", f"/api/uploads/{JOB_ID}/data", None, ("GET", f"/jobs/v1/jobs/{JOB_ID}/data", "", None, None)),
+    ("get", f"/api/uploads/{JOB_ID}/metadata", None, ("GET", f"/jobs/v1/jobs/{JOB_ID}/metadata", "", None, None)),
+    ("get", f"/api/uploads/{JOB_ID}/datasheet", None, ("GET", f"/jobs/v1/jobs/{JOB_ID}/datasheet", "", None, None)),
+    ("get", f"/api/uploads/{JOB_ID}/metadata?diagnostic=true", None,
+     ("GET", f"/jobs/v1/jobs/{JOB_ID}/metadata", "diagnostic=true", None, None)),
     ("get", "/api/uploads?cursor=abc", None, ("GET", "/jobs/v1/jobs", "limit=20&cursor=abc", None, None)),
 ])
 def test_routes_forward_to_matching_controller_calls(client, controller, method, path, body, expected):
@@ -196,7 +207,7 @@ def test_routes_forward_to_matching_controller_calls(client, controller, method,
 
 
 def test_job_id_must_be_a_uuid(client, controller):
-    assert client.get("/api/uploads/not-a-uuid/attribution").status_code == 422
+    assert client.get("/api/uploads/not-a-uuid/data").status_code == 422
     assert client.get("/api/uploads/..%2F..%2Fadmin").status_code in (404, 422)
     assert client.get("/api/uploads/not-a-job/report").status_code == 422
     assert controller.requests == []
@@ -233,13 +244,63 @@ def test_pipeline_url_must_use_https():
     assert Settings(pipeline_url="https://data-pipeline.fabryka.ai").pipeline_url == "https://data-pipeline.fabryka.ai"
 
 
-@pytest.mark.parametrize("field", ["license", "author", "source_ref"])
-def test_optional_metadata_accepts_the_controller_maximum(client, controller, field):
+@pytest.mark.parametrize("field,limit,prefix", [("license", 4096, ""), ("author", 4096, ""), ("publisher", 200, ""),
+                                                ("limitations", 5000, ""), ("pretty_name", 200, ""),
+                                                ("description", 1000, ""), ("source_ref", 4096, "https://")])
+def test_metadata_accepts_the_profile_maximum(client, controller, field, limit, prefix):
     body = create_body()
-    body["parameters"] = {**body["parameters"], field: "x" * 4096}
+    body["parameters"] = {**body["parameters"], field: prefix + "x" * (limit - len(prefix))}
     assert client.post("/api/uploads", json=body).status_code == 201
-    body["parameters"][field] = "x" * 4097
+    body["parameters"][field] += "x"
     assert client.post("/api/uploads", json=body).status_code == 422
+
+
+@pytest.mark.parametrize("change", [
+    {"source_ref": None}, {"source_ref": ""}, {"source_ref": "ftp://example.org/x"}, {"source_ref": "https://a b"},
+    {"pretty_name": None}, {"pretty_name": ""}, {"description": None}, {"domains": None}, {"domains": []},
+    {"domains": ["Poetry"]}, {"domains": ["Books", "Books"]},
+], ids=lambda change: next(iter(change)) + "=" + repr(next(iter(change.values()))))
+def test_a_create_breaking_the_profile_schema_never_reaches_the_controller(client, controller, change):
+    body = create_body()
+    (key, value), = change.items()
+    body["parameters"] = {k: v for k, v in body["parameters"].items() if k != key}
+    if value is not None:
+        body["parameters"][key] = value
+    assert client.post("/api/uploads", json=body).status_code == 422
+    assert controller.requests == []
+
+
+def test_the_description_fields_are_forwarded_as_given(client, controller):
+    body = create_body()
+    body["parameters"] = {**body["parameters"], "publisher": "Fundacja", "limitations": "Old spelling.\nSome OCR noise.",
+                          "domains": ["Books", "Social Media"], "source_ref": "urn:isbn:9788300000000"}
+    assert client.post("/api/uploads", json=body).status_code == 201
+    sent = json.loads(controller.requests[0].content)["parameters"]
+    assert sent == {**body["parameters"], "mask_names": True}
+
+
+def refusal(code, field):
+    return lambda request: httpx.Response(422, json={"protocol": "job-v1", "request_id": REQUEST_ID, "code": code,
+                                                     "message": "internal wording", "retryable": False,
+                                                     **({"field": field} if field is not None else {})})
+
+
+@pytest.mark.parametrize("code,field", [("invalid_source_ref", "source_ref"), ("invalid_parameters", "pretty_name")])
+def test_parameter_refusals_keep_the_field_they_name(client, controller, code, field):
+    controller.reply = refusal(code, field)
+    response = client.post("/api/uploads", json=create_body())
+    assert response.status_code == 422
+    assert response.json() == {"detail": data_uploads.MESSAGES[code], "code": code, "request_id": REQUEST_ID,
+                               "field": field}
+    assert len(controller.requests) == 1
+
+
+@pytest.mark.parametrize("field", ["Source Ref", "x" * 65, 7, ""])
+def test_a_malformed_field_is_not_forwarded(client, controller, field):
+    controller.reply = refusal("invalid_parameters", field)
+    response = client.post("/api/uploads", json=create_body())
+    assert response.status_code == 422
+    assert "field" not in response.json()
 
 
 def test_no_database_connection_is_held_during_the_controller_call(client, controller):
@@ -435,46 +496,99 @@ def test_other_create_errors_do_not_trigger_the_limit_lookup(client, controller)
     assert len(controller.requests) == 1
 
 
-def test_attribution_returns_the_controller_grant(client, controller):
-    grant = {"protocol": "job-v1", "url": "https://files.test/attribution.jsonl", "diagnostic": False}
-    controller.reply = lambda request: httpx.Response(200, json=grant)
-    response = client.get(f"/api/uploads/{JOB_ID}/attribution")
-    assert (response.status_code, response.json()) == (200, grant)
+@pytest.mark.parametrize("old", ["result", "attribution", "result?kind=attribution"])
+def test_the_former_result_routes_are_gone(client, controller, old):
+    assert client.get(f"/api/uploads/{JOB_ID}/{old}").status_code == 404
+    assert controller.requests == []
 
 
-def test_a_missing_attribution_file_has_its_own_readable_state(client, controller):
-    controller.reply = controller_error(404, "not_found")
-    response = client.get(f"/api/uploads/{JOB_ID}/attribution")
-    assert response.status_code == 404
-    assert response.json() == {"detail": "No attribution file is available for this upload.", "code": "no_attribution",
-                               "request_id": REQUEST_ID}
-
-
-def test_attribution_forwards_the_diagnostic_flag(client, controller):
-    assert client.get(f"/api/uploads/{JOB_ID}/attribution?diagnostic=true").status_code == 200
-    assert client.get(f"/api/uploads/{JOB_ID}/attribution").status_code == 200
-    assert [r.url.query.decode() for r in controller.requests] == ["diagnostic=true", ""]
-
-
-@pytest.mark.parametrize("status,code", [(409, "result_pending"), (409, "no_result"), (410, "expired"), (409, "diagnostic_required")])
-def test_other_attribution_errors_use_the_shared_messages(client, controller, status, code):
+@pytest.mark.parametrize("kind", ["data", "metadata", "datasheet"])
+@pytest.mark.parametrize("status,code", [(409, "result_pending"), (409, "no_result"), (410, "expired"),
+                                         (409, "diagnostic_required")])
+def test_bundle_errors_use_the_shared_messages(client, controller, kind, status, code):
     controller.reply = controller_error(status, code)
-    response = client.get(f"/api/uploads/{JOB_ID}/attribution")
+    response = client.get(f"/api/uploads/{JOB_ID}/{kind}")
     assert (response.status_code, response.json()["detail"]) == (status, data_uploads.MESSAGES[code])
 
 
-def test_attribution_is_guarded_like_the_other_upload_routes(client, controller):
-    controller.reply = controller_error(401, "unauthorized")
-    response = client.get(f"/api/uploads/{JOB_ID}/attribution")
-    assert (response.status_code, response.json()["detail"]) == (502, data_uploads.UNAVAILABLE)
-    controller.reply = None
-    sent = controller.requests[0]
-    assert sent.headers["x-pipeline-user"] == "fixture-tester"
-    drop_hf_identity()
-    assert client.get(f"/api/uploads/{JOB_ID}/attribution").status_code == 403
-    client.cookies.clear()
-    assert client.get(f"/api/uploads/{JOB_ID}/attribution").status_code == 401
+SHEET = '---\npretty_name: "My source"\n---\n\n# Dataset Card for My source\n'.encode()
+
+
+def sheet_reply(url="https://storage.test/sheet.md", served=SHEET, declared=None, digest=None):
+    def reply(request):
+        if request.url.host == "storage.test":
+            return httpx.Response(200, stream=httpx.ByteStream(served))
+        return httpx.Response(200, json={
+            "protocol": "job-v1", "job_id": JOB_ID, "diagnostic": False, "method": "GET", "url": url,
+            "expires_at": "2026-10-16T10:05:00Z",
+            "artifact": {"artifact_id": JOB_ID, "kind": "datasheet", "bytes": len(SHEET) if declared is None else declared,
+                         "sha256": digest or hashlib.sha256(SHEET).hexdigest(),
+                         "first_stored_at": "2026-10-16T10:00:00Z", "expires_at": "2026-11-15T10:00:00Z"}})
+    return reply
+
+
+def test_datasheet_text_follows_the_grant_without_track_credentials(client, controller):
+    controller.reply = sheet_reply()
+    response = client.get(f"/api/uploads/{JOB_ID}/datasheet/text")
+    assert (response.status_code, response.json()) == (200, {"markdown": SHEET.decode()})
+    grant, storage = controller.requests
+    assert grant.url.path == f"/jobs/v1/jobs/{JOB_ID}/datasheet"
+    assert storage.url.host == "storage.test"
+    assert "authorization" not in storage.headers and "x-pipeline-user" not in storage.headers
+
+
+def test_datasheet_text_forwards_the_diagnostic_flag(client, controller):
+    controller.reply = sheet_reply()
+    client.get(f"/api/uploads/{JOB_ID}/datasheet/text?diagnostic=true")
+    assert controller.requests[0].url.query.decode() == "diagnostic=true"
+
+
+@pytest.mark.parametrize("reply", [
+    sheet_reply(served=b"something else entirely"),
+    sheet_reply(served=SHEET + b"more"),
+    sheet_reply(digest="0" * 64),
+    sheet_reply(url="http://storage.test/sheet.md"),
+], ids=["other-bytes", "longer", "wrong-digest", "plain-http"])
+def test_a_datasheet_that_does_not_match_its_grant_is_never_served(client, controller, reply):
+    controller.reply = reply
+    response = client.get(f"/api/uploads/{JOB_ID}/datasheet/text")
+    assert (response.status_code, response.json()["code"]) == (502, "datasheet_unavailable")
+
+
+def test_a_datasheet_body_is_read_raw_and_the_read_stops_once_it_exceeds_the_grant(client, controller):
+    sent = []
+
+    def body():
+        for _ in range(10):
+            sent.append(1)
+            yield b"x" * len(SHEET)
+
+    def reply(request):
+        if request.url.host == "storage.test":
+            controller.storage_request = request
+            return httpx.Response(200, content=body())
+        return sheet_reply()(request)
+    controller.reply = reply
+    response = client.get(f"/api/uploads/{JOB_ID}/datasheet/text")
+    assert (response.status_code, response.json()["code"]) == (502, "datasheet_unavailable")
+    assert controller.storage_request.headers["accept-encoding"] == "identity"
+    assert len(sent) < 10
+
+
+def test_a_datasheet_larger_than_the_preview_limit_is_refused_before_download(client, controller):
+    controller.reply = sheet_reply(declared=data_uploads.DATASHEET_PREVIEW_BYTES + 1)
+    response = client.get(f"/api/uploads/{JOB_ID}/datasheet/text")
+    assert (response.status_code, response.json()["code"]) == (413, "datasheet_too_large")
     assert len(controller.requests) == 1
+
+
+def test_an_unreachable_storage_is_a_502(client, controller):
+    def reply(request):
+        if request.url.host == "storage.test":
+            raise httpx.ConnectError("down")
+        return sheet_reply()(request)
+    controller.reply = reply
+    assert client.get(f"/api/uploads/{JOB_ID}/datasheet/text").status_code == 502
 
 
 @pytest.mark.parametrize("stage", ["pii_mask", None, "stage_from_the_future"])
@@ -485,3 +599,59 @@ def test_job_status_passes_the_stage_through_untouched(client, controller, stage
 
 def test_job_status_without_a_stage_stays_without_one(client, controller):
     assert "stage" not in client.get(f"/api/uploads/{JOB_ID}").json()
+
+
+DESCRIPTION = {"pretty_name": "My source", "description": "Synthetic records.", "source_ref": "https://example.org",
+               "publisher": "", "domains": ["Other"], "limitations": ""}
+
+
+def source_reply(uploaded_by):
+    return lambda request: httpx.Response(200, json={
+        "protocol": "job-v1", "source": "my_source", "version": 2, "job_id": JOB_ID,
+        "created_at": "2026-10-16T10:00:00Z", "uploaded_by": uploaded_by, "description": DESCRIPTION})
+
+
+def add_hf_user(username, subject):
+    with SessionLocal() as session:
+        account = Account(username=username, password_hash="")
+        session.add(account)
+        session.flush()
+        session.add(HuggingFaceIdentity(subject=subject, account_id=account.id, username=username))
+        session.commit()
+
+
+@pytest.mark.parametrize("uploaded_by,uploader", [("hf:fixture-tester", "tester"), ("hf:anna-sub", "anna"),
+                                                  ("hf:not-a-track-user", None), ("cli", None)])
+def test_a_source_names_its_uploader_by_hugging_face_username(client, controller, uploaded_by, uploader):
+    add_hf_user("anna", "anna-sub")
+    controller.reply = source_reply(uploaded_by)
+    body = client.get("/api/uploads/sources/my_source").json()
+    assert body["uploader"] == uploader
+    assert "uploaded_by" not in body
+    assert body["description"] == DESCRIPTION and body["version"] == 2
+
+
+def test_an_unknown_source_has_its_own_readable_state(client, controller):
+    controller.reply = controller_error(404, "not_found")
+    response = client.get("/api/uploads/sources/brand_new")
+    assert response.status_code == 404
+    assert response.json() == {"detail": data_uploads.UNKNOWN_SOURCE, "code": "unknown_source", "request_id": REQUEST_ID}
+
+
+@pytest.mark.parametrize("name", ["Has_Caps", "_lead", "has-dash", "a" * 129])
+def test_a_malformed_source_name_never_reaches_the_controller(client, controller, name):
+    assert client.get(f"/api/uploads/sources/{name}").status_code == 422
+    assert controller.requests == []
+
+
+def test_sources_are_guarded_like_the_other_upload_routes(client, controller):
+    drop_hf_identity()
+    assert client.get("/api/uploads/sources").status_code == 403
+    client.cookies.clear()
+    assert client.get("/api/uploads/sources/my_source").status_code == 401
+    assert controller.requests == []
+
+
+def test_domains_are_the_profile_list_in_order():
+    assert data_uploads.DOMAINS == ("Books", "Conversation", "Dialect", "Encyclopedic", "Legal", "Medical", "News",
+                                    "Other", "Readaloud", "Social Media", "Speeches", "Spoken", "Subtitles", "Web")

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { COPY, CHECK_LABELS, PII_LABELS, REJECT_LABELS, STAGE_LABELS, STAT_LABELS } from "../frontend/src/uploads/copy.ts";
+import { REJECT_REASONS, rejectionMessage } from "../frontend/src/uploads/rejection.ts";
 import { timeline } from "../frontend/src/uploads/phases.ts";
 
 function leaves(value, path = "COPY") {
@@ -31,4 +32,31 @@ test("the report label maps are part of the copy", () => {
   assert.equal(COPY.labels.pii, PII_LABELS);
   assert.equal(COPY.labels.stat, STAT_LABELS);
   assert.equal(COPY.labels.check, CHECK_LABELS);
+});
+
+test("the Dynaword bundle checks replace attribution coverage", () => {
+  assert.equal(CHECK_LABELS.attribution_coverage, undefined);
+  assert.equal(CHECK_LABELS.metadata_binding, "Data and metadata match row by row");
+  assert.equal(CHECK_LABELS.datasheet, "Datasheet structure");
+});
+
+test("an invalid source address is a described reject reason", () => {
+  assert.ok(REJECT_REASONS.includes("invalid_source_ref"));
+  assert.equal(REJECT_LABELS.invalid_source_ref, "invalid source address");
+  assert.match(rejectionMessage({ position: 3, rule: "invalid_source_ref", field: "source_ref" }), /^Record 3 has a source_ref /);
+});
+
+test("no copy still promises a single result file or an attribution file", () => {
+  for (const [path, text] of leaves(COPY)) {
+    assert.doesNotMatch(text, /result file|attribution/i, path);
+  }
+});
+
+test("the uploads list has a source and version column", () => {
+  assert.equal(COPY.history.columns.source, "Source · version");
+});
+
+test("field names carry no optional suffix, so the missing-fields list stays bare", () => {
+  for (const [key, name] of Object.entries(COPY.file.fields)) assert.doesNotMatch(name, /optional/i, key);
+  assert.equal(COPY.file.optional, "(optional)");
 });

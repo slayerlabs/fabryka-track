@@ -12,6 +12,7 @@ export const REJECT_LABELS: Record<string, string> = {
   missing_license: "missing license",
   missing_source_ref: "missing source_ref",
   source_ref_unresolved: "unresolved source_ref",
+  invalid_source_ref: "invalid source address",
 };
 
 export const STAGE_LABELS: Record<string, string> = {
@@ -28,9 +29,9 @@ export const PIPELINE_STAGE_LABELS: Record<string, string> = {
   upload_dedup: "Removing duplicates",
   pii_mask: "Masking personal data",
   masked_exact_dedup: "Removing duplicates created by masking",
-  write_parquet: "Writing the result file",
-  qa: "Auditing the result",
-  artifact_upload: "Uploading the result",
+  write_parquet: "Writing data.parquet and metadata.parquet",
+  qa: "Auditing the files and the datasheet",
+  artifact_upload: "Uploading the files",
   reporting: "Writing the report",
 };
 
@@ -51,7 +52,8 @@ export const STAT_LABELS: Record<string, string> = {
 };
 
 export const CHECK_LABELS: Record<string, string> = {
-  schema: "Result schema",
+  schema: "Data schema",
+  metadata_binding: "Data and metadata match row by row",
   record: "Record format",
   token_count: "Token count",
   record_balance: "Record balance",
@@ -61,7 +63,7 @@ export const CHECK_LABELS: Record<string, string> = {
   residual_pii: "Remaining personal data",
   empty_result: "Non-empty result",
   metadata_conflict: "Metadata conflicts",
-  attribution_coverage: "Attribution coverage",
+  datasheet: "Datasheet structure",
   masking_only_duplicate: "Duplicates created by masking",
   license_needs_legal_review: "Licenses needing legal review",
 };
@@ -83,7 +85,7 @@ export const COPY = {
     finalizing: "Publishing results",
   },
   timelineStatus: { pending: "Pending", active: "In progress", done: "Done", failed: "Failed" },
-  recipeStages: ["Validate records", "Remove too-short records", "Remove duplicates", "Mask personal data", "Remove duplicates created by masking", "Write the result file", "Audit the result"],
+  recipeStages: ["Validate records", "Remove too-short records", "Remove duplicates", "Mask personal data", "Remove duplicates created by masking", "Write data.parquet, metadata.parquet and the datasheet", "Audit the files"],
   pipelines: {
     heading: "Choose a mode",
     loading: "Loading modes…",
@@ -96,7 +98,15 @@ export const COPY = {
     intro: "Keep this tab open until the upload finishes; an interrupted upload cannot be resumed and has to be started again.",
     fileLabel: "File",
     missingFields: "Still needed:",
-    fields: { source: "Source", added: "Added", license: "License", declaration: "Declaration", file: "File", pipeline: "Mode" },
+    refusedTitle: "The upload did not start.",
+    refusedFields: "Fix the highlighted fields and run again. Nothing was uploaded.",
+    refusedNothing: "Nothing was uploaded.",
+    refusedDetails: "Fix the details below and run again.",
+    optional: "(optional)",
+    fields: { source: "Source", added: "Added", license: "License", author: "Author", source_ref: "Source address",
+      pretty_name: "Name", description: "Description", domains: "Domains", publisher: "Publisher",
+      limitations: "Limitations",
+      declaration: "Declaration", file: "File", pipeline: "Mode" },
     formatHint: "The format is taken from the file extension.",
     checking: "Checking the file…",
     checkFailed: "The file could not be checked.",
@@ -108,6 +118,21 @@ export const COPY = {
     size: "Size",
     run: "Run",
     back: "Back",
+  },
+  source: {
+    shared: "Sources are shared: anyone can add a later version of this source.",
+    newSource: "New source",
+    newVersion: "New version",
+    use: "use",
+    updated: "Updated",
+    sectionTitle: "Source description",
+    sectionSub: "Shown on the source's datasheet in Polish Dynaword.",
+    addressHint: "A URL or identifier, e.g.",
+    descriptionPlaceholder: "One to three sentences about what the data is.",
+    limitationsPlaceholder: "Known gaps or biases, e.g. pre-1936 spelling.",
+    provenanceLabel: "Provenance",
+    provenance: "Every record carries its own source address",
+    licenseHint: "Applies to every record that does not carry its own license.",
   },
   progress: {
     ready: "The file passed the local check. Start the upload when you are ready.",
@@ -132,9 +157,14 @@ export const COPY = {
     newUpload: "New upload",
     expired: "The results of this upload have expired.",
     inProgress: "This upload is still in progress. Results appear here once they are published.",
+    datasheetHeading: "Datasheet",
+    preview: "Preview",
+    markdown: "Markdown",
+    datasheetLoading: "Loading the datasheet…",
+    front: { pretty_name: "Name", language: "Language", license: "License", license_name: "License name", domains: "Domains" },
   },
   gate: { signIn: "Sign in with Hugging Face to upload data.", loading: "Loading…" },
-  wizard: { description: "Send a Dynaword file to the data pipeline, follow its validation and download the report and result." },
+  wizard: { description: "Send a Dynaword file to the data pipeline, follow its validation and download the report, the data, its metadata and the datasheet." },
   history: {
     description: "Your uploads to the data pipeline. Open one to follow its progress or see its results.",
     heading: "Your uploads",
@@ -142,7 +172,7 @@ export const COPY = {
     loading: "Loading uploads…",
     empty: "No uploads yet.",
     loadMore: "Load more",
-    columns: { upload: "Upload", mode: "Mode", phase: "Phase", outcome: "Outcome", size: "Size", started: "Started", updated: "Updated" },
+    columns: { upload: "Upload", source: "Source · version", mode: "Mode", phase: "Phase", outcome: "Outcome", size: "Size", started: "Started", updated: "Updated" },
   },
   verdicts: {
     passed: "Passed",
@@ -168,10 +198,11 @@ export const COPY = {
     unavailable: "The chart library could not be loaded. Reload this page to try again.",
   },
   downloads: {
-    result: "Download result",
-    diagnostic: "Download diagnostic result",
-    attribution: "Download attribution",
-    noAttribution: "This upload has no attribution file.",
+    download: "Download",
+    diagnosticNote: "This upload failed its quality checks. These are diagnostic files for finding out why.",
+    data: { name: "data.parquet", what: "Records: id, text, source, added, created, token_count" },
+    metadata: { name: "metadata.parquet", what: "Per-record license, author, source address" },
+    datasheet: { what: "Datasheet" },
   },
   messages: {
     publishing: "Publishing results. This usually takes a moment.",

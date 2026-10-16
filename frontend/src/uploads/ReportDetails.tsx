@@ -1,8 +1,7 @@
 import { useState } from "react";
-import { apiError } from "../provider";
-import { attributionGrant, resultGrant, type UploadReport } from "./api";
+import { bundleGrant, type BundleKind, type UploadJob, type UploadReport } from "./api";
 import { CHECK_LABELS, COPY } from "./copy";
-import { bindingLabel, errorMessage, humanize } from "./display";
+import { bindingLabel, datasheetName, errorMessage, humanize } from "./display";
 import { checksOpen, summarizeReport } from "./report";
 
 export function ReportDetails({ report }: { report: UploadReport }) {
@@ -57,23 +56,17 @@ export function ReportDetails({ report }: { report: UploadReport }) {
   );
 }
 
-interface DownloadProps {
-  id: string;
-  diagnosticFirst: boolean;
-  attribution?: boolean;
-}
+const FILES: BundleKind[] = ["data", "metadata", "datasheet"];
 
-export function ResultDownload({ id, diagnosticFirst, attribution = false }: DownloadProps) {
+export function BundleDownloads({ job, diagnostic }: { job: UploadJob; diagnostic: boolean }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [diagnostic, setDiagnostic] = useState(diagnosticFirst);
-  async function download(grant: () => Promise<{ url: string }>) {
+  async function download(kind: BundleKind) {
     setBusy(true);
     setError("");
     try {
-      window.location.assign((await grant()).url);
+      window.location.assign((await bundleGrant(job.job_id, kind, diagnostic)).url);
     } catch (e) {
-      if (apiError(e).code === "diagnostic_required") setDiagnostic(true);
       setError(errorMessage(e));
     } finally {
       setBusy(false);
@@ -81,28 +74,26 @@ export function ResultDownload({ id, diagnosticFirst, attribution = false }: Dow
   }
   return (
     <>
+      {diagnostic && <p className="notice">{COPY.downloads.diagnosticNote}</p>}
       {error && (
         <p className="error" role="alert">
           {error}
         </p>
       )}
-      <div className="actions">
-        {!diagnosticFirst && (
-          <button className="primary" disabled={busy} onClick={() => void download(() => resultGrant(id, false))}>
-            {COPY.downloads.result}
+      {FILES.map((kind) => {
+        const name = kind === "datasheet" ? datasheetName(job) : COPY.downloads[kind].name;
+        return (
+        <div className="bundle-file" key={kind}>
+          <div>
+            <code>{name}</code>
+            <small>{COPY.downloads[kind].what}</small>
+          </div>
+          <button className="secondary" type="button" disabled={busy} aria-label={`${COPY.downloads.download} ${name}`} onClick={() => void download(kind)}>
+            {COPY.downloads.download}
           </button>
-        )}
-        {diagnostic && (
-          <button className="secondary" disabled={busy} onClick={() => void download(() => resultGrant(id, true))}>
-            {COPY.downloads.diagnostic}
-          </button>
-        )}
-        {attribution && (
-          <button className="secondary" disabled={busy} onClick={() => void download(() => attributionGrant(id, diagnostic))}>
-            {COPY.downloads.attribution}
-          </button>
-        )}
-      </div>
+        </div>
+        );
+      })}
     </>
   );
 }

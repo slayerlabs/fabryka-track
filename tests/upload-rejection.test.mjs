@@ -16,7 +16,7 @@ test("every current reject reason has its own sentence naming the record", () =>
     assert.ok(!seen.has(message), reason);
     seen.add(message);
   }
-  assert.equal(REJECT_REASONS.length, 13);
+  assert.equal(REJECT_REASONS.length, 14);
 });
 
 test("the sentences say what is wrong", () => {

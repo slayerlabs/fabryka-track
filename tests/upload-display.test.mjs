@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { isFinal } from "../frontend/src/uploads/phases.ts";
-import { bindingLabel, canCancel, describeJob, diagnosticOnly, errorMessage, publishingResults, hasAttribution, humanize, jobOutcome, keepPolling, modeLabel, rejectionMessage, showsReport, stoppedMessage } from "../frontend/src/uploads/display.ts";
+import { bindingLabel, canCancel, describeJob, diagnosticOnly, errorMessage, publishingResults, hasBundle, versionChip, versionLabel, datasheetName, humanize, jobOutcome, keepPolling, modeLabel, rejectionMessage, showsReport, stoppedMessage } from "../frontend/src/uploads/display.ts";
 
 test("machine codes read as plain words", () => {
   assert.equal(humanize("failed_qa"), "Failed qa");
@@ -121,12 +121,26 @@ test("a mode shows its title from the list and falls back to the pipeline id", (
   assert.equal(modeLabel("x", pipelines), "x");
 });
 
-test("an attribution download is offered only for a published job that lists one", () => {
-  const published = { publication_state: "published", artifacts: [{ kind: "result" }, { kind: "attribution" }] };
-  assert.equal(hasAttribution(job("passed", published)), true);
-  assert.equal(hasAttribution(job("passed", { ...published, publication_state: "pending" })), false);
-  assert.equal(hasAttribution(job("passed", { publication_state: "published", artifacts: [{ kind: "result" }] })), false);
-  assert.equal(hasAttribution(job("passed", { publication_state: "published" })), false);
+test("downloads are offered only for a published job that lists its data file", () => {
+  const published = { publication_state: "published", artifacts: [{ kind: "data" }, { kind: "metadata" }, { kind: "datasheet" }] };
+  assert.equal(hasBundle(job("passed", published)), true);
+  assert.equal(hasBundle(job("failed_qa", published)), true);
+  assert.equal(hasBundle(job("passed", { ...published, publication_state: "pending" })), false);
+  assert.equal(hasBundle(job("passed", { publication_state: "published", artifacts: [{ kind: "report" }] })), false);
+  assert.equal(hasBundle(job("passed", { publication_state: "published" })), false);
+});
+
+test("a source version reads as name, version and whether it is current", () => {
+  assert.equal(versionChip({ version: 3, current: true }), "v3 · current");
+  assert.equal(versionChip({ version: 1, current: false }), "v1");
+  assert.equal(versionLabel({ source: "wolne_lektury", version: 3, current: true }), "wolne_lektury v3 · current");
+});
+
+test("the datasheet is named after its source", () => {
+  assert.equal(datasheetName({ source_version: { source: "polona", version: 1, current: true } }), "polona.md");
+  assert.equal(datasheetName({ parameters: { source: "wolne_lektury" } }), "wolne_lektury.md");
+  assert.equal(datasheetName({ parameters: { source: 7 } }), "datasheet.md");
+  assert.equal(datasheetName({}), "datasheet.md");
 });
 
 test("error messages come from Error objects and fall back to a generic sentence", () => {

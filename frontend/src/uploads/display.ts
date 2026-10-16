@@ -1,4 +1,4 @@
-import type { UploadJob, UploadPipeline } from "./api.ts";
+import type { SourceVersion, UploadJob, UploadPipeline } from "./api.ts";
 import { rejectionMessage as rejectionSentence } from "./rejection.ts";
 import { isFinal } from "./phases.ts";
 import type { UploadProgress } from "./uploader.ts";
@@ -97,8 +97,18 @@ export const errorMessage = (error: unknown) =>
 
 export const formatWhen = (value?: string | null) => (value ? new Date(value).toLocaleString() : "—");
 
-export const hasAttribution = (job: UploadJob) =>
-  showsReport(job) && job.artifacts?.some((artifact) => artifact.kind === "attribution") === true;
+export const hasBundle = (job: UploadJob) =>
+  showsReport(job) && job.artifacts?.some((artifact) => artifact.kind === "data") === true;
+
+export const versionChip = ({ version, current }: Pick<SourceVersion, "version" | "current">) =>
+  `v${version}${current ? " · current" : ""}`;
+
+export const versionLabel = (version: SourceVersion) => `${version.source} ${versionChip(version)}`;
+
+export function datasheetName(job: Pick<UploadJob, "source_version" | "parameters">) {
+  const source = job.source_version?.source ?? job.parameters?.source;
+  return typeof source === "string" && source ? `${source}.md` : "datasheet.md";
+}
 
 const PROTOCOL_TERMINAL = new Set(["passed", "failed_qa", "failed", "cancelled", "rejected"]);
 
