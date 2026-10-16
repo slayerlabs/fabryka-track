@@ -1,5 +1,6 @@
 import { apiError } from "../provider.ts";
 import type { UploadErrors } from "./form.ts";
+import { failedCreating } from "./uploader.ts";
 
 export interface Refusal {
   errors: UploadErrors;
@@ -29,7 +30,7 @@ const FORM_FIELDS = new Set(["source", "added", "license", "author", "source_ref
 
 export function parameterRefusal(error: unknown): Refusal | null {
   const { status, code, field } = apiError(error);
-  if (status !== 422 || !code || !PARAMETER_CODES.has(code)) return null;
+  if (!failedCreating(error) || status !== 422 || !code || !PARAMETER_CODES.has(code)) return null;
   const message = error instanceof Error ? error.message : "";
   if (!field || !FORM_FIELDS.has(field)) return { errors: {}, message };
   const key = field as keyof UploadErrors;

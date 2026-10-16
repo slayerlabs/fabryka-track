@@ -39,6 +39,11 @@ interface Grant {
   url: string;
 }
 
+const CREATE_FAILED = Symbol("create-failed");
+
+export const failedCreating = (error: unknown) =>
+  typeof error === "object" && error !== null && CREATE_FAILED in error;
+
 const post = (body: unknown, signal?: AbortSignal): RequestInit => ({
   method: "POST",
   body: JSON.stringify(body),
@@ -63,7 +68,10 @@ export async function uploadFile(
     parameters: form.parameters,
     declaration: form.declaration,
   });
-  const session = (await withRetries(deps, () => deps.call("/api/uploads", create))) as { job_id: string; part_size_bytes?: number };
+  const session = (await withRetries(deps, () => deps.call("/api/uploads", create)).catch((error) => {
+    if (typeof error === "object" && error !== null) Object.assign(error, { [CREATE_FAILED]: true });
+    throw error;
+  })) as { job_id: string; part_size_bytes?: number };
   const job = `/api/uploads/${encodeURIComponent(session.job_id)}`;
   let confirm: RequestInit;
   try {
