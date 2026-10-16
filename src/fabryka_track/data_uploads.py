@@ -8,7 +8,7 @@ from uuid import UUID
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, ConfigDict, Field, StrictBool
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator
 from sqlalchemy import select
 
 from .accounts import current_user, require_user
@@ -29,6 +29,11 @@ REFUSED = "The data pipeline refused this request."
 MAX_BYTES = 10 * 1024 ** 3
 NO_ATTRIBUTION = "No attribution file is available for this upload."
 ACTION_KEY = r"^[!-~]{16,128}$"
+FIELD = re.compile(r"[a-z][a-z0-9_]{0,63}")
+SOURCE_REF = r"^(https?|doi|hdl|urn|ark|oai):\S+$"
+Domain = Literal["Books", "Conversation", "Dialect", "Encyclopedic", "Legal", "Medical", "News", "Other",
+                 "Readaloud", "Social Media", "Speeches", "Spoken", "Subtitles", "Web"]
+DOMAINS = Domain.__args__
 MESSAGES = {
     "user_limit_reached": "You already have an upload in progress. Wait for it to finish or cancel it.",
     "guest_capacity_full": "Guest upload capacity is full right now. Try again later.",
@@ -42,6 +47,9 @@ MESSAGES = {
     "diagnostic_required": "Only a diagnostic result is available for this upload.",
     "no_result": "This upload has no result to download.",
     "idempotency_conflict": "This action was already submitted with different details. Reload the page and try again.",
+    "invalid_parameters": "One of the details you entered cannot be used. Fix the highlighted field and run again.",
+    "invalid_source_ref": "The source address cannot be used. Use the public address of the source, "
+                          "without passwords or access keys.",
     "invalid_request": "The data pipeline rejected the request. Check the file and form, then try again.",
     "provider_unavailable": "Storage is temporarily unavailable. Try again shortly.",
     "integrity_mismatch": "The uploaded file does not match what was declared. Start a new upload.",
@@ -71,10 +79,22 @@ class UploadParameters(Body):
     # a record without a license of its own takes this one; with neither the recipe rejects every record
     license: str = Field(min_length=1, max_length=4096, pattern=r"\S")
     author: str | None = Field(default=None, max_length=4096)
-    source_ref: str | None = Field(default=None, max_length=4096)
+    source_ref: str = Field(min_length=1, max_length=4096, pattern=SOURCE_REF)
+    pretty_name: str = Field(min_length=1, max_length=200)
+    description: str = Field(min_length=1, max_length=1000)
+    publisher: str | None = Field(default=None, max_length=200)
+    domains: list[Domain] = Field(min_length=1)
+    limitations: str | None = Field(default=None, max_length=5000)
     per_record_provenance: StrictBool | None = None
     # accepted only so cached older frontends keep working; the value is ignored
     mask_names: StrictBool | None = None
+
+    @field_validator("domains")
+    @classmethod
+    def domains_are_unique(cls, value):
+        if len(set(value)) != len(value):
+            raise ValueError("domains repeat a value")
+        return value
 
 
 class Declaration(Body):
@@ -111,8 +131,8 @@ class CancelUpload(Body):
 
 
 class ControllerError(Exception):
-    def __init__(self, status, code, message, request_id=None):
-        self.status, self.code, self.message, self.request_id = status, code, message, request_id
+    def __init__(self, status, code, message, request_id=None, field=None):
+        self.status, self.code, self.message, self.request_id, self.field = status, code, message, request_id, field
 
 
 @dataclass(frozen=True)
@@ -155,9 +175,9 @@ def object_body(response):
     return body if isinstance(body, dict) else None
 
 
-def failure(method, path, status, code, message, request_id=None, *, reply_status=None):
+def failure(method, path, status, code, message, request_id=None, *, reply_status=None, field=None):
     logger.warning("controller %s %s failed: status=%s code=%s request_id=%s", method, path, status, code, request_id)
-    return ControllerError(reply_status or status or 502, code, message, request_id)
+    return ControllerError(reply_status or status or 502, code, message, request_id, field)
 
 
 def call(caller, method, path, *, json=None, params=None, action_key=None):
@@ -176,16 +196,20 @@ def call(caller, method, path, *, json=None, params=None, action_key=None):
     if response.is_success:
         return response.status_code, body
     status, code, request_id = response.status_code, body.get("code"), body.get("request_id")
+    field = body.get("field")
+    field = field if isinstance(field, str) and FIELD.fullmatch(field) else None
     # 401 and forbidden_origin mean Track's own controller credentials or setup were refused, not the browser.
     if status == 401 or code == "forbidden_origin":
         raise failure(method, path, status, code, UNAVAILABLE, request_id, reply_status=502)
     message = MESSAGES.get(code) or (UNAVAILABLE if status >= 500 else REFUSED)
-    raise failure(method, path, status, code, message, request_id)
+    raise failure(method, path, status, code, message, request_id, field=field)
 
 
 def controller_error_response(_request, error):
-    return JSONResponse({"detail": error.message, "code": error.code, "request_id": error.request_id},
-                        status_code=error.status)
+    body = {"detail": error.message, "code": error.code, "request_id": error.request_id}
+    if error.field:
+        body["field"] = error.field
+    return JSONResponse(body, status_code=error.status)
 
 
 def forward(caller, method, path, **kwargs):

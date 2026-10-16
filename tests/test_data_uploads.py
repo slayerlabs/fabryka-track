@@ -14,12 +14,17 @@ JOB_ID = "6f1c1f3e-2b7a-4d5e-9c3b-1a2b3c4d5e6f"
 ACTION_KEY = "0b0c7d9e-1f2a-4b3c-8d4e-5f6a7b8c9d0e"
 
 
+PARAMETERS = {"source": "my_source", "added": "2026-10-08", "license": "cc-by-4.0",
+              "source_ref": "https://example.org/my_source", "pretty_name": "My source",
+              "description": "Synthetic records for the proxy tests.", "domains": ["Other"]}
+
+
 def create_body(**overrides):
     body = {
         "action_key": ACTION_KEY,
         "pipeline": "dynaword-upload",
         "input": {"format": "jsonl", "encoded_bytes": 1024, "sha256": "a" * 64, "filename": "data.jsonl"},
-        "parameters": {"source": "my_source", "added": "2026-10-08", "license": "cc-by-4.0"},
+        "parameters": dict(PARAMETERS),
         "declaration": {"accepted": True, "version": data_uploads.DECLARATION_VERSION},
     }
     body.update(overrides)
@@ -105,7 +110,7 @@ def test_create_forwards_track_pair_and_hugging_face_identity(client, controller
     assert json.loads(sent.content) == {
         "protocol": "job-v1", "pipeline": "other-mode",
         "input": {"format": "jsonl", "encoded_bytes": 1024, "sha256": "a" * 64, "filename": "data.jsonl"},
-        "parameters": {"source": "my_source", "added": "2026-10-08", "license": "cc-by-4.0", "mask_names": True},
+        "parameters": {**PARAMETERS, "mask_names": True},
         "declaration": {"version": "upload-declaration-v0-placeholder", "accepted": True},
     }
 
@@ -233,13 +238,63 @@ def test_pipeline_url_must_use_https():
     assert Settings(pipeline_url="https://data-pipeline.fabryka.ai").pipeline_url == "https://data-pipeline.fabryka.ai"
 
 
-@pytest.mark.parametrize("field", ["license", "author", "source_ref"])
-def test_optional_metadata_accepts_the_controller_maximum(client, controller, field):
+@pytest.mark.parametrize("field,limit,prefix", [("license", 4096, ""), ("author", 4096, ""), ("publisher", 200, ""),
+                                                ("limitations", 5000, ""), ("pretty_name", 200, ""),
+                                                ("description", 1000, ""), ("source_ref", 4096, "https://")])
+def test_metadata_accepts_the_profile_maximum(client, controller, field, limit, prefix):
     body = create_body()
-    body["parameters"] = {**body["parameters"], field: "x" * 4096}
+    body["parameters"] = {**body["parameters"], field: prefix + "x" * (limit - len(prefix))}
     assert client.post("/api/uploads", json=body).status_code == 201
-    body["parameters"][field] = "x" * 4097
+    body["parameters"][field] += "x"
     assert client.post("/api/uploads", json=body).status_code == 422
+
+
+@pytest.mark.parametrize("change", [
+    {"source_ref": None}, {"source_ref": ""}, {"source_ref": "ftp://example.org/x"}, {"source_ref": "https://a b"},
+    {"pretty_name": None}, {"pretty_name": ""}, {"description": None}, {"domains": None}, {"domains": []},
+    {"domains": ["Poetry"]}, {"domains": ["Books", "Books"]},
+], ids=lambda change: next(iter(change)) + "=" + repr(next(iter(change.values()))))
+def test_a_create_breaking_the_profile_schema_never_reaches_the_controller(client, controller, change):
+    body = create_body()
+    (key, value), = change.items()
+    body["parameters"] = {k: v for k, v in body["parameters"].items() if k != key}
+    if value is not None:
+        body["parameters"][key] = value
+    assert client.post("/api/uploads", json=body).status_code == 422
+    assert controller.requests == []
+
+
+def test_the_description_fields_are_forwarded_as_given(client, controller):
+    body = create_body()
+    body["parameters"] = {**body["parameters"], "publisher": "Fundacja", "limitations": "Old spelling.\nSome OCR noise.",
+                          "domains": ["Books", "Social Media"], "source_ref": "urn:isbn:9788300000000"}
+    assert client.post("/api/uploads", json=body).status_code == 201
+    sent = json.loads(controller.requests[0].content)["parameters"]
+    assert sent == {**body["parameters"], "mask_names": True}
+
+
+def refusal(code, field):
+    return lambda request: httpx.Response(422, json={"protocol": "job-v1", "request_id": REQUEST_ID, "code": code,
+                                                     "message": "internal wording", "retryable": False,
+                                                     **({"field": field} if field is not None else {})})
+
+
+@pytest.mark.parametrize("code,field", [("invalid_source_ref", "source_ref"), ("invalid_parameters", "pretty_name")])
+def test_parameter_refusals_keep_the_field_they_name(client, controller, code, field):
+    controller.reply = refusal(code, field)
+    response = client.post("/api/uploads", json=create_body())
+    assert response.status_code == 422
+    assert response.json() == {"detail": data_uploads.MESSAGES[code], "code": code, "request_id": REQUEST_ID,
+                               "field": field}
+    assert len(controller.requests) == 1
+
+
+@pytest.mark.parametrize("field", ["Source Ref", "x" * 65, 7, ""])
+def test_a_malformed_field_is_not_forwarded(client, controller, field):
+    controller.reply = refusal("invalid_parameters", field)
+    response = client.post("/api/uploads", json=create_body())
+    assert response.status_code == 422
+    assert "field" not in response.json()
 
 
 def test_no_database_connection_is_held_during_the_controller_call(client, controller):
