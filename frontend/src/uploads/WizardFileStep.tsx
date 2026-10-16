@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { SourceDescription, SourceSummary } from "./api";
 import { formatBytes } from "./bytes";
 import { COPY } from "./copy";
 import type { FileCheck } from "./useFileCheck";
-import { FieldError, MetadataFields } from "./MetadataFields";
+import { FieldError, Label, MetadataFields } from "./MetadataFields";
 import type { UploadErrors, UploadFormState } from "./form";
-import type { Refusal } from "./refusal";
+import { refusalSummary, type Refusal } from "./refusal";
 
 interface Props {
   state: UploadFormState;
@@ -88,12 +88,24 @@ export function WizardFileStep({ state, errors, check, canRun, onChange, onBack,
     setTouched((current) => new Set(current).add(key));
     onChange(key, value);
   };
+  const formRef = useRef<HTMLFormElement>(null);
+  const bannerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!refusal) return;
+    // the wizard scrolls to the top after the step change; focusing later brings the refusal back into view
+    const frame = requestAnimationFrame(() => {
+      const field = formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]');
+      (field ?? bannerRef.current)?.focus();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, []);
   const pending = check.status === "done" && !canRun && check.report.blocking.length === 0;
   return (
     <section className="panel">
       <h2>{COPY.steps[1].title}</h2>
       <p className="muted">{COPY.file.intro}</p>
       <form
+        ref={formRef}
         onSubmit={(event) => {
           event.preventDefault();
           if (canRun) onRun();
@@ -101,7 +113,7 @@ export function WizardFileStep({ state, errors, check, canRun, onChange, onBack,
         noValidate
       >
         <label className="field">
-          <span>{COPY.file.fileLabel}</span>
+          <Label text={COPY.file.fileLabel} required />
           <input
             type="file"
             accept=".jsonl,.parquet"
@@ -115,12 +127,6 @@ export function WizardFileStep({ state, errors, check, canRun, onChange, onBack,
           <small className="muted">{COPY.file.formatHint}</small>
           {!state.file && <FieldError text={touched.size ? errors.file : undefined} />}
         </label>
-        {refusal && (
-          <div className="banner banner-bad" role="alert">
-            <b>{COPY.file.refusedTitle}</b>{" "}
-            {Object.keys(refusal.errors).length ? COPY.file.refusedFields : `${refusal.message} ${COPY.file.refusedNothing}`}
-          </div>
-        )}
         <CheckResult check={check} />
         <MetadataFields
           state={state}
@@ -139,6 +145,11 @@ export function WizardFileStep({ state, errors, check, canRun, onChange, onBack,
             {COPY.file.missingFields}{" "}
             {Object.keys(errors).map((key) => COPY.file.fields[key as keyof typeof COPY.file.fields] ?? key).join(", ")}
           </p>
+        )}
+        {refusal && (
+          <div className="banner banner-bad" role="alert" tabIndex={-1} ref={bannerRef}>
+            <b>{COPY.file.refusedTitle}</b> {refusalSummary(refusal)}
+          </div>
         )}
         <div className="actions">
           <button className="secondary" type="button" onClick={onBack}>

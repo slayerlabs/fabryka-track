@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { inlines, parseDatasheet } from "../frontend/src/uploads/datasheet.ts";
+import { frontLabel, inlines, parseDatasheet } from "../frontend/src/uploads/datasheet.ts";
 
 const SHEET = `---
 pretty_name: "Wolne Lektury"
@@ -132,4 +132,12 @@ test("adversarial 1 MiB inputs parse in under a second", () => {
     parseDatasheet(input);
     assert.ok(performance.now() - started < 1000, name);
   }
+});
+
+test("frontmatter labels come only from the label table, never from the prototype chain", () => {
+  assert.equal(frontLabel("pretty_name"), "Name");
+  assert.equal(frontLabel("custom_key"), "custom_key");
+  assert.equal(frontLabel("__proto__"), "__proto__");
+  assert.equal(frontLabel("constructor"), "constructor");
+  assert.equal(frontLabel("toString"), "toString");
 });

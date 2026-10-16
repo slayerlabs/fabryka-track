@@ -42,11 +42,12 @@ interface Props {
 
 const LABELS = COPY.file.fields;
 
-function Label({ text, required, chip }: { text: string; required?: boolean; chip?: ReactNode }) {
+export function Label({ text, required, optional, chip }: { text: string; required?: boolean; optional?: boolean; chip?: ReactNode }) {
   return (
     <span>
       {text}
       {required && <span className="req"> *</span>}
+      {optional && <span className="muted"> {COPY.file.optional}</span>}
       {chip && <> {chip}</>}
     </span>
   );
@@ -77,6 +78,7 @@ export function MetadataFields({ state, errors, disabled, set, sources, describe
             value={state.source}
             sources={sources}
             disabled={disabled}
+            invalid={Boolean(errors.source)}
             onChange={(value) => set("source", value)}
             onPick={onPickSource}
           />
@@ -95,7 +97,7 @@ export function MetadataFields({ state, errors, disabled, set, sources, describe
           <FieldError text={errors.license} />
         </label>
         <label className="field">
-          <Label text={LABELS.author} />
+          <Label text={LABELS.author} optional />
           <input {...text("author")} />
           <FieldError text={errors.author} />
         </label>
@@ -135,7 +137,7 @@ export function MetadataFields({ state, errors, disabled, set, sources, describe
             <FieldError text={errors.pretty_name} />
           </label>
           <label className="field">
-            <Label text={LABELS.publisher} />
+            <Label text={LABELS.publisher} optional />
             <input {...text("publisher")} />
             <FieldError text={errors.publisher} />
           </label>
@@ -170,7 +172,7 @@ export function MetadataFields({ state, errors, disabled, set, sources, describe
             <FieldError text={errors.domains} />
           </div>
           <label className="field wide">
-            <Label text={LABELS.limitations} />
+            <Label text={LABELS.limitations} optional />
             <textarea
               rows={3}
               value={state.limitations}

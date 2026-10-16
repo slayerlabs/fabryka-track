@@ -8,11 +8,12 @@ interface Props {
   value: string;
   sources: SourceSummary[];
   disabled: boolean;
+  invalid: boolean;
   onChange: (value: string) => void;
   onPick: (source: string) => void;
 }
 
-export function SourceField({ value, sources, disabled, onChange, onPick }: Props) {
+export function SourceField({ value, sources, disabled, invalid, onChange, onPick }: Props) {
   const listId = useId();
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
@@ -36,6 +37,7 @@ export function SourceField({ value, sources, disabled, onChange, onPick }: Prop
         aria-expanded={items.length > 0}
         aria-controls={listId}
         aria-autocomplete="list"
+        aria-invalid={invalid}
         aria-activedescendant={active >= 0 && items[active] ? `${listId}-${active}` : undefined}
         autoComplete="off"
         value={value}

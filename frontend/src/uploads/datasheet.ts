@@ -1,3 +1,5 @@
+import { COPY } from "./copy.ts";
+
 export type Inline = { kind: "text" | "strong" | "code"; text: string };
 export type Block =
   | { kind: "heading"; level: 1 | 2 | 3 | 4; inlines: Inline[] }
@@ -136,3 +138,5 @@ export function parseDatasheet(markdown: string): { front: [string, string][]; b
   if (end < 0) return { front: [], blocks: parseBlocks(lines) };
   return { front: frontRows(lines.slice(1, end)), blocks: parseBlocks(lines.slice(end + 1)) };
 }
+
+export const frontLabel = (key: string) => (Object.hasOwn(COPY.results.front, key) ? COPY.results.front[key as keyof typeof COPY.results.front] : key);

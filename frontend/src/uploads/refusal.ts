@@ -1,3 +1,4 @@
+import { COPY } from "./copy.ts";
 import { apiError } from "../provider.ts";
 import type { UploadErrors } from "./form.ts";
 import { failedCreating } from "./uploader.ts";
@@ -35,6 +36,12 @@ export function parameterRefusal(error: unknown): Refusal | null {
   if (!field || !FORM_FIELDS.has(field)) return { errors: {}, message };
   const key = field as keyof UploadErrors;
   return { errors: { [key]: FIELD_MESSAGES[code]?.[key] ?? message }, message };
+}
+
+export function refusalSummary(refusal: Refusal): string {
+  return Object.keys(refusal.errors).length
+    ? COPY.file.refusedFields
+    : `${refusal.message} ${COPY.file.refusedDetails} ${COPY.file.refusedNothing}`;
 }
 
 export function withoutField(refusal: Refusal | null, key: string): Refusal | null {

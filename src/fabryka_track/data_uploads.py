@@ -53,7 +53,7 @@ MESSAGES = {
     "diagnostic_required": "Only a diagnostic result is available for this upload.",
     "no_result": "This upload has no result to download.",
     "idempotency_conflict": "This action was already submitted with different details. Reload the page and try again.",
-    "invalid_parameters": "One of the details you entered cannot be used. Fix the highlighted field and run again.",
+    "invalid_parameters": "One of the details you entered cannot be used.",
     "invalid_source_ref": "The source address must be a public address with a host, "
                           "without a password or signed access key.",
     "invalid_request": "The data pipeline rejected the request. Check the file and form, then try again.",

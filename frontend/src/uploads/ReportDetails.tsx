@@ -80,17 +80,20 @@ export function BundleDownloads({ job, diagnostic }: { job: UploadJob; diagnosti
           {error}
         </p>
       )}
-      {FILES.map((kind) => (
+      {FILES.map((kind) => {
+        const name = kind === "datasheet" ? datasheetName(job) : COPY.downloads[kind].name;
+        return (
         <div className="bundle-file" key={kind}>
           <div>
-            <code>{kind === "datasheet" ? datasheetName(job) : COPY.downloads[kind].name}</code>
+            <code>{name}</code>
             <small>{COPY.downloads[kind].what}</small>
           </div>
-          <button className="secondary" type="button" disabled={busy} onClick={() => void download(kind)}>
+          <button className="secondary" type="button" disabled={busy} aria-label={`${COPY.downloads.download} ${name}`} onClick={() => void download(kind)}>
             {COPY.downloads.download}
           </button>
         </div>
-      ))}
+        );
+      })}
     </>
   );
 }

@@ -55,3 +55,8 @@ test("no copy still promises a single result file or an attribution file", () =>
 test("the uploads list has a source and version column", () => {
   assert.equal(COPY.history.columns.source, "Source · version");
 });
+
+test("field names carry no optional suffix, so the missing-fields list stays bare", () => {
+  for (const [key, name] of Object.entries(COPY.file.fields)) assert.doesNotMatch(name, /optional/i, key);
+  assert.equal(COPY.file.optional, "(optional)");
+});

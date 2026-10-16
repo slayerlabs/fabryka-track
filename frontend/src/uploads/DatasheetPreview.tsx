@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { datasheetText } from "./api";
 import { COPY } from "./copy";
-import { parseDatasheet, type Block, type Inline } from "./datasheet";
+import { frontLabel, parseDatasheet, type Block, type Inline } from "./datasheet";
 import { errorMessage } from "./display";
 
 type Load = { status: "loading" } | { status: "error"; message: string } | { status: "done"; markdown: string };
@@ -72,7 +72,7 @@ export function DatasheetPreview({ jobId, diagnostic }: { jobId: string; diagnos
             <table>
               <tbody>
                 {parsed.front.map(([key, value]) => (
-                  <tr key={key}><th>{COPY.results.front[key as keyof typeof COPY.results.front] ?? key}</th><td>{value}</td></tr>
+                  <tr key={key}><th>{frontLabel(key)}</th><td>{value}</td></tr>
                 ))}
               </tbody>
             </table>

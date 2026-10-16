@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parameterRefusal, withoutField } from "../frontend/src/uploads/refusal.ts";
+import { parameterRefusal, refusalSummary, withoutField } from "../frontend/src/uploads/refusal.ts";
 import { uploadFile } from "../frontend/src/uploads/uploader.ts";
 
 const rejection = (code, field, statusCode = 422, message = "Server words.") =>
@@ -76,4 +76,11 @@ test("editing a refused field clears its error; the banner goes with the last on
   assert.equal(withoutField(null, "license"), null);
   const bannerOnly = { errors: {}, message: "m" };
   assert.equal(withoutField(bannerOnly, "license"), bannerOnly);
+});
+
+test("a banner-only refusal does not point at a highlighted field", () => {
+  const text = refusalSummary({ errors: {}, message: "One of the details you entered cannot be used." });
+  assert.doesNotMatch(text, /highlighted/);
+  assert.match(text, /^One of the details you entered cannot be used\. Fix the details below and run again\. Nothing was uploaded\.$/);
+  assert.match(refusalSummary({ errors: { license: "x" }, message: "m" }), /Fix the highlighted fields/);
 });
