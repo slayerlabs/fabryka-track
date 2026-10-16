@@ -5,6 +5,7 @@ import { COPY } from "./copy";
 import type { FileCheck } from "./useFileCheck";
 import { FieldError, MetadataFields } from "./MetadataFields";
 import type { UploadErrors, UploadFormState } from "./form";
+import type { Refusal } from "./refusal";
 
 interface Props {
   state: UploadFormState;
@@ -17,6 +18,7 @@ interface Props {
   sources: SourceSummary[];
   described: SourceDescription | null;
   onPickSource: (source: string) => void;
+  refusal: Refusal | null;
 }
 
 function CheckResult({ check }: { check: FileCheck }) {
@@ -78,9 +80,10 @@ function CheckResult({ check }: { check: FileCheck }) {
   );
 }
 
-export function WizardFileStep({ state, errors, check, canRun, onChange, onBack, onRun, sources, described, onPickSource }: Props) {
+export function WizardFileStep({ state, errors, check, canRun, onChange, onBack, onRun, sources, described, onPickSource, refusal }: Props) {
   const [touched, setTouched] = useState<Set<string>>(new Set());
   const shown = Object.fromEntries(Object.entries(errors).filter(([key]) => touched.has(key) && key !== "file")) as UploadErrors;
+  const visible = { ...shown, ...refusal?.errors };
   const set: Props["onChange"] = (key, value) => {
     setTouched((current) => new Set(current).add(key));
     onChange(key, value);
@@ -112,10 +115,16 @@ export function WizardFileStep({ state, errors, check, canRun, onChange, onBack,
           <small className="muted">{COPY.file.formatHint}</small>
           {!state.file && <FieldError text={touched.size ? errors.file : undefined} />}
         </label>
+        {refusal && (
+          <div className="banner banner-bad" role="alert">
+            <b>{COPY.file.refusedTitle}</b>{" "}
+            {Object.keys(refusal.errors).length ? COPY.file.refusedFields : `${refusal.message} ${COPY.file.refusedNothing}`}
+          </div>
+        )}
         <CheckResult check={check} />
         <MetadataFields
           state={state}
-          errors={shown}
+          errors={visible}
           disabled={false}
           set={set}
           sources={sources}

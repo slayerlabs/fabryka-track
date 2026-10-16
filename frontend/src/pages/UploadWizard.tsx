@@ -6,6 +6,7 @@ import type { UploadJob } from "../uploads/api";
 import { carryForm, pipelineLimit, validateUpload, type UploadFormState } from "../uploads/form";
 import { backTo, parseLocation, reachable, resolveLocation, wizardTitle, wizardUrl, type Step, type WizardLocation } from "../uploads/location";
 import { emptyForm } from "../uploads/MetadataFields";
+import { withoutField, type Refusal } from "../uploads/refusal";
 import { applySourceDescription, findSource, nextPick } from "../uploads/sources";
 import { useFileCheck } from "../uploads/useFileCheck";
 import { usePipelines } from "../uploads/usePipelines";
@@ -38,6 +39,7 @@ function UploadWizard() {
   const [hadJob, setHadJob] = useState(false);
   const [jobParameters, setJobParameters] = useState<UploadJob["parameters"]>();
   const sources = useSourceList();
+  const [refusal, setRefusal] = useState<Refusal | null>(null);
   const [picked, setPicked] = useState("");
   const described = useSourceDescription(form.source, findSource(sources, form.source) !== null, (source) =>
     setPicked((current) => nextPick(current, { kind: "settled", source })),
@@ -51,6 +53,7 @@ function UploadWizard() {
     setPicked((current) => nextPick(current, { kind: "settled", source: described.source }));
   }, [described]);
   const pickSource = (source: string) => {
+    setRefusal((current) => withoutField(current, "source"));
     setForm((current) => {
       const next = { ...current, source };
       // the same name keeps its loaded description, so no new fetch would fill the fields
@@ -96,8 +99,10 @@ function UploadWizard() {
 
   const go = (next: Partial<WizardLocation> & { step: Step }, replace = false) =>
     navigate(wizardUrl({ ...at, ...next }), { replace });
-  const set = <K extends keyof UploadFormState>(key: K, value: UploadFormState[K]) =>
+  const set = <K extends keyof UploadFormState>(key: K, value: UploadFormState[K]) => {
     setForm((current) => ({ ...current, [key]: value }));
+    setRefusal((current) => withoutField(current, key));
+  };
 
   return (
     <>
@@ -132,6 +137,10 @@ function UploadWizard() {
           onBusyChange={setUploading}
           onFinished={() => go({ step: 4 })}
           onJob={(job) => setJobParameters(job.parameters)}
+          onRefused={(next) => {
+            setRefusal(next);
+            go({ step: 2 }, true);
+          }}
         />
       )}
       {at.step === 4 && (
@@ -150,10 +159,14 @@ function UploadWizard() {
           canRun={canStart}
           onChange={set}
           onBack={() => go({ step: 1 })}
-          onRun={() => go({ step: 3 })}
+          onRun={() => {
+            setRefusal(null);
+            go({ step: 3 });
+          }}
           sources={sources}
           described={described}
           onPickSource={pickSource}
+          refusal={refusal}
         />
       )}
     </>

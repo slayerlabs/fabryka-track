@@ -7,6 +7,7 @@ import { JobFacts } from "./JobFacts";
 import { isFinal, timeline } from "./phases";
 import { awaitingStart, initialProgress, progressReducer, timelineInput } from "./progress";
 import { duration } from "./report";
+import { parameterRefusal, type Refusal } from "./refusal";
 import { Timeline } from "./Timeline";
 import { uploadFile } from "./uploader";
 
@@ -25,6 +26,7 @@ interface Props {
   onBusyChange: (busy: boolean) => void;
   onFinished: () => void;
   onJob: (job: UploadJob) => void;
+  onRefused: (refusal: Refusal) => void;
 }
 
 function useClock(active: boolean) {
@@ -38,7 +40,7 @@ function useClock(active: boolean) {
   return now;
 }
 
-export function WizardProgressStep({ jobId, source, pipelines, onJobCreated, onBusyChange, onFinished, onJob }: Props) {
+export function WizardProgressStep({ jobId, source, pipelines, onJobCreated, onBusyChange, onFinished, onJob, onRefused }: Props) {
   const [state, dispatch] = useReducer(progressReducer, initialProgress);
   const abort = useRef<AbortController | null>(null);
   const running = state.job?.client_phase === "running";
@@ -103,6 +105,8 @@ export function WizardProgressStep({ jobId, source, pipelines, onJobCreated, onB
       onJobCreated(id);
     } catch (e) {
       dispatch({ type: "upload-failed", message: errorMessage(e), aborted: controller.signal.aborted });
+      const refusal = controller.signal.aborted ? null : parameterRefusal(e);
+      if (refusal) onRefused(refusal);
     }
   }
 
