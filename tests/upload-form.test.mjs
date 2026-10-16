@@ -155,6 +155,18 @@ test("the source address is required and must use an allowed scheme", () => {
     assert.equal(validateUpload({ ...valid, source_ref }).errors.source_ref, undefined, source_ref);
 });
 
+test("the source address is stripped like the server strips it", () => {
+  for (const edge of ["\x85", "\x1c", "\u3000"])
+    assert.equal(validateUpload({ ...valid, source_ref: `${edge}https://x${edge}` }).form.parameters.source_ref, "https://x", JSON.stringify(edge));
+  assert.ok(validateUpload({ ...valid, source_ref: "\ufeffhttps://x" }).errors.source_ref);
+});
+
+test("the source address limit counts code points, not UTF-16 units", () => {
+  const address = (points) => "https://" + "\u{1F600}".repeat(points - 8);
+  assert.equal(validateUpload({ ...valid, source_ref: address(4096) }).errors.source_ref, undefined);
+  assert.ok(validateUpload({ ...valid, source_ref: address(4097) }).errors.source_ref);
+});
+
 test("name, description and at least one domain are required within the profile limits", () => {
   assert.ok(validateUpload({ ...valid, pretty_name: " " }).errors.pretty_name);
   assert.ok(validateUpload({ ...valid, pretty_name: "x".repeat(201) }).errors.pretty_name);

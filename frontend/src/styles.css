@@ -2502,3 +2502,25 @@ footer {
 .check-cell.other { background: var(--amber-tint); border-color: var(--amber-line); }
 .wizard-steps .step:disabled { opacity: 1; cursor: default; }
 .wizard-steps .step.active { cursor: default; }
+.req { color: var(--accent); }
+.fields .wide { grid-column: 1 / -1; }
+.chip { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.chip-new, .chip-current { background: var(--green-tint); color: var(--green); }
+.chip-version { background: var(--accent-tint); color: var(--accent); }
+.chip-old { background: var(--line); color: var(--muted); }
+.source-combo { position: relative; }
+.source-options { position: absolute; z-index: 3; top: calc(100% + 4px); left: 0; right: 0; margin: 0; padding: 0; list-style: none; background: white; border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 24px #1a151214; font-size: 13.5px; }
+.source-options li { padding: 8px 12px; border-bottom: 1px solid var(--line); cursor: pointer; }
+.source-options li:last-child { border-bottom: 0; }
+.source-options li.active, .source-options li:hover { background: var(--accent-tint-2); }
+.source-options small { display: block; color: var(--muted); margin-top: 2px; }
+.form-section { border-top: 1px solid var(--line); padding-top: 16px; margin-top: 8px; }
+.form-section h3 { margin: 0 0 4px; }
+.form-section > p { margin: 0 0 14px; font-size: 13px; }
+.domain-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.domain-chip { border: 1px solid var(--line); border-radius: 999px; padding: 4px 11px; font: inherit; font-size: 12.5px; background: white; color: var(--muted-3); cursor: pointer; }
+.domain-chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: white; }
+.banner { border-radius: 8px; padding: 10px 14px; font-size: 13.5px; line-height: 1.5; margin: 14px 0; }
+.banner-info { background: var(--accent-tint-2); border: 1px solid var(--accent-tint); }
+.banner-bad { background: var(--red-tint); border: 1px solid #f3c9d0; }
+textarea[aria-invalid="true"], input[aria-invalid="true"] { border-color: var(--red); background: var(--red-tint); }

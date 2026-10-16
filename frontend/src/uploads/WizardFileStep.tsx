@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { SourceDescription, SourceSummary } from "./api";
 import { formatBytes } from "./bytes";
 import { COPY } from "./copy";
 import type { FileCheck } from "./useFileCheck";
@@ -13,6 +14,9 @@ interface Props {
   onChange: <K extends keyof UploadFormState>(key: K, value: UploadFormState[K]) => void;
   onBack: () => void;
   onRun: () => void;
+  sources: SourceSummary[];
+  described: SourceDescription | null;
+  onPickSource: (source: string) => void;
 }
 
 function CheckResult({ check }: { check: FileCheck }) {
@@ -74,7 +78,7 @@ function CheckResult({ check }: { check: FileCheck }) {
   );
 }
 
-export function WizardFileStep({ state, errors, check, canRun, onChange, onBack, onRun }: Props) {
+export function WizardFileStep({ state, errors, check, canRun, onChange, onBack, onRun, sources, described, onPickSource }: Props) {
   const [touched, setTouched] = useState<Set<string>>(new Set());
   const shown = Object.fromEntries(Object.entries(errors).filter(([key]) => touched.has(key) && key !== "file")) as UploadErrors;
   const set: Props["onChange"] = (key, value) => {
@@ -109,7 +113,18 @@ export function WizardFileStep({ state, errors, check, canRun, onChange, onBack,
           {!state.file && <FieldError text={touched.size ? errors.file : undefined} />}
         </label>
         <CheckResult check={check} />
-        <MetadataFields state={state} errors={shown} disabled={false} set={set} />
+        <MetadataFields
+          state={state}
+          errors={shown}
+          disabled={false}
+          set={set}
+          sources={sources}
+          described={described}
+          onPickSource={(source) => {
+            setTouched((current) => new Set(current).add("source"));
+            onPickSource(source);
+          }}
+        />
         {pending && (
           <p className="muted">
             {COPY.file.missingFields}{" "}

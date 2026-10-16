@@ -6,8 +6,10 @@ import type { UploadJob } from "../uploads/api";
 import { carryForm, pipelineLimit, validateUpload, type UploadFormState } from "../uploads/form";
 import { backTo, parseLocation, reachable, resolveLocation, wizardTitle, wizardUrl, type Step, type WizardLocation } from "../uploads/location";
 import { emptyForm } from "../uploads/MetadataFields";
+import { applySourceDescription, findSource } from "../uploads/sources";
 import { useFileCheck } from "../uploads/useFileCheck";
 import { usePipelines } from "../uploads/usePipelines";
+import { useSourceDescription, useSourceList } from "../uploads/useSources";
 import { WizardFileStep } from "../uploads/WizardFileStep";
 import { WizardPipelineStep } from "../uploads/WizardPipelineStep";
 import { WizardResultsStep } from "../uploads/WizardResultsStep";
@@ -35,6 +37,22 @@ function UploadWizard() {
   const [uploading, setUploading] = useState(false);
   const [hadJob, setHadJob] = useState(false);
   const [jobParameters, setJobParameters] = useState<UploadJob["parameters"]>();
+  const sources = useSourceList();
+  const described = useSourceDescription(form.source, findSource(sources, form.source) !== null);
+  const [picked, setPicked] = useState("");
+  useEffect(() => {
+    if (!described) return;
+    setForm((current) => applySourceDescription(current, described, picked === described.source));
+    setPicked("");
+  }, [described]);
+  const pickSource = (source: string) => {
+    setForm((current) => {
+      const next = { ...current, source };
+      // the same name keeps its loaded description, so no new fetch would fill the fields
+      return described?.source === source ? applySourceDescription(next, described, true) : next;
+    });
+    setPicked(described?.source === source ? "" : source);
+  };
 
   const requested = parseLocation(params);
   const only = pipelines.list.length === 1 ? pipelines.list[0].pipeline : "";
@@ -128,6 +146,9 @@ function UploadWizard() {
           onChange={set}
           onBack={() => go({ step: 1 })}
           onRun={() => go({ step: 3 })}
+          sources={sources}
+          described={described}
+          onPickSource={pickSource}
         />
       )}
     </>

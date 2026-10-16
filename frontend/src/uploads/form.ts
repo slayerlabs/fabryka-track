@@ -93,9 +93,9 @@ export function validateUpload(state: UploadFormState, limitBytes = MAX_UPLOAD_B
       "Use up to 128 lowercase letters, digits and underscores, starting with a letter or digit.";
   if (!isCalendarDate(state.added)) errors.added = "Enter the date the data was added (YYYY-MM-DD).";
   if (!state.license.trim()) errors.license = "Enter the license of the data, for example CC-BY-4.0.";
-  const sourceRef = state.source_ref.trim();
+  const sourceRef = pyStrip(state.source_ref);
   if (!sourceRef) errors.source_ref = "Enter the address of the source.";
-  else if (!SOURCE_REF.test(sourceRef) || sourceRef.length > 4096)
+  else if (!SOURCE_REF.test(sourceRef) || codePoints(sourceRef) > 4096)
     errors.source_ref = "Use an address that starts with https:, http:, doi:, hdl:, urn:, ark: or oai:, without spaces.";
   const prettyName = checkedText(state.pretty_name, 200, true, "Enter the name of the source.");
   if (prettyName.error) errors.pretty_name = prettyName.error;
