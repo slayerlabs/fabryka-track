@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import re
 import threading
@@ -19,6 +20,7 @@ from .settings import settings
 router = APIRouter(prefix="/api/uploads")
 logger = logging.getLogger(__name__)
 _client = None
+_storage = None
 _client_lock = threading.Lock()
 DECLARATION_VERSION = "upload-declaration-v0-placeholder"
 PROTOCOL = "job-v1"
@@ -27,7 +29,9 @@ USERNAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,95}")
 UNAVAILABLE = "Data uploads are temporarily unavailable. Try again shortly."
 REFUSED = "The data pipeline refused this request."
 MAX_BYTES = 10 * 1024 ** 3
-NO_ATTRIBUTION = "No attribution file is available for this upload."
+DATASHEET_PREVIEW_BYTES = 1024 ** 2
+DATASHEET_UNAVAILABLE = "The datasheet could not be loaded. Download it instead."
+DATASHEET_TOO_LARGE = "The datasheet is too large to preview. Download it instead."
 ACTION_KEY = r"^[!-~]{16,128}$"
 FIELD = re.compile(r"[a-z][a-z0-9_]{0,63}")
 SOURCE_NAME = r"^[a-z0-9][a-z0-9_]{0,127}$"
@@ -167,6 +171,14 @@ def controller_client():
                                    timeout=httpx.Timeout(20, connect=5),
                                    limits=httpx.Limits(max_connections=20, max_keepalive_connections=10))
         return _client
+
+
+def storage_client():
+    global _storage
+    with _client_lock:
+        if _storage is None:
+            _storage = httpx.Client(timeout=httpx.Timeout(20, connect=5), follow_redirects=False)
+        return _storage
 
 
 def object_body(response):
@@ -320,17 +332,54 @@ def upload_report(job_id: UUID, caller=Depends(uploader)):
     return forward(caller, "GET", f"/jobs/{job_id}/report")
 
 
-@router.get("/{job_id}/result")
-def upload_result(job_id: UUID, diagnostic: bool = False, caller=Depends(uploader)):
-    return forward(caller, "GET", f"/jobs/{job_id}/result", params={"diagnostic": "true"} if diagnostic else None)
+def diagnostic_query(diagnostic):
+    return {"diagnostic": "true"} if diagnostic else None
 
 
-@router.get("/{job_id}/attribution")
-def upload_attribution(job_id: UUID, diagnostic: bool = False, caller=Depends(uploader)):
+@router.get("/{job_id}/data")
+def upload_data(job_id: UUID, diagnostic: bool = False, caller=Depends(uploader)):
+    return forward(caller, "GET", f"/jobs/{job_id}/data", params=diagnostic_query(diagnostic))
+
+
+@router.get("/{job_id}/metadata")
+def upload_metadata(job_id: UUID, diagnostic: bool = False, caller=Depends(uploader)):
+    return forward(caller, "GET", f"/jobs/{job_id}/metadata", params=diagnostic_query(diagnostic))
+
+
+@router.get("/{job_id}/datasheet")
+def upload_datasheet(job_id: UUID, diagnostic: bool = False, caller=Depends(uploader)):
+    return forward(caller, "GET", f"/jobs/{job_id}/datasheet", params=diagnostic_query(diagnostic))
+
+
+def unavailable_datasheet():
+    return failure("GET", "datasheet storage", None, "datasheet_unavailable", DATASHEET_UNAVAILABLE, reply_status=502)
+
+
+def read_signed(url, size):
+    content = b""
+    with storage_client().stream("GET", url) as response:
+        if not response.is_success:
+            raise unavailable_datasheet()
+        for chunk in response.iter_bytes():
+            content += chunk
+            if len(content) > size:
+                break
+    return content
+
+
+@router.get("/{job_id}/datasheet/text")
+def upload_datasheet_text(job_id: UUID, diagnostic: bool = False, caller=Depends(uploader)):
+    _, grant = call(caller, "GET", f"/jobs/{job_id}/datasheet", params=diagnostic_query(diagnostic))
+    artifact = grant.get("artifact") if isinstance(grant.get("artifact"), dict) else {}
+    url, size, digest = grant.get("url"), artifact.get("bytes"), artifact.get("sha256")
+    if not isinstance(url, str) or not url.startswith("https://") or type(size) is not int or not isinstance(digest, str):
+        raise unavailable_datasheet()
+    if size > DATASHEET_PREVIEW_BYTES:
+        raise ControllerError(413, "datasheet_too_large", DATASHEET_TOO_LARGE)
     try:
-        return forward(caller, "GET", f"/jobs/{job_id}/attribution",
-                       params={"diagnostic": "true"} if diagnostic else None)
-    except ControllerError as error:
-        if error.status == 404:
-            raise ControllerError(404, "no_attribution", NO_ATTRIBUTION, error.request_id)
-        raise
+        content = read_signed(url, size)
+    except httpx.HTTPError:
+        raise unavailable_datasheet()
+    if len(content) != size or hashlib.sha256(content).hexdigest() != digest:
+        raise unavailable_datasheet()
+    return {"markdown": content.decode("utf-8", errors="replace")}

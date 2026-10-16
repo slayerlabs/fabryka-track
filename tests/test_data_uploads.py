@@ -1,4 +1,5 @@
 import base64
+import hashlib
 import json
 
 import httpx
@@ -68,6 +69,7 @@ def controller(monkeypatch):
         return real_client(transport=httpx.MockTransport(fake), **kw)
     monkeypatch.setattr(data_uploads.httpx, "Client", build)
     monkeypatch.setattr(data_uploads, "_client", None)
+    monkeypatch.setattr(data_uploads, "_storage", None)
     monkeypatch.setattr(data_uploads.settings, "pipeline_url", "https://pipeline.test")
     monkeypatch.setattr(data_uploads.settings, "pipeline_username", "track")
     monkeypatch.setattr(data_uploads.settings, "pipeline_password", "track-secret")
@@ -188,10 +190,11 @@ CONFIRM = {"parts": [{"part_number": 1, "etag": '"abc"'}, {"part_number": 2, "et
     ("get", "/api/uploads/sources/report", None, ("GET", "/jobs/v1/sources/report", "", None, None)),
     ("get", f"/api/uploads/{JOB_ID}", None, ("GET", f"/jobs/v1/jobs/{JOB_ID}", "", None, None)),
     ("get", f"/api/uploads/{JOB_ID}/report", None, ("GET", f"/jobs/v1/jobs/{JOB_ID}/report", "", None, None)),
-    ("get", f"/api/uploads/{JOB_ID}/result", None, ("GET", f"/jobs/v1/jobs/{JOB_ID}/result", "", None, None)),
-    ("get", f"/api/uploads/{JOB_ID}/attribution", None, ("GET", f"/jobs/v1/jobs/{JOB_ID}/attribution", "", None, None)),
-    ("get", f"/api/uploads/{JOB_ID}/result?diagnostic=true", None,
-     ("GET", f"/jobs/v1/jobs/{JOB_ID}/result", "diagnostic=true", None, None)),
+    ("get", f"/api/uploads/{JOB_ID}/data", None, ("GET", f"/jobs/v1/jobs/{JOB_ID}/data", "", None, None)),
+    ("get", f"/api/uploads/{JOB_ID}/metadata", None, ("GET", f"/jobs/v1/jobs/{JOB_ID}/metadata", "", None, None)),
+    ("get", f"/api/uploads/{JOB_ID}/datasheet", None, ("GET", f"/jobs/v1/jobs/{JOB_ID}/datasheet", "", None, None)),
+    ("get", f"/api/uploads/{JOB_ID}/metadata?diagnostic=true", None,
+     ("GET", f"/jobs/v1/jobs/{JOB_ID}/metadata", "diagnostic=true", None, None)),
     ("get", "/api/uploads?cursor=abc", None, ("GET", "/jobs/v1/jobs", "limit=20&cursor=abc", None, None)),
 ])
 def test_routes_forward_to_matching_controller_calls(client, controller, method, path, body, expected):
@@ -204,7 +207,7 @@ def test_routes_forward_to_matching_controller_calls(client, controller, method,
 
 
 def test_job_id_must_be_a_uuid(client, controller):
-    assert client.get("/api/uploads/not-a-uuid/attribution").status_code == 422
+    assert client.get("/api/uploads/not-a-uuid/data").status_code == 422
     assert client.get("/api/uploads/..%2F..%2Fadmin").status_code in (404, 422)
     assert client.get("/api/uploads/not-a-job/report").status_code == 422
     assert controller.requests == []
@@ -493,46 +496,79 @@ def test_other_create_errors_do_not_trigger_the_limit_lookup(client, controller)
     assert len(controller.requests) == 1
 
 
-def test_attribution_returns_the_controller_grant(client, controller):
-    grant = {"protocol": "job-v1", "url": "https://files.test/attribution.jsonl", "diagnostic": False}
-    controller.reply = lambda request: httpx.Response(200, json=grant)
-    response = client.get(f"/api/uploads/{JOB_ID}/attribution")
-    assert (response.status_code, response.json()) == (200, grant)
+@pytest.mark.parametrize("old", ["result", "attribution", "result?kind=attribution"])
+def test_the_former_result_routes_are_gone(client, controller, old):
+    assert client.get(f"/api/uploads/{JOB_ID}/{old}").status_code == 404
+    assert controller.requests == []
 
 
-def test_a_missing_attribution_file_has_its_own_readable_state(client, controller):
-    controller.reply = controller_error(404, "not_found")
-    response = client.get(f"/api/uploads/{JOB_ID}/attribution")
-    assert response.status_code == 404
-    assert response.json() == {"detail": "No attribution file is available for this upload.", "code": "no_attribution",
-                               "request_id": REQUEST_ID}
-
-
-def test_attribution_forwards_the_diagnostic_flag(client, controller):
-    assert client.get(f"/api/uploads/{JOB_ID}/attribution?diagnostic=true").status_code == 200
-    assert client.get(f"/api/uploads/{JOB_ID}/attribution").status_code == 200
-    assert [r.url.query.decode() for r in controller.requests] == ["diagnostic=true", ""]
-
-
-@pytest.mark.parametrize("status,code", [(409, "result_pending"), (409, "no_result"), (410, "expired"), (409, "diagnostic_required")])
-def test_other_attribution_errors_use_the_shared_messages(client, controller, status, code):
+@pytest.mark.parametrize("kind", ["data", "metadata", "datasheet"])
+@pytest.mark.parametrize("status,code", [(409, "result_pending"), (409, "no_result"), (410, "expired"),
+                                         (409, "diagnostic_required")])
+def test_bundle_errors_use_the_shared_messages(client, controller, kind, status, code):
     controller.reply = controller_error(status, code)
-    response = client.get(f"/api/uploads/{JOB_ID}/attribution")
+    response = client.get(f"/api/uploads/{JOB_ID}/{kind}")
     assert (response.status_code, response.json()["detail"]) == (status, data_uploads.MESSAGES[code])
 
 
-def test_attribution_is_guarded_like_the_other_upload_routes(client, controller):
-    controller.reply = controller_error(401, "unauthorized")
-    response = client.get(f"/api/uploads/{JOB_ID}/attribution")
-    assert (response.status_code, response.json()["detail"]) == (502, data_uploads.UNAVAILABLE)
-    controller.reply = None
-    sent = controller.requests[0]
-    assert sent.headers["x-pipeline-user"] == "fixture-tester"
-    drop_hf_identity()
-    assert client.get(f"/api/uploads/{JOB_ID}/attribution").status_code == 403
-    client.cookies.clear()
-    assert client.get(f"/api/uploads/{JOB_ID}/attribution").status_code == 401
+SHEET = '---\npretty_name: "My source"\n---\n\n# Dataset Card for My source\n'.encode()
+
+
+def sheet_reply(url="https://storage.test/sheet.md", served=SHEET, declared=None, digest=None):
+    def reply(request):
+        if request.url.host == "storage.test":
+            return httpx.Response(200, content=served)
+        return httpx.Response(200, json={
+            "protocol": "job-v1", "job_id": JOB_ID, "diagnostic": False, "method": "GET", "url": url,
+            "expires_at": "2026-10-16T10:05:00Z",
+            "artifact": {"artifact_id": JOB_ID, "kind": "datasheet", "bytes": len(SHEET) if declared is None else declared,
+                         "sha256": digest or hashlib.sha256(SHEET).hexdigest(),
+                         "first_stored_at": "2026-10-16T10:00:00Z", "expires_at": "2026-11-15T10:00:00Z"}})
+    return reply
+
+
+def test_datasheet_text_follows_the_grant_without_track_credentials(client, controller):
+    controller.reply = sheet_reply()
+    response = client.get(f"/api/uploads/{JOB_ID}/datasheet/text")
+    assert (response.status_code, response.json()) == (200, {"markdown": SHEET.decode()})
+    grant, storage = controller.requests
+    assert grant.url.path == f"/jobs/v1/jobs/{JOB_ID}/datasheet"
+    assert storage.url.host == "storage.test"
+    assert "authorization" not in storage.headers and "x-pipeline-user" not in storage.headers
+
+
+def test_datasheet_text_forwards_the_diagnostic_flag(client, controller):
+    controller.reply = sheet_reply()
+    client.get(f"/api/uploads/{JOB_ID}/datasheet/text?diagnostic=true")
+    assert controller.requests[0].url.query.decode() == "diagnostic=true"
+
+
+@pytest.mark.parametrize("reply", [
+    sheet_reply(served=b"something else entirely"),
+    sheet_reply(served=SHEET + b"more"),
+    sheet_reply(digest="0" * 64),
+    sheet_reply(url="http://storage.test/sheet.md"),
+], ids=["other-bytes", "longer", "wrong-digest", "plain-http"])
+def test_a_datasheet_that_does_not_match_its_grant_is_never_served(client, controller, reply):
+    controller.reply = reply
+    response = client.get(f"/api/uploads/{JOB_ID}/datasheet/text")
+    assert (response.status_code, response.json()["code"]) == (502, "datasheet_unavailable")
+
+
+def test_a_datasheet_larger_than_the_preview_limit_is_refused_before_download(client, controller):
+    controller.reply = sheet_reply(declared=data_uploads.DATASHEET_PREVIEW_BYTES + 1)
+    response = client.get(f"/api/uploads/{JOB_ID}/datasheet/text")
+    assert (response.status_code, response.json()["code"]) == (413, "datasheet_too_large")
     assert len(controller.requests) == 1
+
+
+def test_an_unreachable_storage_is_a_502(client, controller):
+    def reply(request):
+        if request.url.host == "storage.test":
+            raise httpx.ConnectError("down")
+        return sheet_reply()(request)
+    controller.reply = reply
+    assert client.get(f"/api/uploads/{JOB_ID}/datasheet/text").status_code == 502
 
 
 @pytest.mark.parametrize("stage", ["pii_mask", None, "stage_from_the_future"])
