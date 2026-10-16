@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DECLARATION_TEXT, DECLARATION_VERSION, MAX_UPLOAD_BYTES, carryForm, pipelineLimit, prefillForm, validateUpload } from "../frontend/src/uploads/form.ts";
+import { DECLARATION_TEXT, DECLARATION_VERSION, DOMAINS, MAX_UPLOAD_BYTES, carryForm, pipelineLimit, prefillForm, toggleDomain, validateUpload } from "../frontend/src/uploads/form.ts";
 
 const valid = {
   pipeline: "dynaword-upload",
@@ -9,10 +9,17 @@ const valid = {
   added: "2026-10-08",
   license: " CC0-1.0 ",
   author: "  ",
-  source_ref: "",
+  source_ref: " https://example.org/corpus ",
+  pretty_name: " My corpus ",
+  description: " Synthetic records. ",
+  publisher: "",
+  limitations: "  ",
+  domains: ["Web", "Books"],
   per_record_provenance: false,
   declaration: true,
 };
+
+const required = { source_ref: "https://example.org/corpus", pretty_name: "My corpus", description: "Synthetic records.", domains: ["Books", "Web"] };
 
 test("a complete form becomes the create request with blank optional fields omitted", () => {
   const { errors, form } = validateUpload(valid);
@@ -20,14 +27,14 @@ test("a complete form becomes the create request with blank optional fields omit
   assert.deepEqual(form, {
     pipeline: "dynaword-upload",
     format: "jsonl",
-    parameters: { source: "my_source", added: "2026-10-08", license: "CC0-1.0", per_record_provenance: false, mask_names: true },
+    parameters: { source: "my_source", added: "2026-10-08", license: "CC0-1.0", ...required, per_record_provenance: false, mask_names: true },
     declaration: { accepted: true, version: DECLARATION_VERSION },
   });
   const filled = validateUpload({ ...valid, file: { name: "x.PARQUET", size: 5 }, license: " cc-by-4.0 ",
     author: "Ada", source_ref: "https://example.org", per_record_provenance: true });
   assert.equal(filled.form.format, "parquet");
   assert.deepEqual(filled.form.parameters, { source: "my_source", added: "2026-10-08", license: "cc-by-4.0",
-    author: "Ada", source_ref: "https://example.org", per_record_provenance: true, mask_names: true });
+    author: "Ada", ...required, source_ref: "https://example.org", per_record_provenance: true, mask_names: true });
 });
 
 test("a mode must be chosen", () => {
@@ -101,13 +108,16 @@ test("a new upload with no mode chosen starts from an empty form", () => {
   assert.equal(carryForm(valid, fresh, { step: 1, pipeline: "", job: "" }), fresh);
 });
 
-const blank = { ...valid, file: null, source: "", added: "2026-10-15", license: "", author: "", source_ref: "", declaration: false };
+const blank = { ...valid, file: null, source: "", added: "2026-10-15", license: "", author: "", source_ref: "", pretty_name: "", description: "", publisher: "", limitations: "",
+  domains: [], declaration: false };
 const stored = { source: "old_source", added: "2026-10-02", license: "CC0-1.0", author: "Ada", source_ref: "https://example.org",
+  pretty_name: "Old", description: "Old data.", publisher: "Pub", limitations: "Gaps.", domains: ["News"],
   per_record_provenance: true, mask_names: true };
 
 test("a form opened without its session takes the job's stored parameters", () => {
   assert.deepEqual(prefillForm(blank, stored, blank), { ...blank, source: "old_source", added: "2026-10-02", license: "CC0-1.0",
-    author: "Ada", source_ref: "https://example.org", per_record_provenance: true });
+    author: "Ada", source_ref: "https://example.org", pretty_name: "Old", description: "Old data.", publisher: "Pub",
+    limitations: "Gaps.", domains: ["News"], per_record_provenance: true });
 });
 
 test("values already in the form win over the job's parameters", () => {
@@ -136,4 +146,61 @@ test("going back from a job prefills the carried form, but a new upload and ente
   assert.deepEqual(carryForm(blank, blank, { step: 1, pipeline: "p", job: "" }, stored), prefilled);
   assert.equal(carryForm(blank, blank, { step: 1, pipeline: "", job: "" }, stored), blank);
   assert.deepEqual(carryForm(blank, blank, { step: 3, pipeline: "p", job: "j" }, stored), blank);
+});
+
+test("the source address is required and must use an allowed scheme", () => {
+  for (const source_ref of ["", "   ", "example.org", "ftp://example.org", "https://a b", "https://" + "x".repeat(4089)])
+    assert.ok(validateUpload({ ...valid, source_ref }).errors.source_ref, source_ref.slice(0, 20));
+  for (const source_ref of ["https://x", "http://x", "doi:10.1/x", "hdl:1/2", "urn:isbn:978", "ark:/1/x", "oai:repo:1"])
+    assert.equal(validateUpload({ ...valid, source_ref }).errors.source_ref, undefined, source_ref);
+});
+
+test("name, description and at least one domain are required within the profile limits", () => {
+  assert.ok(validateUpload({ ...valid, pretty_name: " " }).errors.pretty_name);
+  assert.ok(validateUpload({ ...valid, pretty_name: "x".repeat(201) }).errors.pretty_name);
+  assert.ok(validateUpload({ ...valid, description: "" }).errors.description);
+  assert.ok(validateUpload({ ...valid, description: "x".repeat(1001) }).errors.description);
+  assert.ok(validateUpload({ ...valid, publisher: "x".repeat(201) }).errors.publisher);
+  assert.ok(validateUpload({ ...valid, limitations: "x".repeat(5001) }).errors.limitations);
+  assert.ok(validateUpload({ ...valid, domains: [] }).errors.domains);
+  assert.ok(validateUpload({ ...valid, domains: ["Poetry"] }).errors.domains);
+});
+
+test("optional publisher and limitations are sent only when filled, multi-line limitations kept", () => {
+  const { form } = validateUpload({ ...valid, publisher: " Fundacja ", limitations: "Old spelling.\nOCR noise." });
+  assert.equal(form.parameters.publisher, "Fundacja");
+  assert.equal(form.parameters.limitations, "Old spelling.\nOCR noise.");
+  assert.equal("publisher" in validateUpload(valid).form.parameters, false);
+});
+
+test("one-line fields refuse every line break the server's splitlines sees", () => {
+  for (const sep of ["\n", "\r", "\r\n", "\v", "\f", "\x1c", "\x1d", "\x1e", "\x85", "\u2028", "\u2029"])
+    for (const key of ["pretty_name", "description", "publisher"])
+      assert.ok(validateUpload({ ...valid, [key]: `a${sep}b` }).errors[key], `${key} ${JSON.stringify(sep)}`);
+  assert.equal(validateUpload({ ...valid, pretty_name: "a\n", description: "\x85b\x1c" }).errors.pretty_name, undefined);
+});
+
+test("Markdown and datasheet markers are refused in every description field", () => {
+  const bad = ["# Title", "  ## x", "a\n# b", "x <!-- y", "x --> y", "a --- b", "===", "a\n---", "a\n  ==  "];
+  for (const key of ["pretty_name", "description", "publisher", "limitations"])
+    for (const value of bad) {
+      if (value.includes("\n") && key !== "limitations") continue;
+      assert.ok(validateUpload({ ...valid, [key]: value }).errors[key], `${key} ${JSON.stringify(value)}`);
+    }
+  assert.equal(validateUpload({ ...valid, limitations: "Line one.\nLine two - dash, a#b." }).errors.limitations, undefined);
+  assert.equal(validateUpload({ ...valid, description: "Uses -- and = signs" }).errors.description, undefined);
+});
+
+test("domains toggle and are always sent in the list's order", () => {
+  assert.equal(DOMAINS.length, 14);
+  assert.deepEqual(toggleDomain([], "News"), ["News"]);
+  assert.deepEqual(toggleDomain(["Web", "Books"], "Legal"), ["Books", "Legal", "Web"]);
+  assert.deepEqual(toggleDomain(["Books", "Legal"], "Books"), ["Legal"]);
+  assert.deepEqual(toggleDomain(["Books"], "Poetry"), ["Books"]);
+});
+
+test("stored domains are prefilled only when well-typed and known", () => {
+  assert.deepEqual(prefillForm(blank, { domains: ["Web", "Poetry", "Books"] }, blank).domains, ["Books", "Web"]);
+  assert.deepEqual(prefillForm(blank, { domains: "Web" }, blank).domains, []);
+  assert.deepEqual(prefillForm({ ...blank, domains: ["Legal"] }, { domains: ["Web"] }, blank).domains, ["Legal"]);
 });

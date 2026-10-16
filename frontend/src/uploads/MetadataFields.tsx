@@ -1,14 +1,15 @@
+import { COPY } from "./copy";
 import { DECLARATION_TEXT, type UploadErrors, type UploadFormState } from "./form";
 
 const TEXT_FIELDS = [
   {
     key: "license",
-    label: "License",
+    label: COPY.file.fields.license,
     placeholder: "CC-BY-4.0",
     hint: "Applies to every record that does not carry its own license.",
   },
   { key: "author", label: "Author (optional)", placeholder: undefined, hint: undefined },
-  { key: "source_ref", label: "Source reference (optional)", placeholder: "https://", hint: undefined },
+  { key: "source_ref", label: COPY.file.fields.source_ref, placeholder: "https://", hint: undefined },
 ] as const;
 
 export const emptyForm = (): UploadFormState => ({
@@ -19,6 +20,11 @@ export const emptyForm = (): UploadFormState => ({
   license: "",
   author: "",
   source_ref: "",
+  pretty_name: "",
+  description: "",
+  publisher: "",
+  limitations: "",
+  domains: [],
   per_record_provenance: false,
   declaration: false,
 });
@@ -43,7 +49,7 @@ export function MetadataFields({ state, errors, disabled, set }: Props) {
     <>
       <div className="fields">
         <label className="field">
-          <span>Source</span>
+          <span>{COPY.file.fields.source}</span>
           <input
             value={state.source}
             disabled={disabled}
@@ -54,7 +60,7 @@ export function MetadataFields({ state, errors, disabled, set }: Props) {
           <FieldError text={errors.source} />
         </label>
         <label className="field">
-          <span>Added</span>
+          <span>{COPY.file.fields.added}</span>
           <input
             type="date"
             value={state.added}
