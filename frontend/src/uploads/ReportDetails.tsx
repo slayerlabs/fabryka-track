@@ -89,17 +89,17 @@ export function ResultDownload({ id, diagnosticFirst, attribution = false }: Dow
       <div className="actions">
         {!diagnosticFirst && (
           <button className="primary" disabled={busy} onClick={() => void download(() => resultGrant(id, false))}>
-            {COPY.downloads.result}
+            {COPY.downloads.download}
           </button>
         )}
         {diagnostic && (
           <button className="secondary" disabled={busy} onClick={() => void download(() => resultGrant(id, true))}>
-            {COPY.downloads.diagnostic}
+            {COPY.downloads.download}
           </button>
         )}
         {attribution && (
           <button className="secondary" disabled={busy} onClick={() => void download(() => attributionGrant(id, diagnostic))}>
-            {COPY.downloads.attribution}
+            {COPY.downloads.download}
           </button>
         )}
       </div>

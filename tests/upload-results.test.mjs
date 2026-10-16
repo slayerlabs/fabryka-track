@@ -4,7 +4,7 @@ import { loadUploadResults, summarize } from "../frontend/src/uploads/results.ts
 import { CHECK_LABELS, PII_LABELS, REJECT_LABELS, STAGE_LABELS, STAT_LABELS } from "../frontend/src/uploads/copy.ts";
 import { REJECT_REASONS } from "../frontend/src/uploads/rejection.ts";
 
-const BINDING = ["schema", "record", "token_count", "record_balance", "rejection_share", "exact_duplicate", "near_duplicate", "residual_pii", "empty_result", "metadata_conflict", "attribution_coverage"];
+const BINDING = ["schema", "metadata_binding", "record", "token_count", "record_balance", "rejection_share", "exact_duplicate", "near_duplicate", "residual_pii", "empty_result", "metadata_conflict", "datasheet"];
 const ADVISORY = ["masking_only_duplicate", "license_needs_legal_review"];
 const STATS = ["rows", "token_count", "exact_duplicate_pairs", "near_duplicate_pairs", "masking_only_duplicate_pairs", "residual_pii_records", "license_review_records"];
 
@@ -28,19 +28,19 @@ const payload = () => ({
 
 test("cards show verdict, rows in and out, binding checks passed of total and tokens", () => {
   const { cards } = summarize(payload());
-  assert.deepEqual(cards, { verdict: "passed", failureCode: null, rowsIn: 100, rowsOut: 80, checksPassed: 11, checksTotal: 11, tokens: 5000 });
+  assert.deepEqual(cards, { verdict: "passed", failureCode: null, rowsIn: 100, rowsOut: 80, checksPassed: 12, checksTotal: 12, tokens: 5000 });
 });
 
 test("only binding checks count toward the passed-of-total card", () => {
   const report = payload();
   report.report.qa.checks[0].status = "failed";
   report.report.qa.checks[0].count = 2;
-  report.report.qa.checks[11].status = "failed";
+  report.report.qa.checks[12].status = "failed";
   report.verdict = "failed_qa";
   report.failure_code = "qa_failed";
   const { cards } = summarize(report);
-  assert.equal(cards.checksPassed, 10);
-  assert.equal(cards.checksTotal, 11);
+  assert.equal(cards.checksPassed, 11);
+  assert.equal(cards.checksTotal, 12);
   assert.equal(cards.verdict, "failed_qa");
   assert.equal(cards.failureCode, "qa_failed");
 });
@@ -58,14 +58,14 @@ test("the funnel follows pipeline order and carries the rejection reasons", () =
   assert.equal(funnel.rowsOut, 80);
 });
 
-test("the 13 checks keep a fixed order with their status", () => {
+test("the 14 checks keep a fixed order with their status", () => {
   const report = payload();
   report.report.qa.checks.reverse();
-  report.report.qa.checks[12] = { name: "schema", binding: true, status: "not_evaluated", count: null };
+  report.report.qa.checks[13] = { name: "schema", binding: true, status: "not_evaluated", count: null };
   const { checks: rows } = summarize(report);
   assert.deepEqual(rows.map((row) => row.name), [...BINDING, ...ADVISORY]);
   assert.deepEqual(rows[0], { name: "schema", label: CHECK_LABELS.schema, binding: true, status: "not_evaluated", count: null });
-  assert.equal(rows.length, 13);
+  assert.equal(rows.length, 14);
 });
 
 test("masks list phone, pii and person next to the record count", () => {

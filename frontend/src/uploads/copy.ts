@@ -12,6 +12,7 @@ export const REJECT_LABELS: Record<string, string> = {
   missing_license: "missing license",
   missing_source_ref: "missing source_ref",
   source_ref_unresolved: "unresolved source_ref",
+  invalid_source_ref: "invalid source address",
 };
 
 export const STAGE_LABELS: Record<string, string> = {
@@ -28,9 +29,9 @@ export const PIPELINE_STAGE_LABELS: Record<string, string> = {
   upload_dedup: "Removing duplicates",
   pii_mask: "Masking personal data",
   masked_exact_dedup: "Removing duplicates created by masking",
-  write_parquet: "Writing the result file",
-  qa: "Auditing the result",
-  artifact_upload: "Uploading the result",
+  write_parquet: "Writing data.parquet and metadata.parquet",
+  qa: "Auditing the files and the datasheet",
+  artifact_upload: "Uploading the files",
   reporting: "Writing the report",
 };
 
@@ -51,7 +52,8 @@ export const STAT_LABELS: Record<string, string> = {
 };
 
 export const CHECK_LABELS: Record<string, string> = {
-  schema: "Result schema",
+  schema: "Data schema",
+  metadata_binding: "Data and metadata match row by row",
   record: "Record format",
   token_count: "Token count",
   record_balance: "Record balance",
@@ -61,7 +63,7 @@ export const CHECK_LABELS: Record<string, string> = {
   residual_pii: "Remaining personal data",
   empty_result: "Non-empty result",
   metadata_conflict: "Metadata conflicts",
-  attribution_coverage: "Attribution coverage",
+  datasheet: "Datasheet structure",
   masking_only_duplicate: "Duplicates created by masking",
   license_needs_legal_review: "Licenses needing legal review",
 };
@@ -83,7 +85,7 @@ export const COPY = {
     finalizing: "Publishing results",
   },
   timelineStatus: { pending: "Pending", active: "In progress", done: "Done", failed: "Failed" },
-  recipeStages: ["Validate records", "Remove too-short records", "Remove duplicates", "Mask personal data", "Remove duplicates created by masking", "Write the result file", "Audit the result"],
+  recipeStages: ["Validate records", "Remove too-short records", "Remove duplicates", "Mask personal data", "Remove duplicates created by masking", "Write data.parquet, metadata.parquet and the datasheet", "Audit the files"],
   pipelines: {
     heading: "Choose a mode",
     loading: "Loading modes…",
@@ -134,7 +136,7 @@ export const COPY = {
     inProgress: "This upload is still in progress. Results appear here once they are published.",
   },
   gate: { signIn: "Sign in with Hugging Face to upload data.", loading: "Loading…" },
-  wizard: { description: "Send a Dynaword file to the data pipeline, follow its validation and download the report and result." },
+  wizard: { description: "Send a Dynaword file to the data pipeline, follow its validation and download the report, the data, its metadata and the datasheet." },
   history: {
     description: "Your uploads to the data pipeline. Open one to follow its progress or see its results.",
     heading: "Your uploads",
@@ -168,10 +170,11 @@ export const COPY = {
     unavailable: "The chart library could not be loaded. Reload this page to try again.",
   },
   downloads: {
-    result: "Download result",
-    diagnostic: "Download diagnostic result",
-    attribution: "Download attribution",
-    noAttribution: "This upload has no attribution file.",
+    download: "Download",
+    diagnosticNote: "This upload failed its quality checks. These are diagnostic files for finding out why.",
+    data: { name: "data.parquet", what: "Records: id, text, source, added, created, token_count" },
+    metadata: { name: "metadata.parquet", what: "Per-record license, author, source address" },
+    datasheet: { what: "Datasheet" },
   },
   messages: {
     publishing: "Publishing results. This usually takes a moment.",

@@ -18,6 +18,7 @@ const RECORD_PROBLEMS: Record<string, string> = {
   missing_license: "has no license and no license was entered for the upload.",
   missing_source_ref: "has no source_ref, which this record needs to credit its author or license.",
   source_ref_unresolved: "has a source_ref that cannot be resolved to a source.",
+  invalid_source_ref: "has a source_ref that is not an allowed address (https, http, doi, hdl, urn, ark or oai) or that carries a password or an access key.",
 };
 
 export const REJECT_REASONS = Object.keys(RECORD_PROBLEMS);
