@@ -38,3 +38,15 @@ export function versionBanner({ source, version, uploader }: SourceDescription) 
 
 export const filledFrom = ({ version, description }: SourceDescription) =>
   `Filled in from v${version} · ${description.pretty_name}`;
+
+export type PickEvent =
+  | { kind: "picked"; source: string; loaded: boolean }
+  | { kind: "source"; source: string }
+  | { kind: "settled"; source: string };
+
+// a pick forces the description only for the fetch it started; any other name or outcome drops it
+export function nextPick(picked: string, event: PickEvent): string {
+  if (event.kind === "picked") return event.loaded ? "" : event.source;
+  if (event.kind === "source") return event.source === picked ? picked : "";
+  return event.source === picked ? "" : picked;
+}

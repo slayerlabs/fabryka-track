@@ -17,7 +17,7 @@ export function useSourceList(): SourceSummary[] {
   return sources;
 }
 
-export function useSourceDescription(name: string, listed: boolean): SourceDescription | null {
+export function useSourceDescription(name: string, listed: boolean, onFailed?: (name: string) => void): SourceDescription | null {
   const [described, setDescribed] = useState<SourceDescription | null>(null);
   useEffect(() => {
     setDescribed(null);
@@ -27,7 +27,9 @@ export function useSourceDescription(name: string, listed: boolean): SourceDescr
       (reply) => {
         if (!controller.signal.aborted) setDescribed(reply);
       },
-      () => undefined,
+      () => {
+        if (!controller.signal.aborted) onFailed?.(name);
+      },
     );
     return () => controller.abort();
   }, [name, listed]);

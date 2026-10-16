@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { applySourceDescription, filledFrom, findSource, sourceKind, suggestSources, versionBanner } from "../frontend/src/uploads/sources.ts";
+import { applySourceDescription, filledFrom, findSource, nextPick, sourceKind, suggestSources, versionBanner } from "../frontend/src/uploads/sources.ts";
 
 const list = [
   { source: "polona", current_version: 1, updated_at: "2026-08-01T00:00:00Z" },
@@ -64,4 +64,63 @@ test("the banner names the version and its uploader, or only the version", () =>
   });
   assert.equal(versionBanner({ ...described, uploader: null }).title, "New version of source wolne_lektury (currently v2).");
   assert.equal(filledFrom(described), "Filled in from v2 · Wolne Lektury");
+});
+
+function wizard() {
+  let state = { form: form({ source: "" }), picked: "" };
+  const typed = (source) => {
+    state = { form: { ...state.form, source }, picked: nextPick(state.picked, { kind: "source", source }) };
+  };
+  return {
+    pick: (source) => {
+      state = { form: { ...state.form, source }, picked: nextPick(state.picked, { kind: "picked", source, loaded: false }) };
+      state.picked = nextPick(state.picked, { kind: "source", source });
+    },
+    failed: (source) => (state.picked = nextPick(state.picked, { kind: "settled", source })),
+    arrived: (d) => {
+      state = { form: applySourceDescription(state.form, d, state.picked === d.source), picked: nextPick(state.picked, { kind: "settled", source: d.source }) };
+    },
+    edit: (key, value) => (state.form = { ...state.form, [key]: value }),
+    typed,
+    get form() {
+      return state.form;
+    },
+  };
+}
+
+test("a pick whose description failed to load does not force a later retype of the same name", () => {
+  const w = wizard();
+  w.pick("wolne_lektury");
+  w.failed("wolne_lektury");
+  w.edit("pretty_name", "Edited");
+  w.typed("polona");
+  w.typed("wolne_lektury");
+  w.arrived(described);
+  assert.equal(w.form.pretty_name, "Edited");
+  assert.equal(w.form.source_ref, "https://wolnelektury.pl/");
+});
+
+test("typing away from a pick before its description arrives drops the pick", () => {
+  const w = wizard();
+  w.pick("wolne_lektury");
+  w.edit("pretty_name", "Edited");
+  w.edit("domains", ["Web"]);
+  w.typed("wolne_lekt");
+  w.typed("wolne_lektury");
+  w.arrived(described);
+  assert.equal(w.form.pretty_name, "Edited");
+  assert.deepEqual(w.form.domains, ["Web"]);
+});
+
+test("a pick that is still pending forces the description when it arrives", () => {
+  const w = wizard();
+  w.edit("pretty_name", "Edited");
+  w.pick("wolne_lektury");
+  w.arrived(described);
+  assert.equal(w.form.pretty_name, "Wolne Lektury");
+});
+
+test("a pick of the already loaded name is applied at once and leaves nothing pending", () => {
+  assert.equal(nextPick("", { kind: "picked", source: "wolne_lektury", loaded: true }), "");
+  assert.equal(nextPick("polona", { kind: "settled", source: "wolne_lektury" }), "polona");
 });

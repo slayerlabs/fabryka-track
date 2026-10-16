@@ -6,7 +6,7 @@ import type { UploadJob } from "../uploads/api";
 import { carryForm, pipelineLimit, validateUpload, type UploadFormState } from "../uploads/form";
 import { backTo, parseLocation, reachable, resolveLocation, wizardTitle, wizardUrl, type Step, type WizardLocation } from "../uploads/location";
 import { emptyForm } from "../uploads/MetadataFields";
-import { applySourceDescription, findSource } from "../uploads/sources";
+import { applySourceDescription, findSource, nextPick } from "../uploads/sources";
 import { useFileCheck } from "../uploads/useFileCheck";
 import { usePipelines } from "../uploads/usePipelines";
 import { useSourceDescription, useSourceList } from "../uploads/useSources";
@@ -38,12 +38,17 @@ function UploadWizard() {
   const [hadJob, setHadJob] = useState(false);
   const [jobParameters, setJobParameters] = useState<UploadJob["parameters"]>();
   const sources = useSourceList();
-  const described = useSourceDescription(form.source, findSource(sources, form.source) !== null);
   const [picked, setPicked] = useState("");
+  const described = useSourceDescription(form.source, findSource(sources, form.source) !== null, (source) =>
+    setPicked((current) => nextPick(current, { kind: "settled", source })),
+  );
+  useEffect(() => {
+    setPicked((current) => nextPick(current, { kind: "source", source: form.source }));
+  }, [form.source]);
   useEffect(() => {
     if (!described) return;
     setForm((current) => applySourceDescription(current, described, picked === described.source));
-    setPicked("");
+    setPicked((current) => nextPick(current, { kind: "settled", source: described.source }));
   }, [described]);
   const pickSource = (source: string) => {
     setForm((current) => {
@@ -51,7 +56,7 @@ function UploadWizard() {
       // the same name keeps its loaded description, so no new fetch would fill the fields
       return described?.source === source ? applySourceDescription(next, described, true) : next;
     });
-    setPicked(described?.source === source ? "" : source);
+    setPicked((current) => nextPick(current, { kind: "picked", source, loaded: described?.source === source }));
   };
 
   const requested = parseLocation(params);
