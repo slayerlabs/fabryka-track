@@ -6,15 +6,50 @@ export type Block =
   | { kind: "code"; text: string }
   | { kind: "table"; header: Inline[][]; rows: Inline[][][] };
 
-const MARKER = /^<!--\s*(START|END)-[A-Z -]+\s*-->$/;
+const MARKER_BODY = /^(START|END)-[A-Z -]+$/;
 const HEADING = /^(#{1,4})\s+(.*)$/;
 const ITEM = /^\s*[-*]\s+/;
-const SEPARATOR = /^\s*\|?\s*:?-{3,}/;
-const LINK = /!?\[([^\]]*)\]\([^)]*\)/g;
 const SPAN = /`([^`]+)`|\*\*([^*]+)\*\*/g;
 
+const isMarker = (line: string) => {
+  const text = line.trim();
+  return text.length >= 7 && text.startsWith("<!--") && text.endsWith("-->") && MARKER_BODY.test(text.slice(4, -3).trim());
+};
+
+function isSeparator(line: string) {
+  let text = line.trimStart();
+  if (text.startsWith("|")) text = text.slice(1).trimStart();
+  if (text.startsWith(":")) text = text.slice(1);
+  return text.startsWith("---");
+}
+
+// The next "]" and ")" are cached so a run of "[" cannot rescan the tail (quadratic otherwise).
+function stripLinks(text: string) {
+  const pieces: string[] = [];
+  let start = 0;
+  let from = 0;
+  let close = -2;
+  let paren = -2;
+  for (;;) {
+    const open = text.indexOf("[", from);
+    if (open < 0) break;
+    if (close <= open) close = text.indexOf("]", open + 1);
+    if (close < 0) break;
+    if (text[close + 1] !== "(") {
+      from = open + 1;
+      continue;
+    }
+    if (paren < close + 2) paren = text.indexOf(")", close + 2);
+    if (paren < 0) break;
+    pieces.push(text.slice(start, open > start && text[open - 1] === "!" ? open - 1 : open), text.slice(open + 1, close));
+    start = from = paren + 1;
+  }
+  pieces.push(text.slice(start));
+  return pieces.join("");
+}
+
 export function inlines(source: string): Inline[] {
-  const text = source.replace(LINK, "$1");
+  const text = stripLinks(source);
   const out: Inline[] = [];
   let last = 0;
   for (const match of text.matchAll(SPAN)) {
@@ -29,11 +64,11 @@ export function inlines(source: string): Inline[] {
 const cells = (line: string) =>
   line.trim().replace(/^\|/, "").replace(/\|$/, "").split(/(?<!\\)\|/).map((cell) => inlines(cell.trim().replaceAll("\\|", "|")));
 
-const isTable = (lines: string[], i: number) => lines[i].trim().startsWith("|") && i + 1 < lines.length && SEPARATOR.test(lines[i + 1]);
+const isTable = (lines: string[], i: number) => lines[i].trim().startsWith("|") && i + 1 < lines.length && isSeparator(lines[i + 1]);
 
 function startsBlock(lines: string[], i: number) {
   const line = lines[i];
-  return line.startsWith("```") || HEADING.test(line) || ITEM.test(line) || MARKER.test(line.trim()) || isTable(lines, i);
+  return line.startsWith("```") || HEADING.test(line) || ITEM.test(line) || isMarker(line) || isTable(lines, i);
 }
 
 function parseBlocks(lines: string[]): Block[] {
@@ -41,11 +76,11 @@ function parseBlocks(lines: string[]): Block[] {
   let i = 0;
   while (i < lines.length) {
     const line = lines[i];
-    if (!line.trim() || MARKER.test(line.trim())) {
+    if (!line.trim() || isMarker(line)) {
       i++;
     } else if (line.startsWith("```")) {
-      const close = lines.findIndex((candidate, j) => j > i && candidate.startsWith("```"));
-      const end = close < 0 ? lines.length : close;
+      let end = i + 1;
+      while (end < lines.length && !lines[end].startsWith("```")) end++;
       blocks.push({ kind: "code", text: lines.slice(i + 1, end).join("\n") });
       i = end + 1;
     } else if (HEADING.test(line)) {

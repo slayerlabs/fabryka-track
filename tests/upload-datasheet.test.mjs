@@ -105,3 +105,31 @@ test("the output of the upstream renderer parses: no markers, no links, every li
   const sample = blocks.find((block) => block.kind === "code");
   assert.ok(sample.text.includes("\\u003c!-- x --\\u003e"));
 });
+
+test("links and images are stripped the way a left-to-right reader expects", () => {
+  const text = (value) => inlines(value).map((part) => part.text).join("");
+  assert.equal(text("a [b](c) d ![e](f) g"), "a b d e g");
+  assert.equal(text("[a [b](c)"), "a [b");
+  assert.equal(text("[a] (c) [b](d"), "[a] (c) [b](d");
+  assert.equal(text("[](x)[y](z)"), "y");
+});
+
+test("adversarial 1 MiB inputs parse in under a second", () => {
+  const MiB = 1 << 20;
+  const cases = {
+    brackets: "[".repeat(MiB),
+    bracketParen: "[](".repeat(MiB / 3),
+    markerSpaces: `<!-- START-${" ".repeat(MiB)}x`,
+    separatorSpaces: `| a |\n${" ".repeat(MiB)}x`,
+    alternatingFences: "```\n".repeat(MiB / 4),
+    fencesWithText: "```\nx\n".repeat(MiB / 6),
+    pipes: "|".repeat(MiB),
+    pipeLines: "| a |\n".repeat(MiB / 6),
+    licenceCell: `| License | Records |\n|---|---|\n| \`${"[".repeat(MiB)}\` | 1 |\n`,
+  };
+  for (const [name, input] of Object.entries(cases)) {
+    const started = performance.now();
+    parseDatasheet(input);
+    assert.ok(performance.now() - started < 1000, name);
+  }
+});
