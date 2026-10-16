@@ -6,7 +6,7 @@ from typing import Literal
 from uuid import UUID
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Path, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator
 from sqlalchemy import select
@@ -30,6 +30,8 @@ MAX_BYTES = 10 * 1024 ** 3
 NO_ATTRIBUTION = "No attribution file is available for this upload."
 ACTION_KEY = r"^[!-~]{16,128}$"
 FIELD = re.compile(r"[a-z][a-z0-9_]{0,63}")
+SOURCE_NAME = r"^[a-z0-9][a-z0-9_]{0,127}$"
+UNKNOWN_SOURCE = "No source with this name has been registered yet."
 SOURCE_REF = r"^(https?|doi|hdl|urn|ark|oai):\S+$"
 Domain = Literal["Books", "Conversation", "Dialect", "Encyclopedic", "Legal", "Medical", "News", "Other",
                  "Readaloud", "Social Media", "Speeches", "Spoken", "Subtitles", "Web"]
@@ -48,8 +50,8 @@ MESSAGES = {
     "no_result": "This upload has no result to download.",
     "idempotency_conflict": "This action was already submitted with different details. Reload the page and try again.",
     "invalid_parameters": "One of the details you entered cannot be used. Fix the highlighted field and run again.",
-    "invalid_source_ref": "The source address cannot be used. Use the public address of the source, "
-                          "without passwords or access keys.",
+    "invalid_source_ref": "The source address must be a public address with a host, "
+                          "without a password or signed access key.",
     "invalid_request": "The data pipeline rejected the request. Check the file and form, then try again.",
     "provider_unavailable": "Storage is temporarily unavailable. Try again shortly.",
     "integrity_mismatch": "The uploaded file does not match what was declared. Start a new upload.",
@@ -226,6 +228,31 @@ def list_uploads(cursor: str | None = None, caller=Depends(uploader)):
 @router.get("/pipelines")
 def list_pipelines(caller=Depends(uploader)):
     return forward(caller, "GET", "/pipelines")
+
+
+@router.get("/sources")
+def list_sources(caller=Depends(uploader)):
+    return forward(caller, "GET", "/sources")
+
+
+def uploader_name(principal):
+    if not isinstance(principal, str) or not principal.startswith("hf:"):
+        return None
+    with SessionLocal() as session:
+        return session.scalar(select(HuggingFaceIdentity.username)
+                              .where(HuggingFaceIdentity.subject == principal.removeprefix("hf:")))
+
+
+@router.get("/sources/{source}")
+def describe_source(source: str = Path(pattern=SOURCE_NAME), caller=Depends(uploader)):
+    try:
+        status, body = call(caller, "GET", f"/sources/{source}")
+    except ControllerError as error:
+        if error.status == 404:
+            raise ControllerError(404, "unknown_source", UNKNOWN_SOURCE, error.request_id)
+        raise
+    body["uploader"] = uploader_name(body.pop("uploaded_by", None))
+    return JSONResponse(body, status_code=status)
 
 
 def size_label(n):

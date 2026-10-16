@@ -7,7 +7,7 @@ from sqlalchemy import delete, select
 
 from fabryka_track import data_uploads
 from fabryka_track.database import SessionLocal
-from fabryka_track.models import HuggingFaceIdentity
+from fabryka_track.models import Account, HuggingFaceIdentity
 
 REQUEST_ID = "0f0e0d0c-0b0a-4999-8888-777766665555"
 JOB_ID = "6f1c1f3e-2b7a-4d5e-9c3b-1a2b3c4d5e6f"
@@ -183,6 +183,9 @@ CONFIRM = {"parts": [{"part_number": 1, "etag": '"abc"'}, {"part_number": 2, "et
     ("post", f"/api/uploads/{JOB_ID}/cancel", {"action_key": ACTION_KEY},
      ("POST", f"/jobs/v1/jobs/{JOB_ID}/cancel", "", {"protocol": "job-v1"}, ACTION_KEY)),
     ("get", "/api/uploads/pipelines", None, ("GET", "/jobs/v1/pipelines", "", None, None)),
+    ("get", "/api/uploads/sources", None, ("GET", "/jobs/v1/sources", "", None, None)),
+    ("get", "/api/uploads/sources/my_source", None, ("GET", "/jobs/v1/sources/my_source", "", None, None)),
+    ("get", "/api/uploads/sources/report", None, ("GET", "/jobs/v1/sources/report", "", None, None)),
     ("get", f"/api/uploads/{JOB_ID}", None, ("GET", f"/jobs/v1/jobs/{JOB_ID}", "", None, None)),
     ("get", f"/api/uploads/{JOB_ID}/report", None, ("GET", f"/jobs/v1/jobs/{JOB_ID}/report", "", None, None)),
     ("get", f"/api/uploads/{JOB_ID}/result", None, ("GET", f"/jobs/v1/jobs/{JOB_ID}/result", "", None, None)),
@@ -540,3 +543,59 @@ def test_job_status_passes_the_stage_through_untouched(client, controller, stage
 
 def test_job_status_without_a_stage_stays_without_one(client, controller):
     assert "stage" not in client.get(f"/api/uploads/{JOB_ID}").json()
+
+
+DESCRIPTION = {"pretty_name": "My source", "description": "Synthetic records.", "source_ref": "https://example.org",
+               "publisher": "", "domains": ["Other"], "limitations": ""}
+
+
+def source_reply(uploaded_by):
+    return lambda request: httpx.Response(200, json={
+        "protocol": "job-v1", "source": "my_source", "version": 2, "job_id": JOB_ID,
+        "created_at": "2026-10-16T10:00:00Z", "uploaded_by": uploaded_by, "description": DESCRIPTION})
+
+
+def add_hf_user(username, subject):
+    with SessionLocal() as session:
+        account = Account(username=username, password_hash="")
+        session.add(account)
+        session.flush()
+        session.add(HuggingFaceIdentity(subject=subject, account_id=account.id, username=username))
+        session.commit()
+
+
+@pytest.mark.parametrize("uploaded_by,uploader", [("hf:fixture-tester", "tester"), ("hf:anna-sub", "anna"),
+                                                  ("hf:not-a-track-user", None), ("cli", None)])
+def test_a_source_names_its_uploader_by_hugging_face_username(client, controller, uploaded_by, uploader):
+    add_hf_user("anna", "anna-sub")
+    controller.reply = source_reply(uploaded_by)
+    body = client.get("/api/uploads/sources/my_source").json()
+    assert body["uploader"] == uploader
+    assert "uploaded_by" not in body
+    assert body["description"] == DESCRIPTION and body["version"] == 2
+
+
+def test_an_unknown_source_has_its_own_readable_state(client, controller):
+    controller.reply = controller_error(404, "not_found")
+    response = client.get("/api/uploads/sources/brand_new")
+    assert response.status_code == 404
+    assert response.json() == {"detail": data_uploads.UNKNOWN_SOURCE, "code": "unknown_source", "request_id": REQUEST_ID}
+
+
+@pytest.mark.parametrize("name", ["Has_Caps", "_lead", "has-dash", "a" * 129])
+def test_a_malformed_source_name_never_reaches_the_controller(client, controller, name):
+    assert client.get(f"/api/uploads/sources/{name}").status_code == 422
+    assert controller.requests == []
+
+
+def test_sources_are_guarded_like_the_other_upload_routes(client, controller):
+    drop_hf_identity()
+    assert client.get("/api/uploads/sources").status_code == 403
+    client.cookies.clear()
+    assert client.get("/api/uploads/sources/my_source").status_code == 401
+    assert controller.requests == []
+
+
+def test_domains_are_the_profile_list_in_order():
+    assert data_uploads.DOMAINS == ("Books", "Conversation", "Dialect", "Encyclopedic", "Legal", "Medical", "News",
+                                    "Other", "Readaloud", "Social Media", "Speeches", "Spoken", "Subtitles", "Web")
