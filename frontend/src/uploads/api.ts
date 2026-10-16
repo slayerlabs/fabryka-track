@@ -135,9 +135,6 @@ export const bundleGrant = (id: string, kind: BundleKind, diagnostic: boolean) =
 export const datasheetText = (id: string, diagnostic: boolean, signal?: AbortSignal) =>
   request<{ markdown: string }>(`${job(id)}/datasheet/text${diagnosticQuery(diagnostic)}`, { signal });
 
-export const resultGrant = (id: string, diagnostic: boolean) =>
-  request<{ url: string }>(`${job(id)}/result${diagnostic ? "?diagnostic=true" : ""}`);
-
 function sleep(ms: number, signal?: AbortSignal) {
   return new Promise<void>((resolve, reject) => {
     signal?.throwIfAborted();
@@ -157,6 +154,3 @@ export const browserUploaderDeps = (): UploaderDeps => ({
     hashInWorker(() => new Worker(new URL("./sha256.worker.ts", import.meta.url), { type: "module" }), file, onProgress, signal),
   newKey: () => crypto.randomUUID(),
 });
-
-export const attributionGrant = (id: string, diagnostic = false) =>
-  request<{ url: string }>(`${job(id)}/attribution${diagnostic ? "?diagnostic=true" : ""}`);

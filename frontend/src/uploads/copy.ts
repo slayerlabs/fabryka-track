@@ -123,7 +123,6 @@ export const COPY = {
     newVersion: "New version",
     use: "use",
     updated: "Updated",
-    current: "current",
     sectionTitle: "Source description",
     sectionSub: "Shown on the source's datasheet in Polish Dynaword.",
     addressHint: "A URL or identifier, e.g.",

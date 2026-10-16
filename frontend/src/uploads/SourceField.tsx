@@ -1,6 +1,7 @@
 import { useId, useState } from "react";
 import type { SourceSummary } from "./api";
 import { COPY } from "./copy";
+import { versionChip } from "./display";
 import { findSource, suggestSources } from "./sources";
 
 interface Props {
@@ -76,7 +77,7 @@ export function SourceField({ value, sources, disabled, onChange, onPick }: Prop
                 <>
                   <b>{source}</b>{" "}
                   <span className="chip chip-version">
-                    v{summary.current_version} · {COPY.source.current}
+                    {versionChip({ version: summary.current_version, current: true })}
                   </span>
                   <small>
                     {COPY.source.updated} {summary.updated_at.slice(0, 10)}

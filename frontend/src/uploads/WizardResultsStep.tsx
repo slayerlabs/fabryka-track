@@ -2,9 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 import { getReport, getUpload, type UploadJob, type UploadPipeline } from "./api";
 import { COPY } from "./copy";
-import { describeJob, errorMessage, failureHint, hasAttribution, humanize, rejectionMessage } from "./display";
+import { describeJob, errorMessage, failureHint, hasBundle, humanize, rejectionMessage, versionLabel } from "./display";
 import { JobFacts } from "./JobFacts";
-import { ReportDetails, ResultDownload } from "./ReportDetails";
+import { DatasheetPreview } from "./DatasheetPreview";
+import { BundleDownloads, ReportDetails } from "./ReportDetails";
 import { ResultCharts } from "./ResultCharts";
 import { loadUploadResults, summarize, type UploadResults } from "./results";
 
@@ -70,7 +71,15 @@ export function WizardResultsStep({ jobId, pipelines, onUnfinished, onJob }: Pro
   return (
     <>
       <section className="panel">
-        <h2>{COPY.steps[3].title}</h2>
+        <h2>
+          {COPY.steps[3].title}
+          {job.source_version && job.processing_state === "passed" && (
+            <>
+              {" "}
+              <span className={`chip ${job.source_version.current ? "chip-current" : "chip-old"}`}>{versionLabel(job.source_version)}</span>
+            </>
+          )}
+        </h2>
         {report ? (
           <>
             <div className="metrics">
@@ -107,10 +116,16 @@ export function WizardResultsStep({ jobId, pipelines, onUnfinished, onJob }: Pro
           <ReportDetails report={report} />
         </section>
       )}
-      {described.hasReport && !expired && (
-        <section className="panel">
-          <h2>{COPY.results.downloadsHeading}</h2>
-          <ResultDownload id={job.job_id} diagnosticFirst={described.diagnosticOnly} attribution={hasAttribution(job)} />
+      {hasBundle(job) && !expired && (
+        <section className="panel bundle-grid">
+          <div>
+            <h2>{COPY.results.datasheetHeading}</h2>
+            <DatasheetPreview jobId={job.job_id} diagnostic={described.diagnosticOnly} />
+          </div>
+          <div>
+            <h2>{COPY.results.downloadsHeading}</h2>
+            <BundleDownloads job={job} diagnostic={described.diagnosticOnly} />
+          </div>
         </section>
       )}
       <section className="panel">
