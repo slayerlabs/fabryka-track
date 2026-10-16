@@ -517,7 +517,7 @@ SHEET = '---\npretty_name: "My source"\n---\n\n# Dataset Card for My source\n'.e
 def sheet_reply(url="https://storage.test/sheet.md", served=SHEET, declared=None, digest=None):
     def reply(request):
         if request.url.host == "storage.test":
-            return httpx.Response(200, content=served)
+            return httpx.Response(200, stream=httpx.ByteStream(served))
         return httpx.Response(200, json={
             "protocol": "job-v1", "job_id": JOB_ID, "diagnostic": False, "method": "GET", "url": url,
             "expires_at": "2026-10-16T10:05:00Z",
@@ -553,6 +553,26 @@ def test_a_datasheet_that_does_not_match_its_grant_is_never_served(client, contr
     controller.reply = reply
     response = client.get(f"/api/uploads/{JOB_ID}/datasheet/text")
     assert (response.status_code, response.json()["code"]) == (502, "datasheet_unavailable")
+
+
+def test_a_datasheet_body_is_read_raw_and_the_read_stops_once_it_exceeds_the_grant(client, controller):
+    sent = []
+
+    def body():
+        for _ in range(10):
+            sent.append(1)
+            yield b"x" * len(SHEET)
+
+    def reply(request):
+        if request.url.host == "storage.test":
+            controller.storage_request = request
+            return httpx.Response(200, content=body())
+        return sheet_reply()(request)
+    controller.reply = reply
+    response = client.get(f"/api/uploads/{JOB_ID}/datasheet/text")
+    assert (response.status_code, response.json()["code"]) == (502, "datasheet_unavailable")
+    assert controller.storage_request.headers["accept-encoding"] == "identity"
+    assert len(sent) < 10
 
 
 def test_a_datasheet_larger_than_the_preview_limit_is_refused_before_download(client, controller):

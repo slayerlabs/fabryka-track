@@ -357,13 +357,13 @@ def unavailable_datasheet():
 
 def read_signed(url, size):
     content = b""
-    with storage_client().stream("GET", url) as response:
+    with storage_client().stream("GET", url, headers={"Accept-Encoding": "identity"}) as response:
         if not response.is_success:
             raise unavailable_datasheet()
-        for chunk in response.iter_bytes():
+        for chunk in response.iter_raw():
+            if len(content) + len(chunk) > size:
+                raise unavailable_datasheet()
             content += chunk
-            if len(content) > size:
-                break
     return content
 
 
