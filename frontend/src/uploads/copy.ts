@@ -170,7 +170,7 @@ export const COPY = {
     loading: "Loading uploads…",
     empty: "No uploads yet.",
     loadMore: "Load more",
-    columns: { upload: "Upload", mode: "Mode", phase: "Phase", outcome: "Outcome", size: "Size", started: "Started", updated: "Updated" },
+    columns: { upload: "Upload", source: "Source · version", mode: "Mode", phase: "Phase", outcome: "Outcome", size: "Size", started: "Started", updated: "Updated" },
   },
   verdicts: {
     passed: "Passed",

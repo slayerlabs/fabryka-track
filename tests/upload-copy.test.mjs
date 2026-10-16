@@ -51,3 +51,7 @@ test("no copy still promises a single result file or an attribution file", () =>
     assert.doesNotMatch(text, /result file|attribution/i, path);
   }
 });
+
+test("the uploads list has a source and version column", () => {
+  assert.equal(COPY.history.columns.source, "Source · version");
+});

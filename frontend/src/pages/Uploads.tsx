@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, Navigate, useParams } from "react-router";
 import { formatBytes } from "../uploads/bytes";
 import { COPY } from "../uploads/copy";
-import { describeJob, errorMessage as message, formatWhen as when, modeLabel } from "../uploads/display";
+import { describeJob, errorMessage as message, formatWhen as when, modeLabel, versionChip } from "../uploads/display";
 import { HuggingFaceGate } from "../uploads/HuggingFaceGate";
 import { jobUrl } from "../uploads/location";
 import { usePipelines } from "../uploads/usePipelines";
@@ -129,6 +129,7 @@ function UploadsWorkspace() {
               <thead>
                 <tr>
                   <th>{COPY.history.columns.upload}</th>
+                  <th>{COPY.history.columns.source}</th>
                   <th>{COPY.history.columns.mode}</th>
                   <th>{COPY.history.columns.phase}</th>
                   <th>{COPY.history.columns.outcome}</th>
@@ -146,6 +147,18 @@ function UploadsWorkspace() {
                         <Link to={jobUrl(job)}>
                           {job.job_id.slice(0, 8)}
                         </Link>
+                      </td>
+                      <td>
+                        {job.source_version ? (
+                          <>
+                            {job.source_version.source} ·{" "}
+                            <span className={`chip ${job.source_version.current ? "chip-current" : "chip-old"}`}>
+                              {versionChip(job.source_version)}
+                            </span>
+                          </>
+                        ) : (
+                          "—"
+                        )}
                       </td>
                       <td>{modeLabel(job.pipeline, pipelines.list)}</td>
                       <td>{described.phase}</td>
