@@ -4,6 +4,13 @@ A minimal training studio: mix text datasets with sliders, run a tiny transforme
 smoke test, and watch real metrics. Includes experiment tracking, run comparison,
 logs, checkpoints, and notes.
 
+## Leaderboard: datasets and benchmarks
+
+**[Start here: all leaderboard datasets, runners and scoring protocols](docs/leaderboard-benchmarks.md).**
+One entrypoint for the Fabryka AI benchmark team: EN and PL columns, pinned
+inputs, calibration, public Polish W data and the path from evaluation to `/models`.
+
+
 The entire website uses React 19, [Refine Core](https://refine.dev/core), and React
 Router. Refine queries and mutations connect to the existing same-origin FastAPI
 API; session authentication, CSRF protection, and authorization remain server-owned.

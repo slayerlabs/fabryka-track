@@ -91,7 +91,7 @@ const SCORE_COLUMNS: Record<Category, Column[]> = {
 };
 const CATEGORY_NOTES: Record<Category, string> = {
   en: "Ranked by eff: the Glint Tiny-ML efficiency score (0–100) for owner-marked rows, the track's Tiny-ML efficiency for rows measured by track. Each row shows its scale revision. The size bonus stops at 150M parameters (Glint formula), so larger models get no bonus.",
-  pl: "Ranked by eff-PL = (G + K + WS) / 3 × the same size multiplier as EN; our protocol, not official. G = MultiBLiMP-pl accuracy (length baseline ≈ 60 %: always picking the shorter sentence scores about 60 %), K = ARC-Easy-PL accuracy, WS = score from byte-PPL on a private held-out Polish text. Rows without eff-PL are listed below, unranked, by MultiBLiMP-pl.",
+  pl: "Ranked by eff-PL = (G + K + WS) / 3 × the same size multiplier as EN; our protocol, not official. G = MultiBLiMP-pl accuracy (length baseline ≈ 60 %: always picking the shorter sentence scores about 60 %), K = ARC-Easy-PL accuracy, WS = score from byte-PPL on frozen Polish W (text public since 2026-10-25; check training-data overlap). Rows without eff-PL are listed below, unranked, by MultiBLiMP-pl.",
   plen: "Average of eff EN and eff-PL; favours bilingual models. Shown only for models with both.",
 };
 const EN_OVERALL_NOTE =
