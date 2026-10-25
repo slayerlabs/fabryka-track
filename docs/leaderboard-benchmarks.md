@@ -5,6 +5,11 @@ This is the shared entrypoint for the Fabryka AI benchmark/autoevaluation team.
 It maps the existing instruments; it does not launch evaluations or change rankings.
 For publishing a measured checkpoint, use the [model-board API/SDK contract](model-board.md).
 
+This handover shares existing benchmark data, code, protocols and control values.
+The benchmark group owns running model evaluations, extending the instruments and
+building its automatic evaluation workflow. Our models' new scores are not part
+of this handover.
+
 ## Start here — benchmark team
 
 Elwenor, author of Koliber, leads the benchmark group. Project contact:
@@ -21,7 +26,7 @@ Arkadiusz Słota, Fabryka AI.
 | Path | Runnable implementation | Checkpoints and publication |
 |---|---|---|
 | Track's native automatic evaluations | [benchmark worker](../src/fabryka_track/benchmark_worker.py), [native byte adapter](../src/fabryka_track/benchmark_model.py), [Tiny-ML suite](../src/fabryka_track/tiny_ml_suite.py) | Saved native byte-model checkpoints; `tiny-ml-en-v2-byte-sliding-aci`, `lm-eval==0.4.13`. Full results, not smoke results, can qualify for ranking. [Worker setup and permissions](run-workspace.md#persistent-gpu-benchmark-workers). |
-| Owner-marked SDK rows, including imported HF models | The row declares its `harness`, `harness_sha`, `scale_rev`, dataset provenance and exact checkpoint. The standalone Polish scorers are in [Probierz](https://github.com/slayerlabs/Probierz). | The owner logs measured `board/*` and `board_pl/*` series at `leaderboard/result.step`. These are not automatically evidence that Track's native worker evaluated the model. |
+| Owner-marked SDK rows, including imported HF models | The row declares its `harness`, `harness_sha`, `scale_rev`, dataset provenance and exact checkpoint. The published standalone ARC-PL scorer is in [Probierz](https://github.com/slayerlabs/Probierz); W inputs, exact accounting and its calibration target are below. | The owner logs measured `board/*` and `board_pl/*` series at `leaderboard/result.step`. These are not automatically evidence that Track's native worker evaluated the model. |
 
 **Same metric name or normalization constants do not establish numerical parity.**
 The historical Glint-parity owner protocol uses the model's tokenizer and 256-token
@@ -87,11 +92,31 @@ joined **text** bytes, not JSONL bytes, for the W denominator. Do not sort artic
 normalize whitespace, replace the dataset with another Wikipedia sample, or
 change the context policy while retaining the same benchmark identity.
 
-For the frozen W instrument, `byte_ppl = token_ppl ** (num_tokens / num_text_bytes)`.
-Retain the reference runner's loss/token accounting, including its handling of
-window starts. **BPB = log2(byte_ppl)**; BPB and byte-PPL are not the same value.
-Byte normalization does not remove differences in tokenization, prefix handling
-or available context between evaluators.
+The frozen W instrument uses these exact rules:
+
+1. Tokenize the whole joined text with the model's supplied tokenizer; discard
+   token IDs outside the model vocabulary. Do not manually add BOS or EOS.
+2. For starts `i = 0, 256, 512, ...`, take `chunk = ids[i:i+257]`.
+   The input is `chunk[:-1]`, and the targets are `chunk[1:]`. Reset context for
+   each chunk. The last chunk may be shorter; do not pad it.
+3. Adjacent chunks share one boundary token: the last target of the preceding
+   chunk is the first input of the next. **Targets are never repeated. Only the
+   first token of the entire text is not a target**, not one token per window.
+4. `token_ppl = exp(total_target_cross_entropy / num_targets)`.
+   For byte conversion use **all** token IDs:
+   `byte_ppl = token_ppl ** (len(ids) / num_text_bytes)`, not `num_targets` in
+   that exponent.
+
+For the pinned GoLLeM v6 calibration model, the counters are:
+
+| Counter | Count |
+|---|---:|
+| All token IDs, used in the byte-conversion exponent | 350,087 |
+| Predicted targets, used in the mean cross-entropy | 350,086 |
+
+**BPB = log2(byte_ppl)**; BPB and byte-PPL are not the same value. Byte normalization
+does not remove differences in tokenization, prefix handling or available context
+between evaluators.
 
 W was decontaminated against the GoLLeM v6 training pool, **not every model's
 training corpus**. Disclose known overlap per checkpoint and the scope of any
@@ -120,6 +145,10 @@ model revision, reviewed model code, device/dtype, input checksum and runner
 revision with the result. The W port check requires absolute error **≤ 0.001
 byte-PPL** from the reference above; a larger difference means stop and investigate.
 Do not widen the tolerance or silently change the text after seeing the result.
+
+The pinned GoLLeM v6 reference uses the model card's custom PyTorch
+`load_gollem_v6` loader. Its configuration is not a Transformers AutoModel
+registration; `--trust-remote-code` alone is not a substitute for that loader.
 
 The standalone ARC-PL runner has a separate, public
 [GoLLeM-45M-PL calibration JSON](https://github.com/slayerlabs/Probierz/blob/47cee070f47fab4b52f144daf0531419d7dd0072/benchmarks/zewnetrzne/arc-easy-pl/wyniki-gollem-45m-pl.json)
