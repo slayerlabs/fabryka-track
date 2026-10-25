@@ -15,7 +15,7 @@ router = APIRouter(prefix='/api/leaderboard')
 
 EN_METRICS = {'eff': 'board/eff', 'arc_easy': 'board/arc_easy', 'blimp': 'board/blimp',
               'wiki_byte_ppl': 'board/wiki_byte_ppl'}
-# K = ARC-Easy-PL accuracy %, W = byte perplexity on a private held-out Polish text (only the number is public).
+# K = ARC-Easy-PL accuracy %, W = byte perplexity on frozen Polish W, public since 2026-10-25.
 PL_METRICS = {'multiblimp': 'board_pl/multiblimp', 'arc_easy': 'board_pl/arc_easy', 'byte_ppl': 'board_pl/byte_ppl',
               'eff': 'board_pl/eff'}
 # Rows the server measured itself ("measured by track"); owners cannot claim this trust level.
