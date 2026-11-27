@@ -452,6 +452,15 @@ function RunWorkspace({ id }: { id: string }) {
                     ? r.config.steps
                     : undefined
                 }
+                yMinSpan={
+                  chart.series.every(
+                    (s) =>
+                      s.kind === "checkpoints" &&
+                      /(_acc|acc_norm|_match|pass_at_1)/.test(s.name),
+                  )
+                    ? 0.05
+                    : undefined
+                }
               />
             </div>
           ))}

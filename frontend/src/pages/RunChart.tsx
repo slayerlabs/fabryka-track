@@ -92,6 +92,7 @@ export function RunChart({
   precision = 4,
   defaultHalfLife = 100e6,
   plannedStep,
+  yMinSpan,
 }: {
   series: Series[];
   range?: number;
@@ -104,6 +105,8 @@ export function RunChart({
   defaultHalfLife?: number;
   // Planned end of the run in steps (run config.steps); widens the step axis to it.
   plannedStep?: number;
+  // Smallest y-axis span (linear scale), e.g. 0.05 for accuracies so small changes keep their size.
+  yMinSpan?: number;
 }) {
   const root = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLDivElement>(null);
@@ -287,6 +290,7 @@ export function RunChart({
     ...(axis === "step" && plannedStep && !viewport.xlim
       ? { planned_x: plannedStep }
       : {}),
+    ...(yMinSpan && !viewport.ylim ? { y_min_span: yMinSpan } : {}),
   });
   useEffect(() => {
     if (!inView) return;

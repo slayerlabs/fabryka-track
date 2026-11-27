@@ -48,6 +48,9 @@ class ChartInput(BaseModel):
     ylim: tuple[Number, Number] | None = None
     boundary: Number | None = None
     planned_x: Number | None = Field(default=None, gt=0)  # planned end of the run on the x axis (e.g. config.steps)
+    # Smallest y-axis span for linear plots, centred on the data (e.g. .05 for accuracies, so a 1.6 pp change
+    # between two checkpoints does not fill the whole height).
+    y_min_span: Number | None = Field(default=None, gt=0)
     zero_line: bool = False
     ylabel: str = Field(default='', max_length=100)
 
@@ -80,10 +83,13 @@ def build_figure(spec):
         xlim = spec.xlim
     elif xs:
         low, high = min(xs), max(xs)
-        if spec.planned_x is not None:
-            high = max(high, spec.planned_x)
+        planned = spec.planned_x is not None and spec.planned_x >= high
+        if planned:
+            high = spec.planned_x
         low += (high - low) * spec.skip
         xlim = padded(low, high)
+        if planned:  # the planned end is the edge of the chart, with a thin margin for its marker
+            xlim = xlim[0], high + (high - low) * .02
         if min(xs) > 0:  # a measurement at exactly 0 keeps the left margin instead of sitting cut on the axis
             xlim = max(0, xlim[0]), xlim[1]
     else:
@@ -108,8 +114,12 @@ def build_figure(spec):
                 x, y = zip(*pairs)
                 ax.plot(x, y, color=s.color, alpha=s.alpha * .55, linewidth=1.1, zorder=2)
                 ax.scatter(x, y, s=26, color=s.color, alpha=s.alpha, linewidths=0, zorder=3)
-                ax.annotate(f'{y[-1]:.4g}', (x[-1], y[-1]), xytext=(5, 5), textcoords='offset points',
-                            fontsize=7.5, color=s.color, annotation_clip=True)
+                # Fixed precision so values from one chart compare at a glance; near the right edge the label
+                # goes to the left of the point to stay inside the tile.
+                label = f'{y[-1]:.3f}' if abs(y[-1]) < 10 else f'{y[-1]:,.1f}'
+                right = (x[-1] - xlim[0]) > .85 * (xlim[1] - xlim[0])
+                ax.annotate(label, (x[-1], y[-1]), xytext=(-5 if right else 5, 5), textcoords='offset points',
+                            ha='right' if right else 'left', fontsize=7.5, color=s.color, annotation_clip=True)
         else:
             # Raw measurements are never connected.
             ax.scatter(s.x, s.y, s=13, color=s.color, alpha=s.alpha, linewidths=0)
@@ -130,6 +140,9 @@ def build_figure(spec):
         padding = (high - low) * share if high != low else (
             max(abs(low) * .04, .02) if spec.scale == 'log' else (abs(low) * .05 or 1.))
         low, high = low - padding, high + padding
+        if spec.y_min_span and spec.scale == 'linear' and high - low < spec.y_min_span:
+            middle = (low + high) / 2
+            low, high = middle - spec.y_min_span / 2, middle + spec.y_min_span / 2
         ax.set_ylim((10 ** low, 10 ** high) if spec.scale == 'log' else (low, high))
     elif spec.scale == 'log':
         ax.set_ylim(1., 10.)
@@ -165,6 +178,10 @@ def build_figure(spec):
     if spec.boundary is not None and xlim[0] <= spec.boundary <= xlim[1]:
         ax.axvline(spec.boundary, color='#81776e', linestyle='--', linewidth=.8)
         ax.text(spec.boundary, .98, 'continuation  ', transform=ax.get_xaxis_transform(),
+                fontsize=7, color='#81776e', va='top', ha='right', clip_on=True)
+    if spec.planned_x is not None and xlim[0] <= spec.planned_x <= xlim[1]:
+        ax.axvline(spec.planned_x, color='#81776e', linestyle='--', linewidth=.8)
+        ax.text(spec.planned_x, .98, 'end of run  ', transform=ax.get_xaxis_transform(),
                 fontsize=7, color='#81776e', va='top', ha='right', clip_on=True)
     ax.set_axisbelow(True)
     for spine in ax.spines.values():

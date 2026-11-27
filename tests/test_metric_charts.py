@@ -40,14 +40,15 @@ def test_single_measurement_and_constant_learning_rate_have_useful_limits():
 
 
 def test_checkpoint_evaluations_are_connected_labelled_and_span_the_planned_run():
-    data = {'series': [{'name': 'eval/boolq_acc', 'color': '#b35236', 'kind': 'checkpoints',
-                        'x': [953, 0], 'y': [.6483, .624]}], 'planned_x': 9530}
+    data = {'series': [{'name': 'eval/openbookqa_acc_norm', 'color': '#b35236', 'kind': 'checkpoints',
+                        'x': [953, 0], 'y': [.36, .376]}], 'planned_x': 9530, 'y_min_span': .05}
     fig, ax = build_figure(ChartInput(**data))
-    assert ax.get_xlim()[0] < 0 and ax.get_xlim()[1] >= 9530
-    assert ax.lines[0].get_xydata().tolist() == [[0, .624], [953, .6483]]
-    assert [t.get_text() for t in ax.texts] == ['0.6483']
+    assert ax.get_xlim()[0] < 0 and 9530 < ax.get_xlim()[1] < 10000
+    assert ax.lines[0].get_xydata().tolist() == [[0, .376], [953, .36]]
+    assert ax.lines[1].get_xdata()[0] == 9530  # end-of-run marker
+    assert [t.get_text() for t in ax.texts] == ['0.360', 'end of run  ']
     low, high = ax.get_ylim()
-    assert low < .624 - .005 and high > .6483 + .005
+    assert high - low == pytest.approx(.05) and low < .36 < .376 < high
     fig.clear()
 
 
