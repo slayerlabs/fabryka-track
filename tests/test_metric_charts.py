@@ -39,6 +39,18 @@ def test_single_measurement_and_constant_learning_rate_have_useful_limits():
     fig.clear()
 
 
+def test_checkpoint_evaluations_are_connected_labelled_and_span_the_planned_run():
+    data = {'series': [{'name': 'eval/boolq_acc', 'color': '#b35236', 'kind': 'checkpoints',
+                        'x': [953, 0], 'y': [.6483, .624]}], 'planned_x': 9530}
+    fig, ax = build_figure(ChartInput(**data))
+    assert ax.get_xlim()[0] < 0 and ax.get_xlim()[1] >= 9530
+    assert ax.lines[0].get_xydata().tolist() == [[0, .624], [953, .6483]]
+    assert [t.get_text() for t in ax.texts] == ['0.6483']
+    low, high = ax.get_ylim()
+    assert low < .624 - .005 and high > .6483 + .005
+    fig.clear()
+
+
 @pytest.mark.parametrize('updates', [{'width': 100000}, {'series': [{'name': 'bad', 'color': '#b35236', 'x': [1], 'y': []}]},
                                      {'xlim': [2, 1]}, {'scale': 'log', 'ylim': [0, 1]}])
 def test_render_inputs_are_bounded(updates):

@@ -19,7 +19,8 @@ export type Series = {
   name: string;
   color?: string;
   points: Point[];
-  kind?: "points" | "trend";
+  // "checkpoints": one evaluation per checkpoint; drawn connected with the latest value labelled.
+  kind?: "points" | "trend" | "checkpoints";
   smoothing?: "off";
 };
 type Axis = "step" | "tokens" | "elapsed";
@@ -33,7 +34,7 @@ type Trace = {
   y: number[];
   points: Point[];
   alpha: number;
-  kind: "points" | "trend";
+  kind: "points" | "trend" | "checkpoints";
   raw?: boolean;
 };
 type ImageFrame = {
@@ -90,6 +91,7 @@ export function RunChart({
   ylabel = "",
   precision = 4,
   defaultHalfLife = 100e6,
+  plannedStep,
 }: {
   series: Series[];
   range?: number;
@@ -100,6 +102,8 @@ export function RunChart({
   ylabel?: string;
   precision?: number;
   defaultHalfLife?: number;
+  // Planned end of the run in steps (run config.steps); widens the step axis to it.
+  plannedStep?: number;
 }) {
   const root = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLDivElement>(null);
@@ -128,7 +132,9 @@ export function RunChart({
       s.smoothing === "off" ||
       /validation|perplexity|val\/|system\/gpu|learning_rate/i.test(s.name),
   );
-  const smoothingLocked = series.every((s) => s.kind === "trend");
+  const smoothingLocked = series.every(
+    (s) => s.kind === "trend" || s.kind === "checkpoints",
+  );
   const [smooth, setSmooth] = useState(rawDefault ? 0 : 0.9);
   const [halfLife, setHalfLife] = useState(
     !rawDefault && tokensAvailable ? defaultHalfLife : 0,
@@ -277,6 +283,9 @@ export function RunChart({
       : {}),
     ...(axis === "step" && resumeStep !== undefined
       ? { boundary: resumeStep }
+      : {}),
+    ...(axis === "step" && plannedStep && !viewport.xlim
+      ? { planned_x: plannedStep }
       : {}),
   });
   useEffect(() => {
