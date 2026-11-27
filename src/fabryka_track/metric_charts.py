@@ -25,7 +25,9 @@ class ChartSeries(BaseModel):
     x: list[Number] = Field(max_length=20_000)
     y: list[Number] = Field(max_length=20_000)
     alpha: float = Field(default=1., ge=.05, le=1.)
-    kind: Literal['points', 'trend'] = 'points'
+    # 'checkpoints': one evaluation per checkpoint (a few points per run). Drawn as connected markers with the
+    # latest value labelled, so two or three results do not read as an empty grid.
+    kind: Literal['points', 'trend', 'checkpoints'] = 'points'
 
     @model_validator(mode='after')
     def paired(self):
@@ -45,6 +47,10 @@ class ChartInput(BaseModel):
     xlim: tuple[Number, Number] | None = None
     ylim: tuple[Number, Number] | None = None
     boundary: Number | None = None
+    planned_x: Number | None = Field(default=None, gt=0)  # planned end of the run on the x axis (e.g. config.steps)
+    # Smallest y-axis span for linear plots, centred on the data (e.g. .05 for accuracies, so a 1.6 pp change
+    # between two checkpoints does not fill the whole height).
+    y_min_span: Number | None = Field(default=None, gt=0)
     zero_line: bool = False
     ylabel: str = Field(default='', max_length=100)
 
@@ -77,13 +83,19 @@ def build_figure(spec):
         xlim = spec.xlim
     elif xs:
         low, high = min(xs), max(xs)
+        planned = spec.planned_x is not None and spec.planned_x >= high
+        if planned:
+            high = spec.planned_x
         low += (high - low) * spec.skip
         xlim = padded(low, high)
-        if min(xs) >= 0:
+        if planned:  # the planned end is the edge of the chart, with a thin margin for its marker
+            xlim = xlim[0], high + (high - low) * .02
+        if min(xs) > 0:  # a measurement at exactly 0 keeps the left margin instead of sitting cut on the axis
             xlim = max(0, xlim[0]), xlim[1]
     else:
         xlim = (0., 1.)
     ax.set_xlim(xlim)
+    checkpoints = [s for s in spec.series if s.kind == 'checkpoints']
     for s in spec.series:
         if s.kind == 'trend':
             pairs = list(zip(s.x, s.y))
@@ -96,6 +108,18 @@ def build_figure(spec):
                     x, y = zip(*part)
                     ax.plot(x, y, color=s.color, alpha=s.alpha, linewidth=1.4,
                             marker='o' if len(part) == 1 else None, markersize=2.5)
+        elif s.kind == 'checkpoints':
+            pairs = sorted(zip(s.x, s.y))
+            if pairs:
+                x, y = zip(*pairs)
+                ax.plot(x, y, color=s.color, alpha=s.alpha * .55, linewidth=1.1, zorder=2)
+                ax.scatter(x, y, s=26, color=s.color, alpha=s.alpha, linewidths=0, zorder=3)
+                # Fixed precision so values from one chart compare at a glance; near the right edge the label
+                # goes to the left of the point to stay inside the tile.
+                label = f'{y[-1]:.3f}' if abs(y[-1]) < 10 else f'{y[-1]:,.1f}'
+                right = (x[-1] - xlim[0]) > .85 * (xlim[1] - xlim[0])
+                ax.annotate(label, (x[-1], y[-1]), xytext=(-5 if right else 5, 5), textcoords='offset points',
+                            ha='right' if right else 'left', fontsize=7.5, color=s.color, annotation_clip=True)
         else:
             # Raw measurements are never connected.
             ax.scatter(s.x, s.y, s=13, color=s.color, alpha=s.alpha, linewidths=0)
@@ -111,9 +135,14 @@ def build_figure(spec):
         low, high = min(ys), max(ys)
         if spec.scale == 'log':
             low, high = math.log10(low), math.log10(high)
-        padding = (high - low) * .08 if high != low else (
+        # Sparse checkpoint results get more headroom: two values should not span the whole axis.
+        share = .25 if checkpoints else .08
+        padding = (high - low) * share if high != low else (
             max(abs(low) * .04, .02) if spec.scale == 'log' else (abs(low) * .05 or 1.))
         low, high = low - padding, high + padding
+        if spec.y_min_span and spec.scale == 'linear' and high - low < spec.y_min_span:
+            middle = (low + high) / 2
+            low, high = middle - spec.y_min_span / 2, middle + spec.y_min_span / 2
         ax.set_ylim((10 ** low, 10 ** high) if spec.scale == 'log' else (low, high))
     elif spec.scale == 'log':
         ax.set_ylim(1., 10.)
@@ -149,6 +178,10 @@ def build_figure(spec):
     if spec.boundary is not None and xlim[0] <= spec.boundary <= xlim[1]:
         ax.axvline(spec.boundary, color='#81776e', linestyle='--', linewidth=.8)
         ax.text(spec.boundary, .98, 'continuation  ', transform=ax.get_xaxis_transform(),
+                fontsize=7, color='#81776e', va='top', ha='right', clip_on=True)
+    if spec.planned_x is not None and xlim[0] <= spec.planned_x <= xlim[1]:
+        ax.axvline(spec.planned_x, color='#81776e', linestyle='--', linewidth=.8)
+        ax.text(spec.planned_x, .98, 'end of run  ', transform=ax.get_xaxis_transform(),
                 fontsize=7, color='#81776e', va='top', ha='right', clip_on=True)
     ax.set_axisbelow(True)
     for spine in ax.spines.values():

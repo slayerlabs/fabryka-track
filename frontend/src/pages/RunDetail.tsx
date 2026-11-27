@@ -190,7 +190,9 @@ function RunWorkspace({ id }: { id: string }) {
             : withTokens(points, tokenPositions),
           ...(key === "optimizer/learning_rate"
             ? { smoothing: "off" as const }
-            : {}),
+            : key.startsWith("eval/")
+              ? { kind: "checkpoints" as const }
+              : {}),
         },
       ],
     });
@@ -445,6 +447,20 @@ function RunWorkspace({ id }: { id: string }) {
                 range={range}
                 resumeStep={r.history_import?.resume_step}
                 resumeTokens={resumeTokens}
+                plannedStep={
+                  chart.series.every((s) => s.kind === "checkpoints")
+                    ? r.config.steps
+                    : undefined
+                }
+                yMinSpan={
+                  chart.series.every(
+                    (s) =>
+                      s.kind === "checkpoints" &&
+                      /(_acc|acc_norm|_match|pass_at_1)/.test(s.name),
+                  )
+                    ? 0.05
+                    : undefined
+                }
               />
             </div>
           ))}
